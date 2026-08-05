@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PatrolSync - Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: 30px auto; padding: 20px; }
+    h2, h3 { color: #222; }
+    input, select, button, textarea { width: 100%; padding: 10px; margin: 6px 0; box-sizing: border-box; font-size: 14px; }
+    button { background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button.logout { background: #dc2626; }
+    section { border: 1px solid #ddd; border-radius: 6px; padding: 15px; margin-bottom: 20px; }
+    #header { display: flex; justify-content: space-between; align-items: center; }
+    ul { list-style: none; padding: 0; }
+    li { border-bottom: 1px solid #eee; padding: 8px 0; }
+    .status { font-weight: bold; margin-top: 8px; }
+    .success { color: green; }
+    .error { color: red; }
+    .sev-low { color: #2563eb; }
+    .sev-medium { color: #d97706; }
+    .sev-high { color: #dc2626; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h2 id="companyName">Loading...</h2>
+    <button class="logout" onclick="logout()">Log Out</button>
+  </div>
+  <p>Plan: <strong id="planLabel">-</strong> | Tenant ID: <span id="tenantIdLabel">-</span></p>
+
+  <section>
+    <h3>Add a Site</h3>
+    <input type="text" id="siteName" placeholder="Site name (e.g. Downtown Mall)">
+    <input type="text" id="siteAddress" placeholder="Address (optional)">
+    <button onclick="addSite()">Add Site</button>
+    <div id="siteStatus" class="status"></div>
+    <ul id="siteList"></ul>
+  </section>
+
+  <section>
+    <h3>Add a Guard</h3>
+    <input type="email" id="guardEmail" placeholder="Guard email">
+    <input type="password" id="guardPassword" placeholder="Temporary password" minlength="6">
+    <button onclick="addGuard()">Add Guard</button>
+    <div id="guardStatus" class="status"></div>
+    <ul id="guardList"></ul>
+  </section>
+
+  <section>
+    <h3>Recent Incidents</h3>
+    <button onclick="loadIncidents()">Refresh</button>
+    <ul id="incidentList"></ul>
+  </section>
+
+  <script>
+    const API_BASE = 'https://patrolsync-backend.onrender.com';
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('tenant_id');
+    const userEmail = localStorage.getItem('user_email');
+
+    if (!token || !tenantId) {
+      window.location.href = 'signup.html';
+    }
+
+    document.getElementById('tenantIdLabel').textContent = tenantId;
+    document.getElementById('companyName').textContent = userEmail ? 'Welcome, ' + userEmail : 'Dashboard';
+
+    function authHeaders() {
+      return {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      };
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      localStorage.removeItem('tenant_id');
+      localStorage.removeItem('user_email');
+      window.location.href = 'signup.html';
+    }
+
+    async function loadTenantInfo() {
+      try {
+        const res = await fetch(API_BASE + '/api/tenants');
+        const tenants = await res.json();
+        const tenant = tenants.find(t => t.id === Number(tenantId));
+        if (tenant) {
+          document.getElementById('companyName').textContent = tenant.name;
+          document.getElementById('planLabel').textContent = tenant.plan;
+        }
+      } catch (err) {}
+    }
+
+    async function loadSites() {
+      try {
+        const res = await fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() });
+        const sites = await res.json();
+        const list = document.getElementById('siteList');
+        list.innerHTML = '';
+        sites.forEach(s => {
+          const li = document.createElement('li');
+          li.textContent = s.name + (s.address ? ' — ' + s.address : '');
+          list.appendChild(li);
+        });
+      } catch (err) {}
+    }
+
+    async function addSite() {
+      const name = document.getElementById('siteName').value;
+      const address = document.getElementById('siteAddress').value;
+      const statusDiv = document.getElementById('siteStatus');
+      if (!name) { statusDiv.textContent = 'Site name is required'; statusDiv.className = 'status error'; return; }
+      try {
+        const res = await fetch(API_BASE + '/api/sites', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ tenant_id: Number(tenantId), name, address })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to add site');
+        statusDiv.textContent = 'Site added.';
+        statusDiv.className = 'status success';
+        document.getElementById('siteName').value = '';
+        document.getElementById('siteAddress').value = '';
+        loadSites();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function loadGuards() {
+      try {
+        const res = await fetch(API_BASE + '/api/users?tenant_id=' + tenantId + '&role=guard', { headers: authHeaders() });
+        const guards = await res.json();
+        const list = document.getElementById('guardList');
+        list.innerHTML = '';
+        guards.forEach(g => {
+          const li = document.createElement('li');
+          li.textContent = g.email;
+          list.appendChild(li);
+        });
+      } catch (err) {}
+    }
+
+    async function addGuard() {
+      const email = document.getElementById('guardEmail').value;
+      const password = document.getElementById('guardPassword').value;
+      const statusDiv = document.getElementById('guardStatus');
+      if (!email || !password) { statusDiv.textContent = 'Email and password are required'; statusDiv.className = 'status error'; return; }
+      try {
+        const res = await fetch(API_BASE + '/api/users', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ tenant_id: Number(tenantId), email, role: 'guard', password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to add guard');
+        statusDiv.textContent = 'Guard added.';
+        statusDiv.className = 'status success';
+        document.getElementById('guardEmail').value = '';
+        document.getElementById('guardPassword').value = '';
+        loadGuards();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function loadIncidents() {
+      try {
+        const res = await fetch(API_BASE + '/api/incidents?tenant_id=' + tenantId, { headers: authHeaders() });
+        const incidents = await res.json();
+        const list = document.getElementById('incidentList');
+        list.innerHTML = '';
+        incidents.forEach(i => {
+          const li = document.createElement('li');
+          li.innerHTML = '<span class="sev-' + i.severity + '">[' + i.severity.toUpperCase() + ']</span> ' +
+            i.description + ' — ' + new Date(i.reported_at).toLocaleString();
+          list.appendChild(li);
+        });
+      } catch (err) {}
+    }
+
+    loadTenantInfo();
+    loadSites();
+    loadGuards();
+    loadIncidents();
+  </script>
+</body>
+</html>
