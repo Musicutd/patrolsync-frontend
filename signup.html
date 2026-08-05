@@ -82,8 +82,9 @@
         localStorage.setItem('tenant_id', data.tenant.id);
         localStorage.setItem('user_email', data.admin.email);
 
-        statusDiv.textContent = 'Account created! Tenant ID: ' + data.tenant.id;
+        statusDiv.textContent = 'Account created! Redirecting...';
         statusDiv.className = 'success';
+        setTimeout(() => { window.location.href = 'dashboard.html'; }, 1000);
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'error';
