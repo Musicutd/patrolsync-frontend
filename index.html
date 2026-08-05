@@ -16,10 +16,14 @@
     #status { margin-top: 10px; font-weight: bold; }
     .success { color: green; }
     .error { color: red; }
+    #authNotice { background: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
   </style>
 </head>
 <body>
   <h2>Report Incident</h2>
+  <div id="authNotice" style="display:none;">
+    You're not logged in. <a href="signup.html">Sign up</a> or log in first.
+  </div>
   <form id="incidentForm">
     <label>Tenant ID</label>
     <input type="number" id="tenant_id" required value="1">
@@ -49,6 +53,16 @@
     const form = document.getElementById('incidentForm');
     const statusDiv = document.getElementById('status');
     const submitBtn = document.getElementById('submitBtn');
+    const authNotice = document.getElementById('authNotice');
+
+    const token = localStorage.getItem('token');
+    const savedTenantId = localStorage.getItem('tenant_id');
+
+    if (!token) {
+      authNotice.style.display = 'block';
+    } else if (savedTenantId) {
+      document.getElementById('tenant_id').value = savedTenantId;
+    }
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -67,15 +81,19 @@
       try {
         const res = await fetch(API_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + (token || '')
+          },
           body: JSON.stringify(payload)
         });
-        if (!res.ok) throw new Error('Request failed');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Request failed');
         statusDiv.textContent = 'Incident reported successfully.';
         statusDiv.className = 'success';
         document.getElementById('description').value = '';
       } catch (err) {
-        statusDiv.textContent = 'Something went wrong. Please try again.';
+        statusDiv.textContent = err.message;
         statusDiv.className = 'error';
       } finally {
         submitBtn.disabled = false;
