@@ -9,10 +9,11 @@
     input, select, button, textarea { width: 100%; padding: 10px; margin: 6px 0; box-sizing: border-box; font-size: 14px; }
     button { background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button.logout { background: #dc2626; }
+    button.scan { background: #16a34a; width: auto; padding: 4px 10px; margin: 0; font-size: 12px; }
     section { border: 1px solid #ddd; border-radius: 6px; padding: 15px; margin-bottom: 20px; }
     #header { display: flex; justify-content: space-between; align-items: center; }
     ul { list-style: none; padding: 0; }
-    li { border-bottom: 1px solid #eee; padding: 8px 0; }
+    li { border-bottom: 1px solid #eee; padding: 8px 0; display: flex; justify-content: space-between; align-items: center; }
     .status { font-weight: bold; margin-top: 8px; }
     .success { color: green; }
     .error { color: red; }
@@ -20,6 +21,11 @@
     .sev-medium { color: #d97706; }
     .sev-high { color: #dc2626; font-weight: bold; }
     .sev-critical { color: #7f1d1d; font-weight: bold; }
+    .hidden { display: none; }
+    .comp-ok { color: green; font-weight: bold; }
+    .comp-overdue { color: #dc2626; font-weight: bold; }
+    .comp-unmonitored { color: #d97706; }
+    .comp-no_schedule { color: #999; }
   </style>
 </head>
 <body>
@@ -45,6 +51,55 @@
     <button onclick="addGuard()">Add Guard</button>
     <div id="guardStatus" class="status"></div>
     <ul id="guardList"></ul>
+  </section>
+
+  <section>
+    <h3>Checkpoints</h3>
+    <select id="checkpointSite">
+      <option value="">Select a site</option>
+    </select>
+    <input type="text" id="checkpointName" placeholder="Checkpoint name (e.g. Main Entrance)">
+    <input type="text" id="checkpointQr" placeholder="QR code value (e.g. CP-001)">
+    <input type="text" id="checkpointLat" placeholder="Latitude (optional)">
+    <input type="text" id="checkpointLng" placeholder="Longitude (optional)">
+    <button onclick="addCheckpoint()">Add Checkpoint</button>
+    <div id="checkpointStatus" class="status"></div>
+    <ul id="checkpointList"></ul>
+  </section>
+
+  <section>
+    <h3>Patrol Schedules</h3>
+    <select id="scheduleSite">
+      <option value="">Select a site</option>
+    </select>
+    <select id="scheduleType">
+      <option value="hourly">Hourly (scan every N hours)</option>
+      <option value="fixed">Fixed times of day</option>
+      <option value="custom">Custom (advanced JSON)</option>
+    </select>
+
+    <div id="hourlyFields">
+      <input type="number" id="intervalHours" placeholder="Interval in hours (e.g. 2)" min="1">
+    </div>
+    <div id="fixedFields" class="hidden">
+      <input type="text" id="fixedTimes" placeholder="Times, comma-separated (e.g. 08:00, 14:00, 20:00)">
+    </div>
+    <div id="customFields" class="hidden">
+      <textarea id="customConfig" rows="3" placeholder='Raw JSON (e.g. {"note": "custom rule"})'></textarea>
+    </div>
+
+    <button onclick="addSchedule()">Add Schedule</button>
+    <div id="scheduleStatus" class="status"></div>
+    <ul id="scheduleList"></ul>
+  </section>
+
+  <section>
+    <h3>Patrol Compliance</h3>
+    <select id="complianceSite">
+      <option value="">Select a site</option>
+    </select>
+    <button onclick="loadCompliance()">Check Compliance</button>
+    <ul id="complianceList"></ul>
   </section>
 
   <section>
@@ -108,10 +163,25 @@
       } catch (err) {}
     }
 
+    function populateSiteDropdown(select, sites) {
+      const previousValue = select.value;
+      select.innerHTML = '<option value="">Select a site</option>';
+      sites.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        select.appendChild(opt);
+      });
+      if (previousValue) select.value = previousValue;
+    }
+
+    let currentSites = [];
+
     async function loadSites() {
       try {
         const res = await fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() });
         const sites = await res.json();
+        currentSites = sites;
 
         const list = document.getElementById('siteList');
         list.innerHTML = '';
@@ -121,16 +191,13 @@
           list.appendChild(li);
         });
 
-        const siteSelect = document.getElementById('incidentSite');
-        const previousValue = siteSelect.value;
-        siteSelect.innerHTML = '<option value="">Select a site</option>';
-        sites.forEach(s => {
-          const opt = document.createElement('option');
-          opt.value = s.id;
-          opt.textContent = s.name;
-          siteSelect.appendChild(opt);
-        });
-        if (previousValue) siteSelect.value = previousValue;
+        populateSiteDropdown(document.getElementById('incidentSite'), sites);
+        populateSiteDropdown(document.getElementById('checkpointSite'), sites);
+        populateSiteDropdown(document.getElementById('scheduleSite'), sites);
+        populateSiteDropdown(document.getElementById('complianceSite'), sites);
+
+        if (document.getElementById('checkpointSite').value) loadCheckpoints();
+        if (document.getElementById('scheduleSite').value) loadSchedules();
       } catch (err) {}
     }
 
@@ -193,6 +260,210 @@
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
+      }
+    }
+
+    document.getElementById('checkpointSite').addEventListener('change', loadCheckpoints);
+
+    async function loadCheckpoints() {
+      const siteId = document.getElementById('checkpointSite').value;
+      const list = document.getElementById('checkpointList');
+      list.innerHTML = '';
+      if (!siteId) return;
+      try {
+        const res = await fetch(API_BASE + '/api/checkpoints?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() });
+        const checkpoints = await res.json();
+        checkpoints.forEach(cp => {
+          const li = document.createElement('li');
+          const label = document.createElement('span');
+          label.textContent = cp.name + ' (QR: ' + cp.qr_code + ')';
+          const scanBtn = document.createElement('button');
+          scanBtn.textContent = 'Log Scan';
+          scanBtn.className = 'scan';
+          scanBtn.onclick = () => logPatrolScan(cp.id, li);
+          li.appendChild(label);
+          li.appendChild(scanBtn);
+          list.appendChild(li);
+        });
+      } catch (err) {}
+    }
+
+    async function addCheckpoint() {
+      const siteId = document.getElementById('checkpointSite').value;
+      const name = document.getElementById('checkpointName').value;
+      const qrCode = document.getElementById('checkpointQr').value;
+      const lat = document.getElementById('checkpointLat').value;
+      const lng = document.getElementById('checkpointLng').value;
+      const statusDiv = document.getElementById('checkpointStatus');
+
+      if (!siteId) { statusDiv.textContent = 'Please select a site'; statusDiv.className = 'status error'; return; }
+      if (!name || !qrCode) { statusDiv.textContent = 'Checkpoint name and QR code are required'; statusDiv.className = 'status error'; return; }
+
+      try {
+        const res = await fetch(API_BASE + '/api/checkpoints', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            name,
+            qr_code: qrCode,
+            latitude: lat || null,
+            longitude: lng || null
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to add checkpoint');
+        statusDiv.textContent = 'Checkpoint added.';
+        statusDiv.className = 'status success';
+        document.getElementById('checkpointName').value = '';
+        document.getElementById('checkpointQr').value = '';
+        document.getElementById('checkpointLat').value = '';
+        document.getElementById('checkpointLng').value = '';
+        loadCheckpoints();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function logPatrolScan(checkpointId, listItemEl) {
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-logs', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            checkpoint_id: checkpointId,
+            user_id: JSON.parse(atob(token.split('.')[1])).user_id
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to log scan');
+        const confirmMsg = document.createElement('span');
+        confirmMsg.textContent = ' ✓ scanned ' + new Date(data.scanned_at || Date.now()).toLocaleTimeString();
+        confirmMsg.style.color = 'green';
+        confirmMsg.style.fontSize = '12px';
+        listItemEl.appendChild(confirmMsg);
+      } catch (err) {
+        alert('Failed to log scan: ' + err.message);
+      }
+    }
+
+    document.getElementById('scheduleType').addEventListener('change', updateScheduleFields);
+    function updateScheduleFields() {
+      const type = document.getElementById('scheduleType').value;
+      document.getElementById('hourlyFields').classList.toggle('hidden', type !== 'hourly');
+      document.getElementById('fixedFields').classList.toggle('hidden', type !== 'fixed');
+      document.getElementById('customFields').classList.toggle('hidden', type !== 'custom');
+    }
+
+    document.getElementById('scheduleSite').addEventListener('change', loadSchedules);
+
+    async function loadSchedules() {
+      const siteId = document.getElementById('scheduleSite').value;
+      const list = document.getElementById('scheduleList');
+      list.innerHTML = '';
+      if (!siteId) return;
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-schedules?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() });
+        const schedules = await res.json();
+        schedules.forEach(s => {
+          const li = document.createElement('li');
+          let summary = '';
+          if (s.schedule_type === 'hourly') {
+            summary = 'Every ' + s.config.interval_hours + ' hour(s)';
+          } else if (s.schedule_type === 'fixed') {
+            summary = 'At ' + (s.config.times || []).join(', ');
+          } else {
+            summary = JSON.stringify(s.config);
+          }
+          li.innerHTML = '<span>' + s.schedule_type.toUpperCase() + ' — ' + summary + '</span>';
+          list.appendChild(li);
+        });
+      } catch (err) {}
+    }
+
+    async function addSchedule() {
+      const siteId = document.getElementById('scheduleSite').value;
+      const type = document.getElementById('scheduleType').value;
+      const statusDiv = document.getElementById('scheduleStatus');
+
+      if (!siteId) { statusDiv.textContent = 'Please select a site'; statusDiv.className = 'status error'; return; }
+
+      let config;
+      try {
+        if (type === 'hourly') {
+          const hours = Number(document.getElementById('intervalHours').value);
+          if (!hours || hours < 1) throw new Error('Enter a valid interval in hours');
+          config = { interval_hours: hours };
+        } else if (type === 'fixed') {
+          const raw = document.getElementById('fixedTimes').value;
+          const times = raw.split(',').map(t => t.trim()).filter(Boolean);
+          if (times.length === 0) throw new Error('Enter at least one time');
+          config = { times };
+        } else {
+          const raw = document.getElementById('customConfig').value;
+          config = raw ? JSON.parse(raw) : {};
+        }
+      } catch (err) {
+        statusDiv.textContent = err.message.includes('JSON') ? 'Invalid JSON in custom config' : err.message;
+        statusDiv.className = 'status error';
+        return;
+      }
+
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-schedules', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            schedule_type: type,
+            config
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to add schedule');
+        statusDiv.textContent = 'Schedule added.';
+        statusDiv.className = 'status success';
+        document.getElementById('intervalHours').value = '';
+        document.getElementById('fixedTimes').value = '';
+        document.getElementById('customConfig').value = '';
+        loadSchedules();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function loadCompliance() {
+      const siteId = document.getElementById('complianceSite').value;
+      const list = document.getElementById('complianceList');
+      list.innerHTML = '';
+      if (!siteId) { list.innerHTML = '<li>Please select a site</li>'; return; }
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-compliance?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() });
+        const compliance = await res.json();
+        if (compliance.length === 0) {
+          list.innerHTML = '<li>No checkpoints found for this site</li>';
+          return;
+        }
+        compliance.forEach(c => {
+          const li = document.createElement('li');
+          let statusText = '';
+          if (c.status === 'ok') statusText = '✓ On schedule';
+          else if (c.status === 'overdue') statusText = '⚠ Overdue' + (c.hours_overdue ? ' by ' + c.hours_overdue + 'h' : ' (never scanned)');
+          else if (c.status === 'unmonitored') statusText = '— No hourly schedule set';
+          else statusText = '— No schedule';
+
+          const lastScanText = c.last_scan ? new Date(c.last_scan).toLocaleString() : 'never';
+          li.innerHTML = '<span>' + c.checkpoint_name + ' — last scan: ' + lastScanText + '</span>' +
+            '<span class="comp-' + c.status + '">' + statusText + '</span>';
+          list.appendChild(li);
+        });
+      } catch (err) {
+        list.innerHTML = '<li class="error">Failed to load compliance</li>';
       }
     }
 
