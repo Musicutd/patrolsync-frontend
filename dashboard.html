@@ -9,10 +9,11 @@
     input, select, button, textarea { width: 100%; padding: 10px; margin: 6px 0; box-sizing: border-box; font-size: 14px; }
     button { background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button.logout { background: #dc2626; }
+    button.scan { background: #16a34a; width: auto; padding: 4px 10px; margin: 0; font-size: 12px; }
     section { border: 1px solid #ddd; border-radius: 6px; padding: 15px; margin-bottom: 20px; }
     #header { display: flex; justify-content: space-between; align-items: center; }
     ul { list-style: none; padding: 0; }
-    li { border-bottom: 1px solid #eee; padding: 8px 0; }
+    li { border-bottom: 1px solid #eee; padding: 8px 0; display: flex; justify-content: space-between; align-items: center; }
     .status { font-weight: bold; margin-top: 8px; }
     .success { color: green; }
     .error { color: red; }
@@ -45,6 +46,20 @@
     <button onclick="addGuard()">Add Guard</button>
     <div id="guardStatus" class="status"></div>
     <ul id="guardList"></ul>
+  </section>
+
+  <section>
+    <h3>Checkpoints</h3>
+    <select id="checkpointSite">
+      <option value="">Select a site</option>
+    </select>
+    <input type="text" id="checkpointName" placeholder="Checkpoint name (e.g. Main Entrance)">
+    <input type="text" id="checkpointQr" placeholder="QR code value (e.g. CP-001)">
+    <input type="text" id="checkpointLat" placeholder="Latitude (optional)">
+    <input type="text" id="checkpointLng" placeholder="Longitude (optional)">
+    <button onclick="addCheckpoint()">Add Checkpoint</button>
+    <div id="checkpointStatus" class="status"></div>
+    <ul id="checkpointList"></ul>
   </section>
 
   <section>
@@ -108,10 +123,25 @@
       } catch (err) {}
     }
 
+    function populateSiteDropdown(select, sites) {
+      const previousValue = select.value;
+      select.innerHTML = '<option value="">Select a site</option>';
+      sites.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        select.appendChild(opt);
+      });
+      if (previousValue) select.value = previousValue;
+    }
+
+    let currentSites = [];
+
     async function loadSites() {
       try {
         const res = await fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() });
         const sites = await res.json();
+        currentSites = sites;
 
         const list = document.getElementById('siteList');
         list.innerHTML = '';
@@ -121,16 +151,12 @@
           list.appendChild(li);
         });
 
-        const siteSelect = document.getElementById('incidentSite');
-        const previousValue = siteSelect.value;
-        siteSelect.innerHTML = '<option value="">Select a site</option>';
-        sites.forEach(s => {
-          const opt = document.createElement('option');
-          opt.value = s.id;
-          opt.textContent = s.name;
-          siteSelect.appendChild(opt);
-        });
-        if (previousValue) siteSelect.value = previousValue;
+        populateSiteDropdown(document.getElementById('incidentSite'), sites);
+        populateSiteDropdown(document.getElementById('checkpointSite'), sites);
+
+        if (document.getElementById('checkpointSite').value) {
+          loadCheckpoints();
+        }
       } catch (err) {}
     }
 
@@ -193,6 +219,93 @@
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
+      }
+    }
+
+    document.getElementById('checkpointSite').addEventListener('change', loadCheckpoints);
+
+    async function loadCheckpoints() {
+      const siteId = document.getElementById('checkpointSite').value;
+      const list = document.getElementById('checkpointList');
+      list.innerHTML = '';
+      if (!siteId) return;
+      try {
+        const res = await fetch(API_BASE + '/api/checkpoints?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() });
+        const checkpoints = await res.json();
+        checkpoints.forEach(cp => {
+          const li = document.createElement('li');
+          const label = document.createElement('span');
+          label.textContent = cp.name + ' (QR: ' + cp.qr_code + ')';
+          const scanBtn = document.createElement('button');
+          scanBtn.textContent = 'Log Scan';
+          scanBtn.className = 'scan';
+          scanBtn.onclick = () => logPatrolScan(cp.id, li);
+          li.appendChild(label);
+          li.appendChild(scanBtn);
+          list.appendChild(li);
+        });
+      } catch (err) {}
+    }
+
+    async function addCheckpoint() {
+      const siteId = document.getElementById('checkpointSite').value;
+      const name = document.getElementById('checkpointName').value;
+      const qrCode = document.getElementById('checkpointQr').value;
+      const lat = document.getElementById('checkpointLat').value;
+      const lng = document.getElementById('checkpointLng').value;
+      const statusDiv = document.getElementById('checkpointStatus');
+
+      if (!siteId) { statusDiv.textContent = 'Please select a site'; statusDiv.className = 'status error'; return; }
+      if (!name || !qrCode) { statusDiv.textContent = 'Checkpoint name and QR code are required'; statusDiv.className = 'status error'; return; }
+
+      try {
+        const res = await fetch(API_BASE + '/api/checkpoints', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            name,
+            qr_code: qrCode,
+            latitude: lat || null,
+            longitude: lng || null
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to add checkpoint');
+        statusDiv.textContent = 'Checkpoint added.';
+        statusDiv.className = 'status success';
+        document.getElementById('checkpointName').value = '';
+        document.getElementById('checkpointQr').value = '';
+        document.getElementById('checkpointLat').value = '';
+        document.getElementById('checkpointLng').value = '';
+        loadCheckpoints();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function logPatrolScan(checkpointId, listItemEl) {
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-logs', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            checkpoint_id: checkpointId,
+            user_id: JSON.parse(atob(token.split('.')[1])).user_id
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to log scan');
+        const confirmMsg = document.createElement('span');
+        confirmMsg.textContent = ' ✓ scanned ' + new Date(data.scanned_at || Date.now()).toLocaleTimeString();
+        confirmMsg.style.color = 'green';
+        confirmMsg.style.fontSize = '12px';
+        listItemEl.appendChild(confirmMsg);
+      } catch (err) {
+        alert('Failed to log scan: ' + err.message);
       }
     }
 
