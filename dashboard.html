@@ -9,11 +9,10 @@
     input, select, button, textarea { width: 100%; padding: 10px; margin: 6px 0; box-sizing: border-box; font-size: 14px; }
     button { background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button.logout { background: #dc2626; }
-    button.scan { background: #16a34a; width: auto; padding: 4px 10px; margin: 0; font-size: 12px; }
     section { border: 1px solid #ddd; border-radius: 6px; padding: 15px; margin-bottom: 20px; }
     #header { display: flex; justify-content: space-between; align-items: center; }
     ul { list-style: none; padding: 0; }
-    li { border-bottom: 1px solid #eee; padding: 8px 0; display: flex; justify-content: space-between; align-items: center; }
+    li { border-bottom: 1px solid #eee; padding: 8px 0; }
     .status { font-weight: bold; margin-top: 8px; }
     .success { color: green; }
     .error { color: red; }
@@ -21,8 +20,6 @@
     .sev-medium { color: #d97706; }
     .sev-high { color: #dc2626; font-weight: bold; }
     .sev-critical { color: #7f1d1d; font-weight: bold; }
-    .hidden { display: none; }
-    .schedule-meta { font-size: 12px; color: #666; }
   </style>
 </head>
 <body>
@@ -48,46 +45,6 @@
     <button onclick="addGuard()">Add Guard</button>
     <div id="guardStatus" class="status"></div>
     <ul id="guardList"></ul>
-  </section>
-
-  <section>
-    <h3>Checkpoints</h3>
-    <select id="checkpointSite">
-      <option value="">Select a site</option>
-    </select>
-    <input type="text" id="checkpointName" placeholder="Checkpoint name (e.g. Main Entrance)">
-    <input type="text" id="checkpointQr" placeholder="QR code value (e.g. CP-001)">
-    <input type="text" id="checkpointLat" placeholder="Latitude (optional)">
-    <input type="text" id="checkpointLng" placeholder="Longitude (optional)">
-    <button onclick="addCheckpoint()">Add Checkpoint</button>
-    <div id="checkpointStatus" class="status"></div>
-    <ul id="checkpointList"></ul>
-  </section>
-
-  <section>
-    <h3>Patrol Schedules</h3>
-    <select id="scheduleSite">
-      <option value="">Select a site</option>
-    </select>
-    <select id="scheduleType">
-      <option value="hourly">Hourly (scan every N hours)</option>
-      <option value="fixed">Fixed times of day</option>
-      <option value="custom">Custom (advanced JSON)</option>
-    </select>
-
-    <div id="hourlyFields">
-      <input type="number" id="intervalHours" placeholder="Interval in hours (e.g. 2)" min="1">
-    </div>
-    <div id="fixedFields" class="hidden">
-      <input type="text" id="fixedTimes" placeholder="Times, comma-separated (e.g. 08:00, 14:00, 20:00)">
-    </div>
-    <div id="customFields" class="hidden">
-      <textarea id="customConfig" rows="3" placeholder='Raw JSON (e.g. {"note": "custom rule"})'></textarea>
-    </div>
-
-    <button onclick="addSchedule()">Add Schedule</button>
-    <div id="scheduleStatus" class="status"></div>
-    <ul id="scheduleList"></ul>
   </section>
 
   <section>
@@ -151,25 +108,10 @@
       } catch (err) {}
     }
 
-    function populateSiteDropdown(select, sites) {
-      const previousValue = select.value;
-      select.innerHTML = '<option value="">Select a site</option>';
-      sites.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = s.name;
-        select.appendChild(opt);
-      });
-      if (previousValue) select.value = previousValue;
-    }
-
-    let currentSites = [];
-
     async function loadSites() {
       try {
         const res = await fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() });
         const sites = await res.json();
-        currentSites = sites;
 
         const list = document.getElementById('siteList');
         list.innerHTML = '';
@@ -179,12 +121,16 @@
           list.appendChild(li);
         });
 
-        populateSiteDropdown(document.getElementById('incidentSite'), sites);
-        populateSiteDropdown(document.getElementById('checkpointSite'), sites);
-        populateSiteDropdown(document.getElementById('scheduleSite'), sites);
-
-        if (document.getElementById('checkpointSite').value) loadCheckpoints();
-        if (document.getElementById('scheduleSite').value) loadSchedules();
+        const siteSelect = document.getElementById('incidentSite');
+        const previousValue = siteSelect.value;
+        siteSelect.innerHTML = '<option value="">Select a site</option>';
+        sites.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.name;
+          siteSelect.appendChild(opt);
+        });
+        if (previousValue) siteSelect.value = previousValue;
       } catch (err) {}
     }
 
@@ -250,12 +196,58 @@
       }
     }
 
-    document.getElementById('checkpointSite').addEventListener('change', loadCheckpoints);
+    async function addIncident() {
+      const siteId = document.getElementById('incidentSite').value;
+      const description = document.getElementById('incidentDescription').value;
+      const severity = document.getElementById('incidentSeverity').value;
+      const statusDiv = document.getElementById('incidentSubmitStatus');
 
-    async function loadCheckpoints() {
-      const siteId = document.getElementById('checkpointSite').value;
-      const list = document.getElementById('checkpointList');
-      list.innerHTML = '';
-      if (!siteId) return;
+      if (!siteId) { statusDiv.textContent = 'Please select a site'; statusDiv.className = 'status error'; return; }
+      if (!description) { statusDiv.textContent = 'Description is required'; statusDiv.className = 'status error'; return; }
+
       try {
-        const res = await fetch(API_BASE + '/api/checkpoints?
+        const res = await fetch(API_BASE + '/api/incidents', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            description,
+            severity
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to submit incident');
+        statusDiv.textContent = 'Incident submitted.';
+        statusDiv.className = 'status success';
+        document.getElementById('incidentDescription').value = '';
+        document.getElementById('incidentSite').value = '';
+        loadIncidents();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function loadIncidents() {
+      try {
+        const res = await fetch(API_BASE + '/api/incidents?tenant_id=' + tenantId, { headers: authHeaders() });
+        const incidents = await res.json();
+        const list = document.getElementById('incidentList');
+        list.innerHTML = '';
+        incidents.forEach(i => {
+          const li = document.createElement('li');
+          li.innerHTML = '<span class="sev-' + i.severity + '">[' + i.severity.toUpperCase() + ']</span> ' +
+            i.description + ' — ' + new Date(i.reported_at).toLocaleString();
+          list.appendChild(li);
+        });
+      } catch (err) {}
+    }
+
+    loadTenantInfo();
+    loadSites();
+    loadGuards();
+    loadIncidents();
+  </script>
+</body>
+</html>
