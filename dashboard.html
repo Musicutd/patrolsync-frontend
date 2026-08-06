@@ -19,6 +19,7 @@
     .sev-low { color: #2563eb; }
     .sev-medium { color: #d97706; }
     .sev-high { color: #dc2626; font-weight: bold; }
+    .sev-critical { color: #7f1d1d; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -44,6 +45,22 @@
     <button onclick="addGuard()">Add Guard</button>
     <div id="guardStatus" class="status"></div>
     <ul id="guardList"></ul>
+  </section>
+
+  <section>
+    <h3>Report Incident</h3>
+    <select id="incidentSite">
+      <option value="">Select a site</option>
+    </select>
+    <textarea id="incidentDescription" placeholder="Describe what happened" rows="4"></textarea>
+    <select id="incidentSeverity">
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+      <option value="critical">Critical</option>
+    </select>
+    <button onclick="addIncident()">Submit Report</button>
+    <div id="incidentSubmitStatus" class="status"></div>
   </section>
 
   <section>
@@ -95,6 +112,7 @@
       try {
         const res = await fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() });
         const sites = await res.json();
+
         const list = document.getElementById('siteList');
         list.innerHTML = '';
         sites.forEach(s => {
@@ -102,6 +120,17 @@
           li.textContent = s.name + (s.address ? ' — ' + s.address : '');
           list.appendChild(li);
         });
+
+        const siteSelect = document.getElementById('incidentSite');
+        const previousValue = siteSelect.value;
+        siteSelect.innerHTML = '<option value="">Select a site</option>';
+        sites.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.name;
+          siteSelect.appendChild(opt);
+        });
+        if (previousValue) siteSelect.value = previousValue;
       } catch (err) {}
     }
 
@@ -161,6 +190,39 @@
         document.getElementById('guardEmail').value = '';
         document.getElementById('guardPassword').value = '';
         loadGuards();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function addIncident() {
+      const siteId = document.getElementById('incidentSite').value;
+      const description = document.getElementById('incidentDescription').value;
+      const severity = document.getElementById('incidentSeverity').value;
+      const statusDiv = document.getElementById('incidentSubmitStatus');
+
+      if (!siteId) { statusDiv.textContent = 'Please select a site'; statusDiv.className = 'status error'; return; }
+      if (!description) { statusDiv.textContent = 'Description is required'; statusDiv.className = 'status error'; return; }
+
+      try {
+        const res = await fetch(API_BASE + '/api/incidents', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            description,
+            severity
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to submit incident');
+        statusDiv.textContent = 'Incident submitted.';
+        statusDiv.className = 'status success';
+        document.getElementById('incidentDescription').value = '';
+        document.getElementById('incidentSite').value = '';
+        loadIncidents();
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
