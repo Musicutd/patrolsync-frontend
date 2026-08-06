@@ -10,6 +10,7 @@
     button { background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button.logout { background: #dc2626; }
     button.scan { background: #16a34a; width: auto; padding: 4px 10px; margin: 0; font-size: 12px; }
+    button.remove { background: #dc2626; width: auto; padding: 4px 10px; margin: 0 0 0 8px; font-size: 12px; }
     section { border: 1px solid #ddd; border-radius: 6px; padding: 15px; margin-bottom: 20px; }
     #header { display: flex; justify-content: space-between; align-items: center; }
     ul { list-style: none; padding: 0; }
@@ -26,6 +27,11 @@
     .comp-overdue { color: #dc2626; font-weight: bold; }
     .comp-unmonitored { color: #d97706; }
     .comp-no_schedule { color: #999; }
+    .actions { display: flex; align-items: center; }
+    .filter-row { display: flex; gap: 6px; align-items: center; }
+    .filter-row input, .filter-row button { margin: 6px 0; }
+    .filter-row button { width: auto; flex-shrink: 0; padding: 10px 14px; }
+    .clear-link { background: none; color: #2563eb; text-decoration: underline; width: auto; padding: 0; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -120,7 +126,11 @@
 
   <section>
     <h3>Recent Incidents</h3>
-    <button onclick="loadIncidents()">Refresh</button>
+    <div class="filter-row">
+      <input type="date" id="incidentDateFilter">
+      <button onclick="loadIncidents()">Filter</button>
+    </div>
+    <button class="clear-link" onclick="clearIncidentFilter()">Clear date filter (show all)</button>
     <ul id="incidentList"></ul>
   </section>
 
@@ -233,7 +243,14 @@
         list.innerHTML = '';
         guards.forEach(g => {
           const li = document.createElement('li');
-          li.textContent = g.email;
+          const label = document.createElement('span');
+          label.textContent = g.email;
+          const removeBtn = document.createElement('button');
+          removeBtn.textContent = 'Remove';
+          removeBtn.className = 'remove';
+          removeBtn.onclick = () => removeGuard(g.id, g.email);
+          li.appendChild(label);
+          li.appendChild(removeBtn);
           list.appendChild(li);
         });
       } catch (err) {}
@@ -256,6 +273,25 @@
         statusDiv.className = 'status success';
         document.getElementById('guardEmail').value = '';
         document.getElementById('guardPassword').value = '';
+        loadGuards();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function removeGuard(guardId, guardEmail) {
+      if (!confirm('Remove guard ' + guardEmail + '? This cannot be undone.')) return;
+      const statusDiv = document.getElementById('guardStatus');
+      try {
+        const res = await fetch(API_BASE + '/api/users/' + guardId + '?tenant_id=' + tenantId, {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to remove guard');
+        statusDiv.textContent = 'Guard removed.';
+        statusDiv.className = 'status success';
         loadGuards();
       } catch (err) {
         statusDiv.textContent = err.message;
@@ -378,10 +414,36 @@
           } else {
             summary = JSON.stringify(s.config);
           }
-          li.innerHTML = '<span>' + s.schedule_type.toUpperCase() + ' — ' + summary + '</span>';
+          const label = document.createElement('span');
+          label.textContent = s.schedule_type.toUpperCase() + ' — ' + summary;
+          const removeBtn = document.createElement('button');
+          removeBtn.textContent = 'Remove';
+          removeBtn.className = 'remove';
+          removeBtn.onclick = () => removeSchedule(s.id, siteId);
+          li.appendChild(label);
+          li.appendChild(removeBtn);
           list.appendChild(li);
         });
       } catch (err) {}
+    }
+
+    async function removeSchedule(scheduleId, siteId) {
+      if (!confirm('Remove this schedule?')) return;
+      const statusDiv = document.getElementById('scheduleStatus');
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-schedules/' + scheduleId + '?tenant_id=' + tenantId, {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to remove schedule');
+        statusDiv.textContent = 'Schedule removed.';
+        statusDiv.className = 'status success';
+        loadSchedules();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
     }
 
     async function addSchedule() {
@@ -500,12 +562,23 @@
       }
     }
 
+    function clearIncidentFilter() {
+      document.getElementById('incidentDateFilter').value = '';
+      loadIncidents();
+    }
+
     async function loadIncidents() {
+      const dateVal = document.getElementById('incidentDateFilter').value;
       try {
-        const res = await fetch(API_BASE + '/api/incidents?tenant_id=' + tenantId, { headers: authHeaders() });
+        const url = API_BASE + '/api/incidents?tenant_id=' + tenantId + (dateVal ? '&date=' + dateVal : '');
+        const res = await fetch(url, { headers: authHeaders() });
         const incidents = await res.json();
         const list = document.getElementById('incidentList');
         list.innerHTML = '';
+        if (incidents.length === 0) {
+          list.innerHTML = '<li>No incidents' + (dateVal ? ' on ' + dateVal : '') + '</li>';
+          return;
+        }
         incidents.forEach(i => {
           const li = document.createElement('li');
           li.innerHTML = '<span class="sev-' + i.severity + '">[' + i.severity.toUpperCase() + ']</span> ' +
