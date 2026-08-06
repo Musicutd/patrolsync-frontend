@@ -21,6 +21,8 @@
     .sev-medium { color: #d97706; }
     .sev-high { color: #dc2626; font-weight: bold; }
     .sev-critical { color: #7f1d1d; font-weight: bold; }
+    .hidden { display: none; }
+    .schedule-meta { font-size: 12px; color: #666; }
   </style>
 </head>
 <body>
@@ -60,6 +62,32 @@
     <button onclick="addCheckpoint()">Add Checkpoint</button>
     <div id="checkpointStatus" class="status"></div>
     <ul id="checkpointList"></ul>
+  </section>
+
+  <section>
+    <h3>Patrol Schedules</h3>
+    <select id="scheduleSite">
+      <option value="">Select a site</option>
+    </select>
+    <select id="scheduleType">
+      <option value="hourly">Hourly (scan every N hours)</option>
+      <option value="fixed">Fixed times of day</option>
+      <option value="custom">Custom (advanced JSON)</option>
+    </select>
+
+    <div id="hourlyFields">
+      <input type="number" id="intervalHours" placeholder="Interval in hours (e.g. 2)" min="1">
+    </div>
+    <div id="fixedFields" class="hidden">
+      <input type="text" id="fixedTimes" placeholder="Times, comma-separated (e.g. 08:00, 14:00, 20:00)">
+    </div>
+    <div id="customFields" class="hidden">
+      <textarea id="customConfig" rows="3" placeholder='Raw JSON (e.g. {"note": "custom rule"})'></textarea>
+    </div>
+
+    <button onclick="addSchedule()">Add Schedule</button>
+    <div id="scheduleStatus" class="status"></div>
+    <ul id="scheduleList"></ul>
   </section>
 
   <section>
@@ -153,10 +181,10 @@
 
         populateSiteDropdown(document.getElementById('incidentSite'), sites);
         populateSiteDropdown(document.getElementById('checkpointSite'), sites);
+        populateSiteDropdown(document.getElementById('scheduleSite'), sites);
 
-        if (document.getElementById('checkpointSite').value) {
-          loadCheckpoints();
-        }
+        if (document.getElementById('checkpointSite').value) loadCheckpoints();
+        if (document.getElementById('scheduleSite').value) loadSchedules();
       } catch (err) {}
     }
 
@@ -306,6 +334,93 @@
         listItemEl.appendChild(confirmMsg);
       } catch (err) {
         alert('Failed to log scan: ' + err.message);
+      }
+    }
+
+    document.getElementById('scheduleType').addEventListener('change', updateScheduleFields);
+    function updateScheduleFields() {
+      const type = document.getElementById('scheduleType').value;
+      document.getElementById('hourlyFields').classList.toggle('hidden', type !== 'hourly');
+      document.getElementById('fixedFields').classList.toggle('hidden', type !== 'fixed');
+      document.getElementById('customFields').classList.toggle('hidden', type !== 'custom');
+    }
+
+    document.getElementById('scheduleSite').addEventListener('change', loadSchedules);
+
+    async function loadSchedules() {
+      const siteId = document.getElementById('scheduleSite').value;
+      const list = document.getElementById('scheduleList');
+      list.innerHTML = '';
+      if (!siteId) return;
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-schedules?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() });
+        const schedules = await res.json();
+        schedules.forEach(s => {
+          const li = document.createElement('li');
+          let summary = '';
+          if (s.schedule_type === 'hourly') {
+            summary = 'Every ' + s.config.interval_hours + ' hour(s)';
+          } else if (s.schedule_type === 'fixed') {
+            summary = 'At ' + (s.config.times || []).join(', ');
+          } else {
+            summary = JSON.stringify(s.config);
+          }
+          li.innerHTML = '<span>' + s.schedule_type.toUpperCase() + ' — ' + summary + '</span>';
+          list.appendChild(li);
+        });
+      } catch (err) {}
+    }
+
+    async function addSchedule() {
+      const siteId = document.getElementById('scheduleSite').value;
+      const type = document.getElementById('scheduleType').value;
+      const statusDiv = document.getElementById('scheduleStatus');
+
+      if (!siteId) { statusDiv.textContent = 'Please select a site'; statusDiv.className = 'status error'; return; }
+
+      let config;
+      try {
+        if (type === 'hourly') {
+          const hours = Number(document.getElementById('intervalHours').value);
+          if (!hours || hours < 1) throw new Error('Enter a valid interval in hours');
+          config = { interval_hours: hours };
+        } else if (type === 'fixed') {
+          const raw = document.getElementById('fixedTimes').value;
+          const times = raw.split(',').map(t => t.trim()).filter(Boolean);
+          if (times.length === 0) throw new Error('Enter at least one time');
+          config = { times };
+        } else {
+          const raw = document.getElementById('customConfig').value;
+          config = raw ? JSON.parse(raw) : {};
+        }
+      } catch (err) {
+        statusDiv.textContent = err.message.includes('JSON') ? 'Invalid JSON in custom config' : err.message;
+        statusDiv.className = 'status error';
+        return;
+      }
+
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-schedules', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            schedule_type: type,
+            config
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to add schedule');
+        statusDiv.textContent = 'Schedule added.';
+        statusDiv.className = 'status success';
+        document.getElementById('intervalHours').value = '';
+        document.getElementById('fixedTimes').value = '';
+        document.getElementById('customConfig').value = '';
+        loadSchedules();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
       }
     }
 
