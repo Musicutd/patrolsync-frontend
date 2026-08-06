@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PatrolSync - Guard</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 16px; background: #f7f7f8; }
+    h2, h3 { color: #222; }
+    input, select, button, textarea { width: 100%; padding: 14px; margin: 6px 0; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; }
+    button { background: #2563eb; color: white; border: none; font-weight: bold; cursor: pointer; }
+    button.logout { background: #dc2626; width: auto; padding: 10px 16px; font-size: 14px; }
+    button.scan { background: #16a34a; }
+    button.scan.overdue { background: #dc2626; }
+    section { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    #header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { border-bottom: 1px solid #eee; padding: 12px 0; }
+    .cp-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .cp-name { font-weight: bold; }
+    .cp-meta { font-size: 12px; color: #666; margin-top: 2px; }
+    .status { font-weight: bold; margin-top: 8px; font-size: 14px; }
+    .success { color: green; }
+    .error { color: red; }
+    .badge { font-size: 12px; padding: 3px 8px; border-radius: 10px; white-space: nowrap; }
+    .badge-ok { background: #dcfce7; color: #166534; }
+    .badge-overdue { background: #fee2e2; color: #991b1b; }
+    .badge-unmonitored { background: #fef3c7; color: #92400e; }
+    .badge-no_schedule { background: #f1f5f9; color: #64748b; }
+    #loginScreen, #guardScreen { display: none; }
+    .hint { font-size: 13px; color: #666; margin: 4px 0 10px; }
+  </style>
+</head>
+<body>
+
+  <div id="loginScreen">
+    <h2>PatrolSync — Guard Login</h2>
+    <section>
+      <input type="number" id="loginTenantId" placeholder="Company / Tenant ID">
+      <input type="email" id="loginEmail" placeholder="Your email">
+      <input type="password" id="loginPassword" placeholder="Password">
+      <button onclick="doLogin()">Log In</button>
+      <div id="loginStatus" class="status"></div>
+      <p class="hint">Ask your admin for your Tenant ID if you don't know it.</p>
+    </section>
+  </div>
+
+  <div id="guardScreen">
+    <div id="header">
+      <h2 id="guardName">Guard</h2>
+      <button class="logout" onclick="doLogout()">Log Out</button>
+    </div>
+
+    <section>
+      <h3>Select Site</h3>
+      <select id="siteSelect">
+        <option value="">Select a site</option>
+      </select>
+    </section>
+
+    <section>
+      <h3>Checkpoints</h3>
+      <p class="hint">Tap "Scan" as soon as you reach each checkpoint.</p>
+      <ul id="checkpointList"><li>Select a site to see checkpoints.</li></ul>
+    </section>
+
+    <section>
+      <h3>Report an Incident</h3>
+      <textarea id="incidentDescription" placeholder="Describe what happened" rows="3"></textarea>
+      <select id="incidentSeverity">
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+        <option value="critical">Critical</option>
+      </select>
+      <button onclick="submitIncident()">Submit Report</button>
+      <div id="incidentStatus" class="status"></div>
+    </section>
+  </div>
+
+  <script>
+    const API_BASE = 'https://patrolsync-backend.onrender.com';
+
+    function getSession() {
+      return {
+        token: localStorage.getItem('guard_token'),
+        tenantId: localStorage.getItem('guard_tenant_id'),
+        userId: localStorage.getItem('guard_user_id'),
+        email: localStorage.getItem('guard_email')
+      };
+    }
+
+    function authHeaders() {
+      const { token } = getSession();
+      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+    }
+
+    function showScreen(name) {
+      document.getElementById('loginScreen').style.display = name === 'login' ? 'block' : 'none';
+      document.getElementById('guardScreen').style.display = name === 'guard' ? 'block' : 'none';
+    }
+
+    async function doLogin() {
+      const tenant_id = document.getElementById('loginTenantId').value;
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      const statusDiv = document.getElementById('loginStatus');
+
+      if (!tenant_id || !email || !password) {
+        statusDiv.textContent = 'All fields are required';
+        statusDiv.className = 'status error';
+        return;
+      }
+
+      try {
+        const res = await fetch(API_BASE + '/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenant_id: Number(tenant_id), email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Login failed');
+
+        localStorage.setItem('guard_token', data.token);
+        localStorage.setItem('guard_tenant_id', data.tenant_id);
+        localStorage.setItem('guard_user_id', data.user.id);
+        localStorage.setItem('guard_email', data.user.email);
+
+        statusDiv.textContent = '';
+        startGuardSession();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    function doLogout() {
+      localStorage.removeItem('guard_token');
+      localStorage.removeItem('guard_tenant_id');
+      localStorage.removeItem('guard_user_id');
+      localStorage.removeItem('guard_email');
+      showScreen('login');
+    }
+
+    function populateSiteDropdown(sites) {
+      const select = document.getElementById('siteSelect');
+      select.innerHTML = '<option value="">Select a site</option>';
+      sites.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        select.appendChild(opt);
+      });
+    }
+
+    async function loadSites() {
+      const { tenantId } = getSession();
+      try {
+        const res = await fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() });
+        const sites = await res.json();
+        populateSiteDropdown(sites);
+      } catch (err) {
+        console.error('loadSites failed:', err.message);
+      }
+    }
+
+    document.getElementById('siteSelect').addEventListener('change', loadCheckpointsWithCompliance);
+
+    async function loadCheckpointsWithCompliance() {
+      const { tenantId } = getSession();
+      const siteId = document.getElementById('siteSelect').value;
+      const list = document.getElementById('checkpointList');
+      list.innerHTML = '';
+
+      if (!siteId) {
+        list.innerHTML = '<li>Select a site to see checkpoints.</li>';
+        return;
+      }
+
+      list.innerHTML = '<li>Loading checkpoints...</li>';
+
+      try {
+        const [cpRes, compRes] = await Promise.all([
+          fetch(API_BASE + '/api/checkpoints?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() }),
+          fetch(API_BASE + '/api/patrol-compliance?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() })
+        ]);
+        const checkpoints = await cpRes.json();
+        const compliance = await compRes.json();
+
+        list.innerHTML = '';
+        if (checkpoints.length === 0) {
+          list.innerHTML = '<li>No checkpoints at this site yet.</li>';
+          return;
+        }
+
+        checkpoints.forEach(cp => {
+          const comp = compliance.find(c => c.checkpoint_id === cp.id);
+          const status = comp ? comp.status : 'no_schedule';
+          const isOverdue = status === 'overdue';
+
+          const li = document.createElement('li');
+          const row = document.createElement('div');
+          row.className = 'cp-row';
+
+          const infoDiv = document.createElement('div');
+          const nameDiv = document.createElement('div');
+          nameDiv.className = 'cp-name';
+          nameDiv.textContent = cp.name;
+          const metaDiv = document.createElement('div');
+          metaDiv.className = 'cp-meta';
+          const lastScanText = comp && comp.last_scan ? new Date(comp.last_scan).toLocaleString() : 'never scanned';
+          metaDiv.textContent = 'Last scan: ' + lastScanText;
+          infoDiv.appendChild(nameDiv);
+          infoDiv.appendChild(metaDiv);
+
+          const badge = document.createElement('span');
+          badge.className = 'badge badge-' + status;
+          badge.textContent = status === 'ok' ? 'On time' : status === 'overdue' ? 'Overdue' : status === 'unmonitored' ? 'Unmonitored' : 'No schedule';
+
+          const scanBtn = document.createElement('button');
+          scanBtn.textContent = 'Scan';
+          scanBtn.className = 'scan' + (isOverdue ? ' overdue' : '');
+          scanBtn.style.width = 'auto';
+          scanBtn.style.padding = '10px 18px';
+          scanBtn.onclick = () => logScan(cp.id, scanBtn, metaDiv, badge);
+
+          row.appendChild(infoDiv);
+          row.appendChild(badge);
+          row.appendChild(scanBtn);
+          li.appendChild(row);
+          list.appendChild(li);
+        });
+      } catch (err) {
+        list.innerHTML = '<li class="error">Failed to load checkpoints</li>';
+      }
+    }
+
+    async function logScan(checkpointId, btnEl, metaDiv, badgeEl) {
+      const { tenantId, userId } = getSession();
+      btnEl.disabled = true;
+      btnEl.textContent = 'Scanning...';
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-logs', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            checkpoint_id: checkpointId,
+            user_id: Number(userId)
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Scan failed');
+        metaDiv.textContent = 'Last scan: ' + new Date(data.scanned_at).toLocaleString();
+        badgeEl.className = 'badge badge-ok';
+        badgeEl.textContent = 'On time';
+        btnEl.className = 'scan';
+        btnEl.textContent = 'Scanned ✓';
+        setTimeout(() => { btnEl.textContent = 'Scan'; btnEl.disabled = false; }, 2000);
+      } catch (err) {
+        alert('Scan failed: ' + err.message);
+        btnEl.disabled = false;
+        btnEl.textContent = 'Scan';
+      }
+    }
+
+    async function submitIncident() {
+      const { tenantId } = getSession();
+      const siteId = document.getElementById('siteSelect').value;
+      const description = document.getElementById('incidentDescription').value;
+      const severity = document.getElementById('incidentSeverity').value;
+      const statusDiv = document.getElementById('incidentStatus');
+
+      if (!siteId) { statusDiv.textContent = 'Please select a site first'; statusDiv.className = 'status error'; return; }
+      if (!description) { statusDiv.textContent = 'Description is required'; statusDiv.className = 'status error'; return; }
+
+      try {
+        const res = await fetch(API_BASE + '/api/incidents', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            description,
+            severity
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to submit incident');
+        statusDiv.textContent = 'Incident submitted. Thank you.';
+        statusDiv.className = 'status success';
+        document.getElementById('incidentDescription').value = '';
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    function startGuardSession() {
+      const { email } = getSession();
+      document.getElementById('guardName').textContent = email || 'Guard';
+      showScreen('guard');
+      loadSites();
+    }
+
+    function init() {
+      const { token, tenantId } = getSession();
+      if (token && tenantId) {
+        startGuardSession();
+      } else {
+        showScreen('login');
+      }
+    }
+    init();
+  </script>
+</body>
+</html>
