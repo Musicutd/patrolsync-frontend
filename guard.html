@@ -33,6 +33,8 @@
     .badge-no_schedule { background: #f1f5f9; color: #64748b; }
     #loginScreen, #guardScreen { display: none; }
     .hint { font-size: 13px; color: #666; margin: 4px 0 10px; }
+    .admin-link { display: block; text-align: center; margin-top: 16px; font-size: 13px; }
+    .admin-link a { color: #2563eb; }
     #scannerModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; }
     #scannerModal video { width: 90%; max-width: 400px; border-radius: 8px; }
     #scannerModal canvas { display: none; }
@@ -45,13 +47,15 @@
   <div id="loginScreen">
     <h2>PatrolSync — Guard Login</h2>
     <section>
-      <input type="number" id="loginTenantId" placeholder="Company / Tenant ID">
       <input type="email" id="loginEmail" placeholder="Your email">
       <input type="password" id="loginPassword" placeholder="Password">
       <button onclick="doLogin()">Log In</button>
       <div id="loginStatus" class="status"></div>
-      <p class="hint">Ask your admin for your Tenant ID if you don't know it.</p>
+      <p class="hint">Ask your site admin if you don't have login credentials yet.</p>
     </section>
+    <div class="admin-link">
+      <a href="login.html">Are you an admin? Log in here →</a>
+    </div>
   </div>
 
   <div id="guardScreen">
@@ -125,14 +129,23 @@
       document.getElementById('guardScreen').style.display = name === 'guard' ? 'block' : 'none';
     }
 
+    function clearAllSessions() {
+      localStorage.removeItem('token');
+      localStorage.removeItem('tenant_id');
+      localStorage.removeItem('user_email');
+      localStorage.removeItem('guard_token');
+      localStorage.removeItem('guard_tenant_id');
+      localStorage.removeItem('guard_user_id');
+      localStorage.removeItem('guard_email');
+    }
+
     async function doLogin() {
-      const tenant_id = document.getElementById('loginTenantId').value;
-      const email = document.getElementById('loginEmail').value;
+      const email = document.getElementById('loginEmail').value.trim();
       const password = document.getElementById('loginPassword').value;
       const statusDiv = document.getElementById('loginStatus');
 
-      if (!tenant_id || !email || !password) {
-        statusDiv.textContent = 'All fields are required';
+      if (!email || !password) {
+        statusDiv.textContent = 'Email and password are required';
         statusDiv.className = 'status error';
         return;
       }
@@ -141,11 +154,18 @@
         const res = await fetch(API_BASE + '/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenant_id: Number(tenant_id), email, password })
+          body: JSON.stringify({ email, password })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Login failed');
 
+        if (data.user.role === 'admin') {
+          statusDiv.textContent = 'This is an admin account. Please use the admin login page.';
+          statusDiv.className = 'status error';
+          return;
+        }
+
+        clearAllSessions();
         localStorage.setItem('guard_token', data.token);
         localStorage.setItem('guard_tenant_id', data.tenant_id);
         localStorage.setItem('guard_user_id', data.user.id);
@@ -160,10 +180,7 @@
     }
 
     function doLogout() {
-      localStorage.removeItem('guard_token');
-      localStorage.removeItem('guard_tenant_id');
-      localStorage.removeItem('guard_user_id');
-      localStorage.removeItem('guard_email');
+      clearAllSessions();
       showScreen('login');
     }
 
@@ -289,8 +306,6 @@
       }
     }
 
-    // Camera-based QR scanner using jsQR. Decodes frames from the live camera feed,
-    // looks up the checkpoint by its QR value, and logs a scan automatically.
     async function openScanner() {
       const modal = document.getElementById('scannerModal');
       const video = document.getElementById('scannerVideo');
