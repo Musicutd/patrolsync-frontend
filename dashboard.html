@@ -68,8 +68,9 @@
     #qrModalContent canvas { margin: 10px auto; display: block; }
     #qrModalContent button, #resetPwModalContent button { margin-top: 10px; }
     .qr-close { background: #64748b; }
-    .assign-row { display: flex; gap: 6px; }
-    .assign-row select { flex: 1; }
+    .assign-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .assign-row select { flex: 1; min-width: 120px; }
+    .assign-row input { flex: 0 0 90px; }
     .assign-row button { width: auto; flex-shrink: 0; padding: 10px 14px; }
   </style>
 </head>
@@ -129,10 +130,11 @@
 
   <section>
     <h3>Guard Schedule (Site Assignments)</h3>
-    <p style="font-size:13px; color:#666;">Assign each guard to the site(s) they're responsible for. Guards will only see their assigned site(s) in their app.</p>
+    <p style="font-size:13px; color:#666;">Assign each guard to a site and set how many checkpoint scans they should complete per day. Leave the target blank to require all checkpoints at that site.</p>
     <div class="assign-row">
       <select id="assignGuard"><option value="">Select a guard</option></select>
       <select id="assignSite"><option value="">Select a site</option></select>
+      <input type="number" id="assignRoundSize" placeholder="Target (e.g. 20)" min="1">
       <button onclick="addAssignment()">Assign</button>
     </div>
     <div id="assignStatus" class="status"></div>
@@ -729,7 +731,8 @@
         assignments.forEach(a => {
           const li = document.createElement('li');
           const label = document.createElement('span');
-          label.textContent = a.guard_email + ' → ' + a.site_name;
+          const targetText = a.round_size !== null ? a.round_size + ' scans/day' : 'all checkpoints';
+          label.textContent = a.guard_email + ' → ' + a.site_name + ' (' + targetText + ')';
           const removeBtn = document.createElement('button');
           removeBtn.textContent = 'Remove';
           removeBtn.className = 'remove';
@@ -746,18 +749,25 @@
     async function addAssignment() {
       const guardId = document.getElementById('assignGuard').value;
       const siteId = document.getElementById('assignSite').value;
+      const roundSize = document.getElementById('assignRoundSize').value;
       const statusDiv = document.getElementById('assignStatus');
       if (!guardId || !siteId) { statusDiv.textContent = 'Select both a guard and a site'; statusDiv.className = 'status error'; return; }
       try {
         const res = await fetch(API_BASE + '/api/guard-assignments', {
           method: 'POST',
           headers: authHeaders(),
-          body: JSON.stringify({ tenant_id: Number(tenantId), site_id: Number(siteId), user_id: Number(guardId) })
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            user_id: Number(guardId),
+            round_size: roundSize ? Number(roundSize) : null
+          })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to assign guard');
         statusDiv.textContent = 'Guard assigned to site.';
         statusDiv.className = 'status success';
+        document.getElementById('assignRoundSize').value = '';
         loadAssignments();
       } catch (err) {
         statusDiv.textContent = err.message;
