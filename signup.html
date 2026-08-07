@@ -2,78 +2,109 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>PatrolSync - Sign Up</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PatrolSync - Create Your Account</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 480px; margin: 40px auto; padding: 20px; }
-    h2 { color: #222; }
-    input, select, button { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; font-size: 14px; }
-    button { background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    button:disabled { background: #999; }
-    #status { margin-top: 10px; font-weight: bold; }
+    h2 { color: #222; text-align: center; }
+    input, select, button { width: 100%; padding: 12px; margin: 8px 0; box-sizing: border-box; font-size: 15px; border-radius: 6px; border: 1px solid #ccc; }
+    button { background: #2563eb; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 14px; }
+    .status { font-weight: bold; margin-top: 10px; text-align: center; }
     .success { color: green; }
     .error { color: red; }
-    .plans { display: flex; gap: 10px; margin: 10px 0; }
-    .plan-card { flex: 1; border: 2px solid #ddd; border-radius: 6px; padding: 12px; text-align: center; cursor: pointer; }
+    .plan-card { border: 2px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 8px 0; cursor: pointer; }
     .plan-card.selected { border-color: #2563eb; background: #eff6ff; }
+    .plan-name { font-weight: bold; text-transform: capitalize; font-size: 15px; }
+    .plan-price { color: #2563eb; font-weight: bold; }
+    .plan-limits { font-size: 12px; color: #666; margin-top: 4px; }
+    .login-link { text-align: center; margin-top: 16px; font-size: 14px; }
+    .login-link a { color: #2563eb; }
   </style>
 </head>
 <body>
   <h2>Create Your PatrolSync Account</h2>
-  <form id="signupForm">
-    <label>Company Name</label>
-    <input type="text" id="company_name" required placeholder="e.g. Apex Security Ltd">
 
-    <label>Choose a Plan</label>
-    <div class="plans">
-      <div class="plan-card selected" data-plan="starter">Starter</div>
-      <div class="plan-card" data-plan="pro">Pro</div>
-      <div class="plan-card" data-plan="enterprise">Enterprise</div>
-    </div>
+  <input type="text" id="companyName" placeholder="Company Name">
 
-    <label>Admin Email</label>
-    <input type="email" id="admin_email" required placeholder="you@company.com">
+  <label style="font-weight: bold; display: block; margin-top: 10px;">Choose a Plan</label>
+  <div id="planCards">Loading plans...</div>
 
-    <label>Password</label>
-    <input type="password" id="admin_password" required minlength="6">
+  <input type="email" id="adminEmail" placeholder="Admin Email">
+  <input type="password" id="adminPassword" placeholder="Password" minlength="6">
 
-    <button type="submit" id="submitBtn">Create Account</button>
-  </form>
-  <div id="status"></div>
+  <button onclick="createAccount()">Create Account</button>
+  <div id="signupStatus" class="status"></div>
+
+  <div class="login-link">
+    Already have an account? <a href="login.html">Log in here</a>
+  </div>
 
   <script>
-    const API_URL = 'https://patrolsync-backend.onrender.com/api/signup';
+    const API_BASE = 'https://patrolsync-backend.onrender.com';
     let selectedPlan = 'starter';
+    let allPlans = null;
 
-    document.querySelectorAll('.plan-card').forEach(card => {
-      card.addEventListener('click', () => {
-        document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
-        card.classList.add('selected');
-        selectedPlan = card.dataset.plan;
+    async function loadPlans() {
+      const container = document.getElementById('planCards');
+      try {
+        const res = await fetch(API_BASE + '/api/plans');
+        allPlans = await res.json();
+        renderPlanCards();
+      } catch (err) {
+        container.innerHTML = '<p style="color:red;">Failed to load plans. Please refresh.</p>';
+      }
+    }
+
+    function renderPlanCards() {
+      const container = document.getElementById('planCards');
+      container.innerHTML = '';
+      Object.keys(allPlans).forEach(planKey => {
+        const p = allPlans[planKey];
+        const isUnlimited = p.locations === null || p.locations === undefined;
+        const card = document.createElement('div');
+        card.className = 'plan-card' + (planKey === selectedPlan ? ' selected' : '');
+        card.onclick = () => { selectedPlan = planKey; renderPlanCards(); };
+
+        const limitsText = isUnlimited
+          ? 'Unlimited locations, checkpoints & guards — pay-per-unit beyond base'
+          : p.locations + ' location(s) · ' + p.checkpoints + ' checkpoint(s) · ' + p.guards + ' guard(s)';
+
+        card.innerHTML =
+          '<div style="display:flex; justify-content:space-between;">' +
+            '<span class="plan-name">' + planKey + '</span>' +
+            '<span class="plan-price">€' + p.monthly_price + '/mo</span>' +
+          '</div>' +
+          '<div class="plan-limits">' + limitsText + '</div>';
+        container.appendChild(card);
       });
-    });
+    }
 
-    const form = document.getElementById('signupForm');
-    const statusDiv = document.getElementById('status');
-    const submitBtn = document.getElementById('submitBtn');
+    async function createAccount() {
+      const company_name = document.getElementById('companyName').value.trim();
+      const admin_email = document.getElementById('adminEmail').value.trim();
+      const admin_password = document.getElementById('adminPassword').value;
+      const statusDiv = document.getElementById('signupStatus');
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      submitBtn.disabled = true;
-      statusDiv.textContent = 'Creating account...';
-      statusDiv.className = '';
+      if (!company_name || !admin_email || !admin_password) {
+        statusDiv.textContent = 'All fields are required';
+        statusDiv.className = 'status error';
+        return;
+      }
+      if (admin_password.length < 6) {
+        statusDiv.textContent = 'Password must be at least 6 characters';
+        statusDiv.className = 'status error';
+        return;
+      }
 
-      const payload = {
-        company_name: document.getElementById('company_name').value,
-        plan: selectedPlan,
-        admin_email: document.getElementById('admin_email').value,
-        admin_password: document.getElementById('admin_password').value
-      };
+      statusDiv.textContent = 'Creating your account...';
+      statusDiv.className = 'status';
 
       try {
-        const res = await fetch(API_URL, {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        const res = await fetch(API_BASE + '/api/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ company_name, plan: selectedPlan, admin_email, admin_password, timezone })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Signup failed');
@@ -83,15 +114,15 @@
         localStorage.setItem('user_email', data.admin.email);
 
         statusDiv.textContent = 'Account created! Redirecting...';
-        statusDiv.className = 'success';
-        setTimeout(() => { window.location.href = 'dashboard.html'; }, 1000);
+        statusDiv.className = 'status success';
+        setTimeout(() => { window.location.href = 'dashboard.html'; }, 800);
       } catch (err) {
         statusDiv.textContent = err.message;
-        statusDiv.className = 'error';
-      } finally {
-        submitBtn.disabled = false;
+        statusDiv.className = 'status error';
       }
-    });
+    }
+
+    loadPlans();
   </script>
 </body>
 </html>
