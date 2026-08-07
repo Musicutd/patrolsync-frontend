@@ -12,8 +12,6 @@
     input, select, button, textarea { width: 100%; padding: 14px; margin: 6px 0; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; }
     button { background: #2563eb; color: white; border: none; font-weight: bold; cursor: pointer; }
     button.logout { background: #dc2626; width: auto; padding: 10px 16px; font-size: 14px; }
-    button.scan { background: #16a34a; }
-    button.scan.overdue { background: #dc2626; }
     button.scanqr { background: #7c3aed; margin-top: 10px; }
     button.remaining { background: #d97706; margin-top: 6px; }
     button.qr-close { background: #64748b; }
@@ -21,17 +19,9 @@
     #header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     ul { list-style: none; padding: 0; margin: 0; }
     li { border-bottom: 1px solid #eee; padding: 12px 0; }
-    .cp-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-    .cp-name { font-weight: bold; }
-    .cp-meta { font-size: 12px; color: #666; margin-top: 2px; }
     .status { font-weight: bold; margin-top: 8px; font-size: 14px; }
     .success { color: green; }
     .error { color: red; }
-    .badge { font-size: 12px; padding: 3px 8px; border-radius: 10px; white-space: nowrap; }
-    .badge-ok { background: #dcfce7; color: #166534; }
-    .badge-overdue { background: #fee2e2; color: #991b1b; }
-    .badge-unmonitored { background: #fef3c7; color: #92400e; }
-    .badge-no_schedule { background: #f1f5f9; color: #64748b; }
     #loginScreen, #guardScreen { display: none; }
     .hint { font-size: 13px; color: #666; margin: 4px 0 10px; }
     .admin-link { display: block; text-align: center; margin-top: 16px; font-size: 13px; }
@@ -103,12 +93,6 @@
       <div id="noAssignmentMsg" class="no-assignment hidden">
         You haven't been assigned to any site yet. Ask your admin to assign you via Guard Schedule.
       </div>
-    </section>
-
-    <section>
-      <h3>Checkpoints</h3>
-      <p class="hint">Or tap "Scan" manually below if you can't use the camera.</p>
-      <ul id="checkpointList"><li>Loading your assigned site...</li></ul>
     </section>
 
     <section>
@@ -224,7 +208,6 @@
       const { tenantId, userId } = getSession();
       const wrap = document.getElementById('siteSelectorWrap');
       const noAssignMsg = document.getElementById('noAssignmentMsg');
-      const cpList = document.getElementById('checkpointList');
 
       try {
         const res = await fetch(API_BASE + '/api/guard-assignments?tenant_id=' + tenantId + '&user_id=' + userId, { headers: authHeaders() });
@@ -235,7 +218,6 @@
         if (assignedSites.length === 0) {
           wrap.classList.add('hidden');
           noAssignMsg.classList.remove('hidden');
-          cpList.innerHTML = '<li>No checkpoints available — no site assigned yet.</li>';
           resetProgressDisplay();
           return;
         }
@@ -253,18 +235,13 @@
         });
 
         select.value = assignedSites[0].id;
-        loadCheckpointsWithCompliance();
         loadProgress();
       } catch (err) {
         console.error('loadAssignedSites failed:', err.message);
-        cpList.innerHTML = '<li class="error">Failed to load your assigned site</li>';
       }
     }
 
-    document.getElementById('siteSelect').addEventListener('change', () => {
-      loadCheckpointsWithCompliance();
-      loadProgress();
-    });
+    document.getElementById('siteSelect').addEventListener('change', loadProgress);
 
     function resetProgressDisplay() {
       document.getElementById('progressCount').textContent = '0';
@@ -324,105 +301,6 @@
 
     function closeRemaining() {
       document.getElementById('remainingModal').style.display = 'none';
-    }
-
-    async function loadCheckpointsWithCompliance() {
-      const { tenantId } = getSession();
-      const siteId = document.getElementById('siteSelect').value;
-      const list = document.getElementById('checkpointList');
-      list.innerHTML = '';
-
-      if (!siteId) {
-        list.innerHTML = '<li>No site assigned.</li>';
-        return;
-      }
-
-      list.innerHTML = '<li>Loading checkpoints...</li>';
-
-      try {
-        const [cpRes, compRes] = await Promise.all([
-          fetch(API_BASE + '/api/checkpoints?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() }),
-          fetch(API_BASE + '/api/patrol-compliance?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() })
-        ]);
-        const checkpoints = await cpRes.json();
-        const compliance = await compRes.json();
-
-        list.innerHTML = '';
-        if (checkpoints.length === 0) {
-          list.innerHTML = '<li>No checkpoints at this site yet.</li>';
-          return;
-        }
-
-        checkpoints.forEach(cp => {
-          const comp = compliance.find(c => c.checkpoint_id === cp.id);
-          const status = comp ? comp.status : 'no_schedule';
-          const isOverdue = status === 'overdue';
-
-          const li = document.createElement('li');
-          const row = document.createElement('div');
-          row.className = 'cp-row';
-
-          const infoDiv = document.createElement('div');
-          const nameDiv = document.createElement('div');
-          nameDiv.className = 'cp-name';
-          nameDiv.textContent = cp.name;
-          const metaDiv = document.createElement('div');
-          metaDiv.className = 'cp-meta';
-          const lastScanText = comp && comp.last_scan ? new Date(comp.last_scan).toLocaleString() : 'never scanned';
-          metaDiv.textContent = 'Last scan: ' + lastScanText;
-          infoDiv.appendChild(nameDiv);
-          infoDiv.appendChild(metaDiv);
-
-          const badge = document.createElement('span');
-          badge.className = 'badge badge-' + status;
-          badge.textContent = status === 'ok' ? 'On time' : status === 'overdue' ? 'Overdue' : status === 'unmonitored' ? 'Unmonitored' : 'No schedule';
-
-          const scanBtn = document.createElement('button');
-          scanBtn.textContent = 'Scan';
-          scanBtn.className = 'scan' + (isOverdue ? ' overdue' : '');
-          scanBtn.style.width = 'auto';
-          scanBtn.style.padding = '10px 18px';
-          scanBtn.onclick = () => logScan(cp.id, scanBtn, metaDiv, badge);
-
-          row.appendChild(infoDiv);
-          row.appendChild(badge);
-          row.appendChild(scanBtn);
-          li.appendChild(row);
-          list.appendChild(li);
-        });
-      } catch (err) {
-        list.innerHTML = '<li class="error">Failed to load checkpoints</li>';
-      }
-    }
-
-    async function logScan(checkpointId, btnEl, metaDiv, badgeEl) {
-      const { tenantId, userId } = getSession();
-      if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Scanning...'; }
-      try {
-        const res = await fetch(API_BASE + '/api/patrol-logs', {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({
-            tenant_id: Number(tenantId),
-            checkpoint_id: checkpointId,
-            user_id: Number(userId)
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Scan failed');
-        if (metaDiv) metaDiv.textContent = 'Last scan: ' + new Date(data.scanned_at).toLocaleString();
-        if (badgeEl) { badgeEl.className = 'badge badge-ok'; badgeEl.textContent = 'On time'; }
-        if (btnEl) {
-          btnEl.className = 'scan';
-          btnEl.textContent = 'Scanned ✓';
-          setTimeout(() => { btnEl.textContent = 'Scan'; btnEl.disabled = false; }, 2000);
-        }
-        loadProgress();
-        return true;
-      } catch (err) {
-        if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Scan'; }
-        throw err;
-      }
     }
 
     async function openScanner() {
@@ -513,9 +391,6 @@
           qrScanStatus.textContent = '✓ ' + checkpoint.name + ' scanned at ' + new Date(scanData.scanned_at).toLocaleTimeString();
           qrScanStatus.className = 'status success';
           loadProgress();
-          if (document.getElementById('siteSelect').value === String(checkpoint.site_id)) {
-            loadCheckpointsWithCompliance();
-          }
         }, 1200);
       } catch (err) {
         statusDiv.textContent = '✗ ' + err.message;
