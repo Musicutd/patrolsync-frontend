@@ -15,6 +15,7 @@
     button.scan { background: #16a34a; }
     button.scan.overdue { background: #dc2626; }
     button.scanqr { background: #7c3aed; margin-top: 10px; }
+    button.remaining { background: #d97706; margin-top: 6px; }
     button.qr-close { background: #64748b; }
     section { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
     #header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -36,6 +37,15 @@
     .admin-link { display: block; text-align: center; margin-top: 16px; font-size: 13px; }
     .admin-link a { color: #2563eb; }
     .no-assignment { color: #92400e; background: #fef3c7; padding: 12px; border-radius: 6px; font-size: 14px; }
+    .progress-wrap { margin: 10px 0; }
+    .progress-count { font-size: 22px; font-weight: bold; color: #222; }
+    .progress-target { font-size: 14px; color: #666; }
+    .progress-bar-bg { width: 100%; height: 14px; background: #eee; border-radius: 7px; overflow: hidden; margin-top: 8px; }
+    .progress-bar-fill { height: 100%; background: #16a34a; border-radius: 7px; transition: width 0.3s; }
+    .progress-complete { color: #166534; font-weight: bold; margin-top: 6px; }
+    #remainingModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+    #remainingModalContent { background: white; padding: 20px; border-radius: 8px; max-width: 400px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    #remainingModalContent li { padding: 10px 0; font-size: 14px; }
     #scannerModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; }
     #scannerModal video { width: 90%; max-width: 400px; border-radius: 8px; }
     #scannerModal canvas { display: none; }
@@ -64,6 +74,19 @@
       <h2 id="guardName">Guard</h2>
       <button class="logout" onclick="doLogout()">Log Out</button>
     </div>
+
+    <section>
+      <h3>Today's Progress</h3>
+      <div class="progress-wrap">
+        <span class="progress-count" id="progressCount">0</span>
+        <span class="progress-target" id="progressTarget">out of 0</span>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progressBarFill" style="width:0%;"></div>
+        </div>
+        <div id="progressCompleteMsg" class="progress-complete hidden">✓ Round complete!</div>
+      </div>
+      <button class="remaining" onclick="showRemaining()">Check Remaining Checkpoints</button>
+    </section>
 
     <section>
       <h3>Scan a Checkpoint</h3>
@@ -100,6 +123,14 @@
       <button onclick="submitIncident()">Submit Report</button>
       <div id="incidentStatus" class="status"></div>
     </section>
+  </div>
+
+  <div id="remainingModal">
+    <div id="remainingModalContent">
+      <h3>Remaining Checkpoints</h3>
+      <ul id="remainingList"></ul>
+      <button class="qr-close" onclick="closeRemaining()">Close</button>
+    </div>
   </div>
 
   <div id="scannerModal">
@@ -189,8 +220,6 @@
       showScreen('login');
     }
 
-    // Loads only the sites this guard has been explicitly assigned to by their
-    // admin, via /api/guard-assignments — never the full company site list.
     async function loadAssignedSites() {
       const { tenantId, userId } = getSession();
       const wrap = document.getElementById('siteSelectorWrap');
@@ -201,12 +230,13 @@
         const res = await fetch(API_BASE + '/api/guard-assignments?tenant_id=' + tenantId + '&user_id=' + userId, { headers: authHeaders() });
         const assignments = await res.json();
 
-        assignedSites = assignments.map(a => ({ id: a.site_id, name: a.site_name }));
+        assignedSites = assignments.map(a => ({ id: a.site_id, name: a.site_name, round_size: a.round_size }));
 
         if (assignedSites.length === 0) {
           wrap.classList.add('hidden');
           noAssignMsg.classList.remove('hidden');
           cpList.innerHTML = '<li>No checkpoints available — no site assigned yet.</li>';
+          resetProgressDisplay();
           return;
         }
 
@@ -222,19 +252,79 @@
           select.appendChild(opt);
         });
 
-        if (assignedSites.length === 1) {
-          document.getElementById('siteSection').querySelector('h3').textContent = 'Your Assigned Site';
-        }
-
         select.value = assignedSites[0].id;
         loadCheckpointsWithCompliance();
+        loadProgress();
       } catch (err) {
         console.error('loadAssignedSites failed:', err.message);
         cpList.innerHTML = '<li class="error">Failed to load your assigned site</li>';
       }
     }
 
-    document.getElementById('siteSelect').addEventListener('change', loadCheckpointsWithCompliance);
+    document.getElementById('siteSelect').addEventListener('change', () => {
+      loadCheckpointsWithCompliance();
+      loadProgress();
+    });
+
+    function resetProgressDisplay() {
+      document.getElementById('progressCount').textContent = '0';
+      document.getElementById('progressTarget').textContent = 'out of 0';
+      document.getElementById('progressBarFill').style.width = '0%';
+      document.getElementById('progressCompleteMsg').classList.add('hidden');
+    }
+
+    async function loadProgress() {
+      const { tenantId, userId } = getSession();
+      const siteId = document.getElementById('siteSelect').value;
+      if (!siteId) { resetProgressDisplay(); return; }
+
+      try {
+        const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load progress');
+
+        document.getElementById('progressCount').textContent = data.scanned_count;
+        document.getElementById('progressTarget').textContent = 'out of ' + data.target;
+        const pct = data.target > 0 ? Math.min(100, (data.scanned_count / data.target) * 100) : 0;
+        document.getElementById('progressBarFill').style.width = pct + '%';
+        document.getElementById('progressCompleteMsg').classList.toggle('hidden', !data.round_complete);
+      } catch (err) {
+        console.error('loadProgress failed:', err.message);
+      }
+    }
+
+    async function showRemaining() {
+      const { tenantId, userId } = getSession();
+      const siteId = document.getElementById('siteSelect').value;
+      const list = document.getElementById('remainingList');
+      if (!siteId) { alert('No site assigned yet.'); return; }
+
+      list.innerHTML = '<li>Loading...</li>';
+      document.getElementById('remainingModal').style.display = 'flex';
+
+      try {
+        const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load remaining checkpoints');
+
+        list.innerHTML = '';
+        if (data.remaining.length === 0) {
+          list.innerHTML = '<li>✓ All checkpoints scanned for today!</li>';
+          return;
+        }
+        data.remaining.forEach(cp => {
+          const li = document.createElement('li');
+          li.textContent = cp.name;
+          list.appendChild(li);
+        });
+      } catch (err) {
+        list.innerHTML = '<li class="error">' + err.message + '</li>';
+      }
+    }
+
+    function closeRemaining() {
+      document.getElementById('remainingModal').style.display = 'none';
+    }
 
     async function loadCheckpointsWithCompliance() {
       const { tenantId } = getSession();
@@ -327,6 +417,7 @@
           btnEl.textContent = 'Scanned ✓';
           setTimeout(() => { btnEl.textContent = 'Scan'; btnEl.disabled = false; }, 2000);
         }
+        loadProgress();
         return true;
       } catch (err) {
         if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Scan'; }
@@ -334,9 +425,6 @@
       }
     }
 
-    // Camera scanner still validates the scanned checkpoint belongs to one of the
-    // guard's assigned sites before logging — prevents scanning checkpoints outside
-    // their assignment even if they somehow encounter another site's QR label.
     async function openScanner() {
       const modal = document.getElementById('scannerModal');
       const video = document.getElementById('scannerVideo');
@@ -424,6 +512,7 @@
           const qrScanStatus = document.getElementById('qrScanStatus');
           qrScanStatus.textContent = '✓ ' + checkpoint.name + ' scanned at ' + new Date(scanData.scanned_at).toLocaleTimeString();
           qrScanStatus.className = 'status success';
+          loadProgress();
           if (document.getElementById('siteSelect').value === String(checkpoint.site_id)) {
             loadCheckpointsWithCompliance();
           }
