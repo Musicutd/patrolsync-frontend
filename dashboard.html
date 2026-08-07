@@ -9,10 +9,13 @@
     input, select, button, textarea { width: 100%; padding: 10px; margin: 6px 0; box-sizing: border-box; font-size: 14px; }
     button { background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button.logout { background: #dc2626; }
+    button.scan { background: #16a34a; width: auto; padding: 4px 10px; margin: 0; font-size: 12px; }
+    button.remove { background: #dc2626; width: auto; padding: 4px 10px; margin: 0 0 0 8px; font-size: 12px; }
+    button.dismiss { background: #64748b; width: auto; padding: 4px 10px; margin: 0; font-size: 12px; }
     section { border: 1px solid #ddd; border-radius: 6px; padding: 15px; margin-bottom: 20px; }
     #header { display: flex; justify-content: space-between; align-items: center; }
     ul { list-style: none; padding: 0; }
-    li { border-bottom: 1px solid #eee; padding: 8px 0; }
+    li { border-bottom: 1px solid #eee; padding: 8px 0; display: flex; justify-content: space-between; align-items: center; }
     .status { font-weight: bold; margin-top: 8px; }
     .success { color: green; }
     .error { color: red; }
@@ -20,6 +23,42 @@
     .sev-medium { color: #d97706; }
     .sev-high { color: #dc2626; font-weight: bold; }
     .sev-critical { color: #7f1d1d; font-weight: bold; }
+    .hidden { display: none; }
+    .comp-ok { color: green; font-weight: bold; }
+    .comp-overdue { color: #dc2626; font-weight: bold; }
+    .comp-unmonitored { color: #d97706; }
+    .comp-no_schedule { color: #999; }
+    .filter-row { display: flex; gap: 6px; align-items: center; }
+    .filter-row input, .filter-row button { margin: 6px 0; }
+    .filter-row button { width: auto; flex-shrink: 0; padding: 10px 14px; }
+    .clear-link { background: none; color: #2563eb; text-decoration: underline; width: auto; padding: 0; font-size: 13px; }
+    .tz-row { display: flex; gap: 6px; align-items: center; }
+    .tz-row select { flex: 1; }
+    .tz-row button { width: auto; flex-shrink: 0; padding: 10px 14px; }
+    .plan-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-weight: bold; font-size: 13px; text-transform: uppercase; }
+    .plan-starter { background: #f1f5f9; color: #475569; }
+    .plan-medium { background: #dbeafe; color: #1e40af; }
+    .plan-pro { background: #ede9fe; color: #6d28d9; }
+    .plan-diamond { background: #fce7f3; color: #be185d; }
+    .plan-enterprise { background: #1e293b; color: #fbbf24; }
+    .usage-item { margin: 12px 0; }
+    .usage-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    .usage-bar-bg { width: 100%; height: 10px; background: #eee; border-radius: 5px; overflow: hidden; }
+    .usage-bar-fill { height: 100%; border-radius: 5px; transition: width 0.3s; }
+    .usage-ok { background: #16a34a; }
+    .usage-warn { background: #d97706; }
+    .usage-full { background: #dc2626; }
+    .upgrade-row { display: flex; gap: 6px; align-items: center; margin-top: 14px; }
+    .upgrade-row select { flex: 1; }
+    .upgrade-row button { width: auto; flex-shrink: 0; padding: 10px 14px; }
+    .price-line { font-size: 13px; color: #666; margin-top: 4px; }
+    .alert-section { border-color: #fca5a5; background: #fff8f8; }
+    .alert-count-badge { display: inline-block; background: #dc2626; color: white; border-radius: 10px; padding: 2px 9px; font-size: 12px; font-weight: bold; margin-left: 6px; }
+    .alert-item { border-bottom: 1px solid #fecaca; padding: 10px 0; }
+    .alert-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .alert-msg { font-weight: bold; color: #991b1b; }
+    .alert-meta { font-size: 12px; color: #7f1d1d; margin-top: 2px; }
+    .no-alerts { color: #16a34a; font-weight: bold; padding: 8px 0; }
   </style>
 </head>
 <body>
@@ -27,7 +66,36 @@
     <h2 id="companyName">Loading...</h2>
     <button class="logout" onclick="logout()">Log Out</button>
   </div>
-  <p>Plan: <strong id="planLabel">-</strong> | Tenant ID: <span id="tenantIdLabel">-</span></p>
+  <p>Tenant ID: <span id="tenantIdLabel">-</span></p>
+
+  <section class="alert-section">
+    <h3>Alerts <span id="alertCountBadge" class="alert-count-badge hidden">0</span></h3>
+    <p style="font-size:13px; color:#7f1d1d;">Overdue checkpoints across all sites. Auto-refreshes; clears itself once the checkpoint is scanned again, or dismiss manually.</p>
+    <button onclick="loadAlerts()">Refresh Alerts</button>
+    <ul id="alertList"></ul>
+  </section>
+
+  <section>
+    <h3>Plan & Usage</h3>
+    <span id="planBadge" class="plan-badge plan-starter">Loading...</span>
+    <div class="price-line" id="planPriceLine"></div>
+    <div id="usageBars"></div>
+    <div class="upgrade-row">
+      <select id="upgradeSelect"><option value="">Loading plans...</option></select>
+      <button onclick="changePlan()">Change Plan</button>
+    </div>
+    <div id="planStatus" class="status"></div>
+  </section>
+
+  <section>
+    <h3>Company Timezone</h3>
+    <p>Fixed patrol times (e.g. "16:00") are interpreted using this timezone. Pick the timezone your sites actually operate in.</p>
+    <div class="tz-row">
+      <select id="timezoneSelect"><option value="">Loading timezones...</option></select>
+      <button onclick="saveTimezone()">Save</button>
+    </div>
+    <div id="timezoneStatus" class="status"></div>
+  </section>
 
   <section>
     <h3>Add a Site</h3>
@@ -48,6 +116,55 @@
   </section>
 
   <section>
+    <h3>Checkpoints</h3>
+    <select id="checkpointSite">
+      <option value="">Select a site</option>
+    </select>
+    <input type="text" id="checkpointName" placeholder="Checkpoint name (e.g. Main Entrance)">
+    <input type="text" id="checkpointQr" placeholder="QR code value (e.g. CP-001)">
+    <input type="text" id="checkpointLat" placeholder="Latitude (optional)">
+    <input type="text" id="checkpointLng" placeholder="Longitude (optional)">
+    <button onclick="addCheckpoint()">Add Checkpoint</button>
+    <div id="checkpointStatus" class="status"></div>
+    <ul id="checkpointList"></ul>
+  </section>
+
+  <section>
+    <h3>Patrol Schedules</h3>
+    <select id="scheduleSite">
+      <option value="">Select a site</option>
+    </select>
+    <select id="scheduleType">
+      <option value="hourly">Hourly (scan every N hours)</option>
+      <option value="fixed">Fixed times of day</option>
+      <option value="custom">Custom (advanced JSON)</option>
+    </select>
+
+    <div id="hourlyFields">
+      <input type="number" id="intervalHours" placeholder="Interval in hours (e.g. 2)" min="1">
+    </div>
+    <div id="fixedFields" class="hidden">
+      <input type="text" id="fixedTimes" placeholder="Times, comma-separated in company timezone (e.g. 08:00, 14:00, 20:00)">
+    </div>
+    <div id="customFields" class="hidden">
+      <textarea id="customConfig" rows="3" placeholder='Raw JSON (e.g. {"note": "custom rule"})'></textarea>
+    </div>
+
+    <button onclick="addSchedule()">Add Schedule</button>
+    <div id="scheduleStatus" class="status"></div>
+    <ul id="scheduleList"></ul>
+  </section>
+
+  <section>
+    <h3>Patrol Compliance</h3>
+    <select id="complianceSite">
+      <option value="">Select a site</option>
+    </select>
+    <button onclick="loadCompliance()">Check Compliance</button>
+    <ul id="complianceList"></ul>
+  </section>
+
+  <section>
     <h3>Report Incident</h3>
     <select id="incidentSite">
       <option value="">Select a site</option>
@@ -65,7 +182,11 @@
 
   <section>
     <h3>Recent Incidents</h3>
-    <button onclick="loadIncidents()">Refresh</button>
+    <div class="filter-row">
+      <input type="date" id="incidentDateFilter">
+      <button onclick="loadIncidents()">Filter</button>
+    </div>
+    <button class="clear-link" onclick="clearIncidentFilter()">Clear date filter (show all)</button>
     <ul id="incidentList"></ul>
   </section>
 
@@ -96,22 +217,245 @@
       window.location.href = 'signup.html';
     }
 
+    function fetchWithTimeout(url, options, ms) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ms || 8000);
+      return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+    }
+
+    async function loadAlerts() {
+      const list = document.getElementById('alertList');
+      const badge = document.getElementById('alertCountBadge');
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/notifications?tenant_id=' + tenantId, { headers: authHeaders() }, 8000);
+        const alerts = await res.json();
+        list.innerHTML = '';
+
+        if (!res.ok || alerts.length === 0) {
+          badge.classList.add('hidden');
+          list.innerHTML = '<li class="no-alerts">✓ No open alerts — everything is on schedule.</li>';
+          return;
+        }
+
+        badge.textContent = alerts.length;
+        badge.classList.remove('hidden');
+
+        alerts.forEach(a => {
+          const li = document.createElement('li');
+          li.className = 'alert-item';
+          const row = document.createElement('div');
+          row.className = 'alert-row';
+
+          const infoDiv = document.createElement('div');
+          const msgDiv = document.createElement('div');
+          msgDiv.className = 'alert-msg';
+          msgDiv.textContent = a.message;
+          const metaDiv = document.createElement('div');
+          metaDiv.className = 'alert-meta';
+          metaDiv.textContent = a.site_name + ' — since ' + new Date(a.created_at).toLocaleString();
+          infoDiv.appendChild(msgDiv);
+          infoDiv.appendChild(metaDiv);
+
+          const dismissBtn = document.createElement('button');
+          dismissBtn.textContent = 'Dismiss';
+          dismissBtn.className = 'dismiss';
+          dismissBtn.onclick = () => dismissAlert(a.id);
+
+          row.appendChild(infoDiv);
+          row.appendChild(dismissBtn);
+          li.appendChild(row);
+          list.appendChild(li);
+        });
+      } catch (err) {
+        console.error('loadAlerts failed:', err.message);
+        list.innerHTML = '<li class="error">Failed to load alerts</li>';
+      }
+    }
+
+    async function dismissAlert(notificationId) {
+      try {
+        const res = await fetch(API_BASE + '/api/notifications/' + notificationId + '/resolve?tenant_id=' + tenantId, {
+          method: 'PATCH',
+          headers: authHeaders()
+        });
+        if (!res.ok) throw new Error('Failed to dismiss');
+        loadAlerts();
+      } catch (err) {
+        alert('Failed to dismiss alert: ' + err.message);
+      }
+    }
+
+    let currentTenant = null;
+    let allPlans = null;
+
     async function loadTenantInfo() {
       try {
-        const res = await fetch(API_BASE + '/api/tenants');
+        const res = await fetchWithTimeout(API_BASE + '/api/tenants', {}, 8000);
         const tenants = await res.json();
         const tenant = tenants.find(t => t.id === Number(tenantId));
         if (tenant) {
+          currentTenant = tenant;
           document.getElementById('companyName').textContent = tenant.name;
-          document.getElementById('planLabel').textContent = tenant.plan;
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error('loadTenantInfo failed:', err.message);
+      }
     }
+
+    async function loadTimezones() {
+      const select = document.getElementById('timezoneSelect');
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/timezones', {}, 8000);
+        if (!res.ok) throw new Error('Backend returned ' + res.status);
+        const zones = await res.json();
+        select.innerHTML = '';
+        zones.forEach(z => {
+          const opt = document.createElement('option');
+          opt.value = z;
+          opt.textContent = z;
+          select.appendChild(opt);
+        });
+        if (currentTenant) select.value = currentTenant.timezone || 'UTC';
+      } catch (err) {
+        console.error('loadTimezones failed:', err.message);
+        select.innerHTML = '<option value="UTC">UTC (backend unreachable — try refreshing)</option>';
+      }
+    }
+
+    async function saveTimezone() {
+      const timezone = document.getElementById('timezoneSelect').value;
+      const statusDiv = document.getElementById('timezoneStatus');
+      if (!timezone) { statusDiv.textContent = 'Please select a timezone'; statusDiv.className = 'status error'; return; }
+      try {
+        const res = await fetch(API_BASE + '/api/tenants/' + tenantId + '/timezone', {
+          method: 'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({ timezone })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save timezone');
+        currentTenant = data;
+        statusDiv.textContent = 'Timezone saved to ' + data.timezone + '. Fixed schedules will now use this timezone.';
+        statusDiv.className = 'status success';
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    function usageBarClass(current, max) {
+      if (max === null || max === undefined) return 'usage-ok';
+      const ratio = current / max;
+      if (ratio >= 1) return 'usage-full';
+      if (ratio >= 0.8) return 'usage-warn';
+      return 'usage-ok';
+    }
+
+    async function loadPlanAndUsage() {
+      const badge = document.getElementById('planBadge');
+      const priceLine = document.getElementById('planPriceLine');
+      const barsDiv = document.getElementById('usageBars');
+      try {
+        const [plansRes, usageRes] = await Promise.all([
+          fetchWithTimeout(API_BASE + '/api/plans', {}, 8000),
+          fetchWithTimeout(API_BASE + '/api/usage?tenant_id=' + tenantId, { headers: authHeaders() }, 8000)
+        ]);
+        allPlans = await plansRes.json();
+        const usageData = await usageRes.json();
+        if (!usageRes.ok) throw new Error(usageData.error || 'Failed to load usage');
+
+        const plan = usageData.plan;
+        badge.textContent = plan;
+        badge.className = 'plan-badge plan-' + plan;
+
+        const limits = usageData.limits;
+        if (plan === 'enterprise') {
+          priceLine.textContent = '€' + limits.monthly_price + '/mo base + pay-per-unit beyond base allocation';
+        } else {
+          priceLine.textContent = '€' + limits.monthly_price + '/mo — up to ' + limits.locations + ' location(s), ' +
+            limits.checkpoints + ' checkpoint(s), ' + limits.guards + ' guard(s)';
+        }
+
+        barsDiv.innerHTML = '';
+        ['locations', 'checkpoints', 'guards'].forEach(key => {
+          const current = usageData.usage[key];
+          const max = limits[key];
+          const isInf = max === null || max === undefined || max === 'Infinity' || max === Infinity;
+          const pct = isInf ? 8 : Math.min(100, (current / max) * 100);
+          const barClass = isInf ? 'usage-ok' : usageBarClass(current, max);
+
+          const item = document.createElement('div');
+          item.className = 'usage-item';
+          const label = document.createElement('div');
+          label.className = 'usage-label';
+          label.innerHTML = '<span>' + key.charAt(0).toUpperCase() + key.slice(1) + '</span><span>' +
+            current + ' / ' + (isInf ? 'unlimited' : max) + '</span>';
+          const barBg = document.createElement('div');
+          barBg.className = 'usage-bar-bg';
+          const barFill = document.createElement('div');
+          barFill.className = 'usage-bar-fill ' + barClass;
+          barFill.style.width = pct + '%';
+          barBg.appendChild(barFill);
+          item.appendChild(label);
+          item.appendChild(barBg);
+          barsDiv.appendChild(item);
+        });
+
+        const upgradeSelect = document.getElementById('upgradeSelect');
+        upgradeSelect.innerHTML = '';
+        Object.keys(allPlans).forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p;
+          opt.textContent = p.charAt(0).toUpperCase() + p.slice(1) + ' (€' + allPlans[p].monthly_price + '/mo)';
+          if (p === plan) opt.selected = true;
+          upgradeSelect.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('loadPlanAndUsage failed:', err.message);
+        badge.textContent = 'Unavailable';
+      }
+    }
+
+    async function changePlan() {
+      const newPlan = document.getElementById('upgradeSelect').value;
+      const statusDiv = document.getElementById('planStatus');
+      if (!newPlan) return;
+      try {
+        const res = await fetch(API_BASE + '/api/tenants/' + tenantId + '/plan', {
+          method: 'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({ plan: newPlan })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to change plan');
+        statusDiv.textContent = 'Plan changed to ' + data.plan + '.';
+        statusDiv.className = 'status success';
+        loadPlanAndUsage();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    function populateSiteDropdown(select, sites) {
+      const previousValue = select.value;
+      select.innerHTML = '<option value="">Select a site</option>';
+      sites.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        select.appendChild(opt);
+      });
+      if (previousValue) select.value = previousValue;
+    }
+
+    let currentSites = [];
 
     async function loadSites() {
       try {
-        const res = await fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() });
+        const res = await fetchWithTimeout(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() }, 8000);
         const sites = await res.json();
+        currentSites = sites;
 
         const list = document.getElementById('siteList');
         list.innerHTML = '';
@@ -121,17 +465,16 @@
           list.appendChild(li);
         });
 
-        const siteSelect = document.getElementById('incidentSite');
-        const previousValue = siteSelect.value;
-        siteSelect.innerHTML = '<option value="">Select a site</option>';
-        sites.forEach(s => {
-          const opt = document.createElement('option');
-          opt.value = s.id;
-          opt.textContent = s.name;
-          siteSelect.appendChild(opt);
-        });
-        if (previousValue) siteSelect.value = previousValue;
-      } catch (err) {}
+        populateSiteDropdown(document.getElementById('incidentSite'), sites);
+        populateSiteDropdown(document.getElementById('checkpointSite'), sites);
+        populateSiteDropdown(document.getElementById('scheduleSite'), sites);
+        populateSiteDropdown(document.getElementById('complianceSite'), sites);
+
+        if (document.getElementById('checkpointSite').value) loadCheckpoints();
+        if (document.getElementById('scheduleSite').value) loadSchedules();
+      } catch (err) {
+        console.error('loadSites failed:', err.message);
+      }
     }
 
     async function addSite() {
@@ -152,6 +495,7 @@
         document.getElementById('siteName').value = '';
         document.getElementById('siteAddress').value = '';
         loadSites();
+        loadPlanAndUsage();
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
@@ -160,16 +504,25 @@
 
     async function loadGuards() {
       try {
-        const res = await fetch(API_BASE + '/api/users?tenant_id=' + tenantId + '&role=guard', { headers: authHeaders() });
+        const res = await fetchWithTimeout(API_BASE + '/api/users?tenant_id=' + tenantId + '&role=guard', { headers: authHeaders() }, 8000);
         const guards = await res.json();
         const list = document.getElementById('guardList');
         list.innerHTML = '';
         guards.forEach(g => {
           const li = document.createElement('li');
-          li.textContent = g.email;
+          const label = document.createElement('span');
+          label.textContent = g.email;
+          const removeBtn = document.createElement('button');
+          removeBtn.textContent = 'Remove';
+          removeBtn.className = 'remove';
+          removeBtn.onclick = () => removeGuard(g.id, g.email);
+          li.appendChild(label);
+          li.appendChild(removeBtn);
           list.appendChild(li);
         });
-      } catch (err) {}
+      } catch (err) {
+        console.error('loadGuards failed:', err.message);
+      }
     }
 
     async function addGuard() {
@@ -190,9 +543,265 @@
         document.getElementById('guardEmail').value = '';
         document.getElementById('guardPassword').value = '';
         loadGuards();
+        loadPlanAndUsage();
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
+      }
+    }
+
+    async function removeGuard(guardId, guardEmail) {
+      if (!confirm('Remove guard ' + guardEmail + '? This cannot be undone.')) return;
+      const statusDiv = document.getElementById('guardStatus');
+      try {
+        const res = await fetch(API_BASE + '/api/users/' + guardId + '?tenant_id=' + tenantId, {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to remove guard');
+        statusDiv.textContent = 'Guard removed.';
+        statusDiv.className = 'status success';
+        loadGuards();
+        loadPlanAndUsage();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    document.getElementById('checkpointSite').addEventListener('change', loadCheckpoints);
+
+    async function loadCheckpoints() {
+      const siteId = document.getElementById('checkpointSite').value;
+      const list = document.getElementById('checkpointList');
+      list.innerHTML = '';
+      if (!siteId) return;
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/checkpoints?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() }, 8000);
+        const checkpoints = await res.json();
+        checkpoints.forEach(cp => {
+          const li = document.createElement('li');
+          const label = document.createElement('span');
+          label.textContent = cp.name + ' (QR: ' + cp.qr_code + ')';
+          const scanBtn = document.createElement('button');
+          scanBtn.textContent = 'Log Scan';
+          scanBtn.className = 'scan';
+          scanBtn.onclick = () => logPatrolScan(cp.id, li);
+          li.appendChild(label);
+          li.appendChild(scanBtn);
+          list.appendChild(li);
+        });
+      } catch (err) {
+        console.error('loadCheckpoints failed:', err.message);
+      }
+    }
+
+    async function addCheckpoint() {
+      const siteId = document.getElementById('checkpointSite').value;
+      const name = document.getElementById('checkpointName').value;
+      const qrCode = document.getElementById('checkpointQr').value;
+      const lat = document.getElementById('checkpointLat').value;
+      const lng = document.getElementById('checkpointLng').value;
+      const statusDiv = document.getElementById('checkpointStatus');
+
+      if (!siteId) { statusDiv.textContent = 'Please select a site'; statusDiv.className = 'status error'; return; }
+      if (!name || !qrCode) { statusDiv.textContent = 'Checkpoint name and QR code are required'; statusDiv.className = 'status error'; return; }
+
+      try {
+        const res = await fetch(API_BASE + '/api/checkpoints', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            name,
+            qr_code: qrCode,
+            latitude: lat || null,
+            longitude: lng || null
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to add checkpoint');
+        statusDiv.textContent = 'Checkpoint added.';
+        statusDiv.className = 'status success';
+        document.getElementById('checkpointName').value = '';
+        document.getElementById('checkpointQr').value = '';
+        document.getElementById('checkpointLat').value = '';
+        document.getElementById('checkpointLng').value = '';
+        loadCheckpoints();
+        loadPlanAndUsage();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function logPatrolScan(checkpointId, listItemEl) {
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-logs', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            checkpoint_id: checkpointId,
+            user_id: JSON.parse(atob(token.split('.')[1])).user_id
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to log scan');
+        const confirmMsg = document.createElement('span');
+        confirmMsg.textContent = ' ✓ scanned ' + new Date(data.scanned_at || Date.now()).toLocaleTimeString();
+        confirmMsg.style.color = 'green';
+        confirmMsg.style.fontSize = '12px';
+        listItemEl.appendChild(confirmMsg);
+      } catch (err) {
+        alert('Failed to log scan: ' + err.message);
+      }
+    }
+
+    document.getElementById('scheduleType').addEventListener('change', updateScheduleFields);
+    function updateScheduleFields() {
+      const type = document.getElementById('scheduleType').value;
+      document.getElementById('hourlyFields').classList.toggle('hidden', type !== 'hourly');
+      document.getElementById('fixedFields').classList.toggle('hidden', type !== 'fixed');
+      document.getElementById('customFields').classList.toggle('hidden', type !== 'custom');
+    }
+
+    document.getElementById('scheduleSite').addEventListener('change', loadSchedules);
+
+    async function loadSchedules() {
+      const siteId = document.getElementById('scheduleSite').value;
+      const list = document.getElementById('scheduleList');
+      list.innerHTML = '';
+      if (!siteId) return;
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/patrol-schedules?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() }, 8000);
+        const schedules = await res.json();
+        schedules.forEach(s => {
+          const li = document.createElement('li');
+          let summary = '';
+          if (s.schedule_type === 'hourly') {
+            summary = 'Every ' + s.config.interval_hours + ' hour(s)';
+          } else if (s.schedule_type === 'fixed') {
+            summary = 'At ' + (s.config.times || []).join(', ') + ' (' + (currentTenant ? currentTenant.timezone : 'UTC') + ')';
+          } else {
+            summary = JSON.stringify(s.config);
+          }
+          const label = document.createElement('span');
+          label.textContent = s.schedule_type.toUpperCase() + ' — ' + summary;
+          const removeBtn = document.createElement('button');
+          removeBtn.textContent = 'Remove';
+          removeBtn.className = 'remove';
+          removeBtn.onclick = () => removeSchedule(s.id, siteId);
+          li.appendChild(label);
+          li.appendChild(removeBtn);
+          list.appendChild(li);
+        });
+      } catch (err) {
+        console.error('loadSchedules failed:', err.message);
+      }
+    }
+
+    async function removeSchedule(scheduleId, siteId) {
+      if (!confirm('Remove this schedule?')) return;
+      const statusDiv = document.getElementById('scheduleStatus');
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-schedules/' + scheduleId + '?tenant_id=' + tenantId, {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to remove schedule');
+        statusDiv.textContent = 'Schedule removed.';
+        statusDiv.className = 'status success';
+        loadSchedules();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function addSchedule() {
+      const siteId = document.getElementById('scheduleSite').value;
+      const type = document.getElementById('scheduleType').value;
+      const statusDiv = document.getElementById('scheduleStatus');
+
+      if (!siteId) { statusDiv.textContent = 'Please select a site'; statusDiv.className = 'status error'; return; }
+
+      let config;
+      try {
+        if (type === 'hourly') {
+          const hours = Number(document.getElementById('intervalHours').value);
+          if (!hours || hours < 1) throw new Error('Enter a valid interval in hours');
+          config = { interval_hours: hours };
+        } else if (type === 'fixed') {
+          const raw = document.getElementById('fixedTimes').value;
+          const times = raw.split(',').map(t => t.trim()).filter(Boolean);
+          if (times.length === 0) throw new Error('Enter at least one time');
+          config = { times };
+        } else {
+          const raw = document.getElementById('customConfig').value;
+          config = raw ? JSON.parse(raw) : {};
+        }
+      } catch (err) {
+        statusDiv.textContent = err.message.includes('JSON') ? 'Invalid JSON in custom config' : err.message;
+        statusDiv.className = 'status error';
+        return;
+      }
+
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-schedules', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            schedule_type: type,
+            config
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to add schedule');
+        statusDiv.textContent = 'Schedule added.';
+        statusDiv.className = 'status success';
+        document.getElementById('intervalHours').value = '';
+        document.getElementById('fixedTimes').value = '';
+        document.getElementById('customConfig').value = '';
+        loadSchedules();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function loadCompliance() {
+      const siteId = document.getElementById('complianceSite').value;
+      const list = document.getElementById('complianceList');
+      list.innerHTML = '';
+      if (!siteId) { list.innerHTML = '<li>Please select a site</li>'; return; }
+      try {
+        const res = await fetch(API_BASE + '/api/patrol-compliance?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() });
+        const compliance = await res.json();
+        if (compliance.length === 0) {
+          list.innerHTML = '<li>No checkpoints found for this site</li>';
+          return;
+        }
+        compliance.forEach(c => {
+          const li = document.createElement('li');
+          let statusText = '';
+          if (c.status === 'ok') statusText = '✓ On schedule';
+          else if (c.status === 'overdue') statusText = '⚠ Overdue' + (c.hours_overdue ? ' by ' + c.hours_overdue + 'h' : ' (never scanned)');
+          else if (c.status === 'unmonitored') statusText = '— No hourly schedule set';
+          else statusText = '— No schedule';
+
+          const lastScanText = c.last_scan ? new Date(c.last_scan).toLocaleString() : 'never';
+          li.innerHTML = '<span>' + c.checkpoint_name + ' — last scan: ' + lastScanText + '</span>' +
+            '<span class="comp-' + c.status + '">' + statusText + '</span>';
+          list.appendChild(li);
+        });
+      } catch (err) {
+        list.innerHTML = '<li class="error">Failed to load compliance</li>';
       }
     }
 
@@ -229,25 +838,46 @@
       }
     }
 
+    function clearIncidentFilter() {
+      document.getElementById('incidentDateFilter').value = '';
+      loadIncidents();
+    }
+
     async function loadIncidents() {
+      const dateVal = document.getElementById('incidentDateFilter').value;
       try {
-        const res = await fetch(API_BASE + '/api/incidents?tenant_id=' + tenantId, { headers: authHeaders() });
+        const url = API_BASE + '/api/incidents?tenant_id=' + tenantId + (dateVal ? '&date=' + dateVal : '');
+        const res = await fetchWithTimeout(url, { headers: authHeaders() }, 8000);
         const incidents = await res.json();
         const list = document.getElementById('incidentList');
         list.innerHTML = '';
+        if (incidents.length === 0) {
+          list.innerHTML = '<li>No incidents' + (dateVal ? ' on ' + dateVal : '') + '</li>';
+          return;
+        }
         incidents.forEach(i => {
           const li = document.createElement('li');
           li.innerHTML = '<span class="sev-' + i.severity + '">[' + i.severity.toUpperCase() + ']</span> ' +
             i.description + ' — ' + new Date(i.reported_at).toLocaleString();
           list.appendChild(li);
         });
-      } catch (err) {}
+      } catch (err) {
+        console.error('loadIncidents failed:', err.message);
+      }
     }
 
-    loadTenantInfo();
-    loadSites();
-    loadGuards();
-    loadIncidents();
+    function init() {
+      loadTenantInfo().then(() => {
+        loadTimezones();
+        loadPlanAndUsage();
+      });
+      loadAlerts();
+      loadSites();
+      loadGuards();
+      loadIncidents();
+      setInterval(loadAlerts, 60000);
+    }
+    init();
   </script>
 </body>
 </html>
