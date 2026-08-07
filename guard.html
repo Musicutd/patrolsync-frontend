@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PatrolSync - Guard</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
     * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 16px; background: #f7f7f8; }
@@ -13,6 +14,8 @@
     button.logout { background: #dc2626; width: auto; padding: 10px 16px; font-size: 14px; }
     button.scan { background: #16a34a; }
     button.scan.overdue { background: #dc2626; }
+    button.scanqr { background: #7c3aed; margin-top: 10px; }
+    button.qr-close { background: #64748b; }
     section { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
     #header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     ul { list-style: none; padding: 0; margin: 0; }
@@ -30,6 +33,11 @@
     .badge-no_schedule { background: #f1f5f9; color: #64748b; }
     #loginScreen, #guardScreen { display: none; }
     .hint { font-size: 13px; color: #666; margin: 4px 0 10px; }
+    #scannerModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; }
+    #scannerModal video { width: 90%; max-width: 400px; border-radius: 8px; }
+    #scannerModal canvas { display: none; }
+    #scannerStatus { color: white; margin-top: 12px; text-align: center; font-size: 14px; }
+    #scannerModal button { width: 80%; max-width: 300px; margin-top: 16px; }
   </style>
 </head>
 <body>
@@ -53,6 +61,13 @@
     </div>
 
     <section>
+      <h3>Scan a Checkpoint</h3>
+      <p class="hint">Point your camera at any checkpoint's QR label — no need to select a site first.</p>
+      <button class="scanqr" onclick="openScanner()">📷 Open Camera Scanner</button>
+      <div id="qrScanStatus" class="status"></div>
+    </section>
+
+    <section>
       <h3>Select Site</h3>
       <select id="siteSelect">
         <option value="">Select a site</option>
@@ -61,7 +76,7 @@
 
     <section>
       <h3>Checkpoints</h3>
-      <p class="hint">Tap "Scan" as soon as you reach each checkpoint.</p>
+      <p class="hint">Or tap "Scan" manually below if you can't use the camera.</p>
       <ul id="checkpointList"><li>Select a site to see checkpoints.</li></ul>
     </section>
 
@@ -79,8 +94,17 @@
     </section>
   </div>
 
+  <div id="scannerModal">
+    <video id="scannerVideo" playsinline></video>
+    <canvas id="scannerCanvas"></canvas>
+    <div id="scannerStatus">Point your camera at a checkpoint QR code...</div>
+    <button class="qr-close" onclick="closeScanner()">Cancel</button>
+  </div>
+
   <script>
     const API_BASE = 'https://patrolsync-backend.onrender.com';
+    let scannerStream = null;
+    let scannerActive = false;
 
     function getSession() {
       return {
@@ -238,8 +262,7 @@
 
     async function logScan(checkpointId, btnEl, metaDiv, badgeEl) {
       const { tenantId, userId } = getSession();
-      btnEl.disabled = true;
-      btnEl.textContent = 'Scanning...';
+      if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Scanning...'; }
       try {
         const res = await fetch(API_BASE + '/api/patrol-logs', {
           method: 'POST',
@@ -252,16 +275,117 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Scan failed');
-        metaDiv.textContent = 'Last scan: ' + new Date(data.scanned_at).toLocaleString();
-        badgeEl.className = 'badge badge-ok';
-        badgeEl.textContent = 'On time';
-        btnEl.className = 'scan';
-        btnEl.textContent = 'Scanned ✓';
-        setTimeout(() => { btnEl.textContent = 'Scan'; btnEl.disabled = false; }, 2000);
+        if (metaDiv) metaDiv.textContent = 'Last scan: ' + new Date(data.scanned_at).toLocaleString();
+        if (badgeEl) { badgeEl.className = 'badge badge-ok'; badgeEl.textContent = 'On time'; }
+        if (btnEl) {
+          btnEl.className = 'scan';
+          btnEl.textContent = 'Scanned ✓';
+          setTimeout(() => { btnEl.textContent = 'Scan'; btnEl.disabled = false; }, 2000);
+        }
+        return true;
       } catch (err) {
-        alert('Scan failed: ' + err.message);
-        btnEl.disabled = false;
-        btnEl.textContent = 'Scan';
+        if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Scan'; }
+        throw err;
+      }
+    }
+
+    // Camera-based QR scanner using jsQR. Decodes frames from the live camera feed,
+    // looks up the checkpoint by its QR value, and logs a scan automatically.
+    async function openScanner() {
+      const modal = document.getElementById('scannerModal');
+      const video = document.getElementById('scannerVideo');
+      const statusDiv = document.getElementById('scannerStatus');
+      statusDiv.textContent = 'Requesting camera access...';
+      modal.style.display = 'flex';
+
+      try {
+        scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = scannerStream;
+        await video.play();
+        scannerActive = true;
+        statusDiv.textContent = 'Point your camera at a checkpoint QR code...';
+        requestAnimationFrame(scanFrame);
+      } catch (err) {
+        statusDiv.textContent = 'Camera access denied or unavailable: ' + err.message;
+      }
+    }
+
+    function closeScanner() {
+      scannerActive = false;
+      if (scannerStream) {
+        scannerStream.getTracks().forEach(track => track.stop());
+        scannerStream = null;
+      }
+      document.getElementById('scannerModal').style.display = 'none';
+    }
+
+    function scanFrame() {
+      if (!scannerActive) return;
+      const video = document.getElementById('scannerVideo');
+      const canvas = document.getElementById('scannerCanvas');
+
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+        if (code && code.data) {
+          handleScannedCode(code.data);
+          return;
+        }
+      }
+      requestAnimationFrame(scanFrame);
+    }
+
+    async function handleScannedCode(qrValue) {
+      scannerActive = false;
+      const statusDiv = document.getElementById('scannerStatus');
+      statusDiv.textContent = 'Found code: ' + qrValue + ' — looking up checkpoint...';
+      const { tenantId, userId } = getSession();
+
+      try {
+        const lookupRes = await fetch(API_BASE + '/api/checkpoints/lookup?tenant_id=' + tenantId + '&qr_code=' + encodeURIComponent(qrValue), {
+          headers: authHeaders()
+        });
+        const checkpoint = await lookupRes.json();
+        if (!lookupRes.ok) throw new Error(checkpoint.error || 'Checkpoint not found');
+
+        statusDiv.textContent = 'Logging scan for "' + checkpoint.name + '" (' + checkpoint.site_name + ')...';
+
+        const scanRes = await fetch(API_BASE + '/api/patrol-logs', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            checkpoint_id: checkpoint.id,
+            user_id: Number(userId)
+          })
+        });
+        const scanData = await scanRes.json();
+        if (!scanRes.ok) throw new Error(scanData.error || 'Failed to log scan');
+
+        statusDiv.textContent = '✓ Scanned "' + checkpoint.name + '" successfully!';
+        setTimeout(() => {
+          closeScanner();
+          const qrScanStatus = document.getElementById('qrScanStatus');
+          qrScanStatus.textContent = '✓ ' + checkpoint.name + ' scanned at ' + new Date(scanData.scanned_at).toLocaleTimeString();
+          qrScanStatus.className = 'status success';
+          if (document.getElementById('siteSelect').value === String(checkpoint.site_id)) {
+            loadCheckpointsWithCompliance();
+          }
+        }, 1200);
+      } catch (err) {
+        statusDiv.textContent = '✗ ' + err.message;
+        setTimeout(() => {
+          if (document.getElementById('scannerModal').style.display !== 'none') {
+            scannerActive = true;
+            statusDiv.textContent = 'Point your camera at a checkpoint QR code...';
+            requestAnimationFrame(scanFrame);
+          }
+        }, 2000);
       }
     }
 
