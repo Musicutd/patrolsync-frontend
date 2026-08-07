@@ -67,6 +67,9 @@
     #qrModalContent canvas { margin: 10px auto; display: block; }
     #qrModalContent button { margin-top: 10px; }
     .qr-close { background: #64748b; }
+    .assign-row { display: flex; gap: 6px; }
+    .assign-row select { flex: 1; }
+    .assign-row button { width: auto; flex-shrink: 0; padding: 10px 14px; }
   </style>
 </head>
 <body>
@@ -121,6 +124,18 @@
     <button onclick="addGuard()">Add Guard</button>
     <div id="guardStatus" class="status"></div>
     <ul id="guardList"></ul>
+  </section>
+
+  <section>
+    <h3>Guard Schedule (Site Assignments)</h3>
+    <p style="font-size:13px; color:#666;">Assign each guard to the site(s) they're responsible for. Guards will only see their assigned site(s) in their app.</p>
+    <div class="assign-row">
+      <select id="assignGuard"><option value="">Select a guard</option></select>
+      <select id="assignSite"><option value="">Select a site</option></select>
+      <button onclick="addAssignment()">Assign</button>
+    </div>
+    <div id="assignStatus" class="status"></div>
+    <ul id="assignmentList"></ul>
   </section>
 
   <section>
@@ -215,6 +230,15 @@
     const userEmail = localStorage.getItem('user_email');
 
     if (!token || !tenantId) {
+      window.location.href = 'signup.html';
+    }
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.role !== 'admin') {
+        window.location.href = 'guard.html';
+      }
+    } catch (err) {
       window.location.href = 'signup.html';
     }
 
@@ -512,6 +536,7 @@
         populateSiteDropdown(document.getElementById('checkpointSite'), sites);
         populateSiteDropdown(document.getElementById('scheduleSite'), sites);
         populateSiteDropdown(document.getElementById('complianceSite'), sites);
+        populateSiteDropdown(document.getElementById('assignSite'), sites);
 
         if (document.getElementById('checkpointSite').value) loadCheckpoints();
         if (document.getElementById('scheduleSite').value) loadSchedules();
@@ -545,10 +570,23 @@
       }
     }
 
+    let currentGuards = [];
+
+    function populateGuardDropdown(select, guards) {
+      select.innerHTML = '<option value="">Select a guard</option>';
+      guards.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.id;
+        opt.textContent = g.email;
+        select.appendChild(opt);
+      });
+    }
+
     async function loadGuards() {
       try {
         const res = await fetchWithTimeout(API_BASE + '/api/users?tenant_id=' + tenantId + '&role=guard', { headers: authHeaders() }, 8000);
         const guards = await res.json();
+        currentGuards = guards;
         const list = document.getElementById('guardList');
         list.innerHTML = '';
         guards.forEach(g => {
@@ -563,6 +601,7 @@
           li.appendChild(removeBtn);
           list.appendChild(li);
         });
+        populateGuardDropdown(document.getElementById('assignGuard'), guards);
       } catch (err) {
         console.error('loadGuards failed:', err.message);
       }
@@ -607,6 +646,75 @@
         statusDiv.className = 'status success';
         loadGuards();
         loadPlanAndUsage();
+        loadAssignments();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function loadAssignments() {
+      const list = document.getElementById('assignmentList');
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/guard-assignments?tenant_id=' + tenantId, { headers: authHeaders() }, 8000);
+        const assignments = await res.json();
+        list.innerHTML = '';
+        if (assignments.length === 0) {
+          list.innerHTML = '<li>No assignments yet — guards have no assigned sites.</li>';
+          return;
+        }
+        assignments.forEach(a => {
+          const li = document.createElement('li');
+          const label = document.createElement('span');
+          label.textContent = a.guard_email + ' → ' + a.site_name;
+          const removeBtn = document.createElement('button');
+          removeBtn.textContent = 'Remove';
+          removeBtn.className = 'remove';
+          removeBtn.onclick = () => removeAssignment(a.id);
+          li.appendChild(label);
+          li.appendChild(removeBtn);
+          list.appendChild(li);
+        });
+      } catch (err) {
+        console.error('loadAssignments failed:', err.message);
+      }
+    }
+
+    async function addAssignment() {
+      const guardId = document.getElementById('assignGuard').value;
+      const siteId = document.getElementById('assignSite').value;
+      const statusDiv = document.getElementById('assignStatus');
+      if (!guardId || !siteId) { statusDiv.textContent = 'Select both a guard and a site'; statusDiv.className = 'status error'; return; }
+      try {
+        const res = await fetch(API_BASE + '/api/guard-assignments', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ tenant_id: Number(tenantId), site_id: Number(siteId), user_id: Number(guardId) })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to assign guard');
+        statusDiv.textContent = 'Guard assigned to site.';
+        statusDiv.className = 'status success';
+        loadAssignments();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function removeAssignment(assignmentId) {
+      if (!confirm('Remove this assignment?')) return;
+      const statusDiv = document.getElementById('assignStatus');
+      try {
+        const res = await fetch(API_BASE + '/api/guard-assignments/' + assignmentId + '?tenant_id=' + tenantId, {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to remove assignment');
+        statusDiv.textContent = 'Assignment removed.';
+        statusDiv.className = 'status success';
+        loadAssignments();
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
@@ -929,6 +1037,7 @@
       loadAlerts();
       loadSites();
       loadGuards();
+      loadAssignments();
       loadIncidents();
       setInterval(loadAlerts, 60000);
     }
