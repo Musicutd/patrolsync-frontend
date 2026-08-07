@@ -26,7 +26,6 @@
     .hint { font-size: 13px; color: #666; margin: 4px 0 10px; }
     .admin-link { display: block; text-align: center; margin-top: 16px; font-size: 13px; }
     .admin-link a { color: #2563eb; }
-    .no-assignment { color: #92400e; background: #fef3c7; padding: 12px; border-radius: 6px; font-size: 14px; }
     .progress-wrap { margin: 10px 0; }
     .progress-count { font-size: 22px; font-weight: bold; color: #222; }
     .progress-target { font-size: 14px; color: #666; }
@@ -66,6 +65,13 @@
     </div>
 
     <section>
+      <h3>Scan a Checkpoint</h3>
+      <p class="hint">Point your camera at any checkpoint's QR label.</p>
+      <button class="scanqr" onclick="openScanner()">📷 Open Camera Scanner</button>
+      <div id="qrScanStatus" class="status"></div>
+    </section>
+
+    <section>
       <h3>Today's Progress</h3>
       <div class="progress-wrap">
         <span class="progress-count" id="progressCount">0</span>
@@ -78,21 +84,9 @@
       <button class="remaining" onclick="showRemaining()">Check Remaining Checkpoints</button>
     </section>
 
-    <section>
-      <h3>Scan a Checkpoint</h3>
-      <p class="hint">Point your camera at any checkpoint's QR label.</p>
-      <button class="scanqr" onclick="openScanner()">📷 Open Camera Scanner</button>
-      <div id="qrScanStatus" class="status"></div>
-    </section>
-
     <section id="siteSection">
       <h3>Your Assigned Site</h3>
-      <div id="siteSelectorWrap">
-        <select id="siteSelect"><option value="">Loading...</option></select>
-      </div>
-      <div id="noAssignmentMsg" class="no-assignment hidden">
-        You haven't been assigned to any site yet. Ask your admin to assign you via Guard Schedule.
-      </div>
+      <select id="siteSelect"><option value="">Loading...</option></select>
     </section>
 
     <section>
@@ -206,8 +200,6 @@
 
     async function loadAssignedSites() {
       const { tenantId, userId } = getSession();
-      const wrap = document.getElementById('siteSelectorWrap');
-      const noAssignMsg = document.getElementById('noAssignmentMsg');
 
       try {
         const res = await fetch(API_BASE + '/api/guard-assignments?tenant_id=' + tenantId + '&user_id=' + userId, { headers: authHeaders() });
@@ -215,18 +207,15 @@
 
         assignedSites = assignments.map(a => ({ id: a.site_id, name: a.site_name, round_size: a.round_size }));
 
+        const select = document.getElementById('siteSelect');
+        select.innerHTML = '';
+
         if (assignedSites.length === 0) {
-          wrap.classList.add('hidden');
-          noAssignMsg.classList.remove('hidden');
+          select.innerHTML = '<option value="">No site assigned</option>';
           resetProgressDisplay();
           return;
         }
 
-        noAssignMsg.classList.add('hidden');
-        wrap.classList.remove('hidden');
-
-        const select = document.getElementById('siteSelect');
-        select.innerHTML = '';
         assignedSites.forEach(s => {
           const opt = document.createElement('option');
           opt.value = s.id;
