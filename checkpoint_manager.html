@@ -23,6 +23,7 @@
   .usage-label { display: flex; justify-content: space-between; font-size: 13px; color: #444; }
   .limit-hit { color: #dc2626; font-size: 13px; margin-top: 6px; }
   a.back-link { font-size: 13px; color: #2563eb; }
+  .hidden { display: none; }
 </style>
 </head>
 <body>
@@ -78,6 +79,18 @@
     return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
   }
 
+  function handleAuthError(message) {
+    if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('tenant_id');
+      localStorage.removeItem('user_email');
+      alert('Your session has expired. Please log in again.');
+      window.location.href = 'login.html';
+      return true;
+    }
+    return false;
+  }
+
   let currentUsage = null;
   let currentSites = [];
 
@@ -85,7 +98,7 @@
     try {
       const res = await fetch(API_BASE + '/api/usage?tenant_id=' + tenantId, { headers: authHeaders() });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load usage');
+      if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to load usage'); }
       currentUsage = data;
 
       const current = data.usage.checkpoints;
@@ -134,6 +147,7 @@
     try {
       const res = await fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() });
       const sites = await res.json();
+      if (!res.ok) { if (handleAuthError(sites.error)) return; throw new Error(sites.error || 'Failed to load sites'); }
       currentSites = sites;
       populateSiteDropdown(document.getElementById('cpSite'), sites);
       populateSiteDropdown(document.getElementById('filterSite'), sites);
@@ -168,7 +182,7 @@
         })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to add checkpoint');
+      if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to add checkpoint'); }
 
       msgDiv.textContent = 'Checkpoint added.';
       msgDiv.className = 'msg success';
@@ -195,6 +209,7 @@
         : API_BASE + '/api/checkpoints?tenant_id=' + tenantId;
       const res = await fetch(url, { headers: authHeaders() });
       const checkpoints = await res.json();
+      if (!res.ok) { if (handleAuthError(checkpoints.error)) return; throw new Error(checkpoints.error || 'Failed to load checkpoints'); }
 
       body.innerHTML = '';
       if (checkpoints.length === 0) {
@@ -205,20 +220,25 @@
       checkpoints.forEach(cp => {
         const tr = document.createElement('tr');
         const canvasId = 'qr-' + cp.id;
-        tr.innerHTML = `
-          <td>${escapeHtml(cp.qr_code)}</td>
-          <td>${escapeHtml(cp.name)}</td>
-          <td>${escapeHtml(cp.building || '-')}</td>
-          <td>${escapeHtml(cp.floor || '-')}</td>
-          <td><canvas id="${canvasId}" width="70" height="70"></canvas></td>
-          <td><button class="print-btn" onclick="printQr('${canvasId}', '${escapeHtml(cp.qr_code)}', '${escapeHtml(cp.name)}')">Print</button></td>
-        `;
+        tr.innerHTML =
+          '<td>' + escapeHtml(cp.qr_code) + '</td>' +
+          '<td>' + escapeHtml(cp.name) + '</td>' +
+          '<td>' + escapeHtml(cp.building || '-') + '</td>' +
+          '<td>' + escapeHtml(cp.floor || '-') + '</td>' +
+          '<td><canvas id="' + canvasId + '" width="70" height="70"></canvas></td>' +
+          '<td><button class="print-btn" data-canvas="' + canvasId + '" data-code="' + escapeHtml(cp.qr_code) + '" data-name="' + escapeHtml(cp.name) + '">Print</button></td>';
         body.appendChild(tr);
       });
 
       checkpoints.forEach(cp => {
         const canvas = document.getElementById('qr-' + cp.id);
         if (canvas) QRCode.toCanvas(canvas, cp.qr_code, { width: 70, margin: 1 }, () => {});
+      });
+
+      document.querySelectorAll('.print-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+          printQr(this.getAttribute('data-canvas'), this.getAttribute('data-code'), this.getAttribute('data-name'));
+        });
       });
     } catch (err) {
       body.innerHTML = '<tr><td colspan="6" style="color:red;">Failed to load checkpoints</td></tr>';
@@ -227,22 +247,28 @@
 
   function escapeHtml(str) {
     if (str === null || str === undefined) return '';
-    return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    return String(str).replace(/[&<>"']/g, function (m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
   }
 
   function printQr(canvasId, code, name) {
     const canvas = document.getElementById(canvasId);
     const dataUrl = canvas.toDataURL('image/png');
     const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-      <html><head><title>Print QR - ${escapeHtml(code)}</title></head>
-      <body style="text-align:center; font-family:Arial, sans-serif; padding:40px;">
-        <h2>${escapeHtml(name)}</h2>
-        <p style="font-size:14px; color:#666;">Code: ${escapeHtml(code)}</p>
-        <img src="${dataUrl}" style="width:220px; height:220px;">
-        <script>window.onload = function() { window.print(); };</script>
-      </body></html>
-    `);
+    const safeCode = escapeHtml(code);
+    const safeName = escapeHtml(name);
+    const scriptOpen = '<' + 'script>';
+    const scriptClose = '<' + '/script>';
+    const html =
+      '<html><head><title>Print QR - ' + safeCode + '</title></head>' +
+      '<body style="text-align:center; font-family:Arial, sans-serif; padding:40px;">' +
+      '<h2>' + safeName + '</h2>' +
+      '<p style="font-size:14px; color:#666;">Code: ' + safeCode + '</p>' +
+      '<img src="' + dataUrl + '" style="width:220px; height:220px;">' +
+      scriptOpen + 'window.onload = function() { window.print(); };' + scriptClose +
+      '</body></html>';
+    printWindow.document.write(html);
     printWindow.document.close();
   }
 
