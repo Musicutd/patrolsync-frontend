@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Checkpoint Manager - PatrolSync</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+  input, select { display: block; width: 100%; padding: 8px; margin: 6px 0 12px; box-sizing: border-box; }
+  button { padding: 10px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
+  button.print-btn { padding: 6px 12px; font-size: 13px; }
+  .msg { margin-top: 10px; font-size: 14px; font-weight: bold; }
+  .msg.error { color: #dc2626; }
+  .msg.success { color: #16a34a; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  td, th { border-bottom: 1px solid #eee; padding: 8px 6px; text-align: left; font-size: 14px; vertical-align: middle; }
+  canvas { display: block; }
+  .usage-bar-bg { width: 100%; height: 10px; background: #eee; border-radius: 5px; overflow: hidden; margin: 8px 0; }
+  .usage-bar-fill { height: 100%; border-radius: 5px; transition: width 0.3s; background: #16a34a; }
+  .usage-bar-fill.warn { background: #d97706; }
+  .usage-bar-fill.full { background: #dc2626; }
+  .usage-label { display: flex; justify-content: space-between; font-size: 13px; color: #444; }
+  .limit-hit { color: #dc2626; font-size: 13px; margin-top: 6px; }
+  a.back-link { font-size: 13px; color: #2563eb; }
+</style>
+</head>
+<body>
+
+<p><a href="dashboard.html" class="back-link">← Back to Dashboard</a></p>
+<h2>Checkpoint Manager</h2>
+
+<div class="card">
+  <h3>Checkpoint Usage</h3>
+  <div class="usage-label"><span id="usageText">Loading...</span></div>
+  <div class="usage-bar-bg"><div class="usage-bar-fill" id="usageBarFill" style="width:0%;"></div></div>
+  <div id="limitHitMsg" class="limit-hit hidden"></div>
+</div>
+
+<div class="card">
+  <h3>Add New Checkpoint</h3>
+  <select id="cpSite"><option value="">Select a site</option></select>
+  <input id="cpCode" placeholder="Unique code (e.g. gate-01)">
+  <input id="cpLocation" placeholder="Location name (e.g. Main Gate)">
+  <input id="cpBuilding" placeholder="Building (optional)">
+  <input id="cpFloor" placeholder="Floor (optional)">
+  <button id="createBtn" onclick="addCheckpoint()">Create + Generate QR</button>
+  <div id="cpMsg" class="msg"></div>
+</div>
+
+<div class="card">
+  <h3>All Checkpoints</h3>
+  <select id="filterSite" onchange="loadCheckpoints()"><option value="">All sites</option></select>
+  <table id="cpTable">
+    <thead>
+      <tr><th>Code</th><th>Location</th><th>Building</th><th>Floor</th><th>QR Code</th><th></th></tr>
+    </thead>
+    <tbody id="cpBody"></tbody>
+  </table>
+</div>
+
+<script>
+  const API_BASE = 'https://patrolsync-backend.onrender.com';
+  const token = localStorage.getItem('token');
+  const tenantId = localStorage.getItem('tenant_id');
+
+  if (!token || !tenantId) {
+    window.location.href = 'signup.html';
+  }
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.role !== 'admin') window.location.href = 'guard.html';
+  } catch (err) {
+    window.location.href = 'signup.html';
+  }
+
+  function authHeaders() {
+    return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+  }
+
+  let currentUsage = null;
+  let currentSites = [];
+
+  async function loadUsage() {
+    try {
+      const res = await fetch(API_BASE + '/api/usage?tenant_id=' + tenantId, { headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load usage');
+      currentUsage = data;
+
+      const current = data.usage.checkpoints;
+      const max = data.limits.checkpoints;
+      const isUnlimited = max === null || max === undefined || max === Infinity;
+
+      document.getElementById('usageText').textContent =
+        current + ' of ' + (isUnlimited ? 'unlimited' : max) + ' checkpoints used (' + data.plan + ' plan)';
+
+      const pct = isUnlimited ? 8 : Math.min(100, (current / max) * 100);
+      const fill = document.getElementById('usageBarFill');
+      fill.style.width = pct + '%';
+      fill.className = 'usage-bar-fill' + (!isUnlimited && current >= max ? ' full' : (!isUnlimited && current / max >= 0.8 ? ' warn' : ''));
+
+      const limitMsg = document.getElementById('limitHitMsg');
+      const createBtn = document.getElementById('createBtn');
+      if (!isUnlimited && current >= max) {
+        limitMsg.textContent = 'You have reached your plan limit. Upgrade your plan to add more checkpoints.';
+        limitMsg.classList.remove('hidden');
+        createBtn.disabled = true;
+        createBtn.style.opacity = '0.5';
+      } else {
+        limitMsg.classList.add('hidden');
+        createBtn.disabled = false;
+        createBtn.style.opacity = '1';
+      }
+    } catch (err) {
+      document.getElementById('usageText').textContent = 'Failed to load usage';
+      console.error(err.message);
+    }
+  }
+
+  function populateSiteDropdown(select, sites) {
+    const prev = select.value;
+    select.innerHTML = select.id === 'filterSite' ? '<option value="">All sites</option>' : '<option value="">Select a site</option>';
+    sites.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name;
+      select.appendChild(opt);
+    });
+    if (prev) select.value = prev;
+  }
+
+  async function loadSites() {
+    try {
+      const res = await fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() });
+      const sites = await res.json();
+      currentSites = sites;
+      populateSiteDropdown(document.getElementById('cpSite'), sites);
+      populateSiteDropdown(document.getElementById('filterSite'), sites);
+      loadCheckpoints();
+    } catch (err) {
+      console.error('loadSites failed:', err.message);
+    }
+  }
+
+  async function addCheckpoint() {
+    const siteId = document.getElementById('cpSite').value;
+    const code = document.getElementById('cpCode').value.trim();
+    const location_name = document.getElementById('cpLocation').value.trim();
+    const building = document.getElementById('cpBuilding').value.trim();
+    const floor = document.getElementById('cpFloor').value.trim();
+    const msgDiv = document.getElementById('cpMsg');
+
+    if (!siteId) { msgDiv.textContent = 'Please select a site'; msgDiv.className = 'msg error'; return; }
+    if (!code || !location_name) { msgDiv.textContent = 'Code and location name are required'; msgDiv.className = 'msg error'; return; }
+
+    try {
+      const res = await fetch(API_BASE + '/api/checkpoints', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          tenant_id: Number(tenantId),
+          site_id: Number(siteId),
+          name: location_name,
+          qr_code: code,
+          building: building || null,
+          floor: floor || null
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to add checkpoint');
+
+      msgDiv.textContent = 'Checkpoint added.';
+      msgDiv.className = 'msg success';
+      document.getElementById('cpCode').value = '';
+      document.getElementById('cpLocation').value = '';
+      document.getElementById('cpBuilding').value = '';
+      document.getElementById('cpFloor').value = '';
+      loadUsage();
+      loadCheckpoints();
+    } catch (err) {
+      msgDiv.textContent = err.message;
+      msgDiv.className = 'msg error';
+    }
+  }
+
+  async function loadCheckpoints() {
+    const siteFilter = document.getElementById('filterSite').value;
+    const body = document.getElementById('cpBody');
+    body.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+
+    try {
+      const url = siteFilter
+        ? API_BASE + '/api/checkpoints?tenant_id=' + tenantId + '&site_id=' + siteFilter
+        : API_BASE + '/api/checkpoints?tenant_id=' + tenantId;
+      const res = await fetch(url, { headers: authHeaders() });
+      const checkpoints = await res.json();
+
+      body.innerHTML = '';
+      if (checkpoints.length === 0) {
+        body.innerHTML = '<tr><td colspan="6">No checkpoints yet.</td></tr>';
+        return;
+      }
+
+      checkpoints.forEach(cp => {
+        const tr = document.createElement('tr');
+        const canvasId = 'qr-' + cp.id;
+        tr.innerHTML = `
+          <td>${escapeHtml(cp.qr_code)}</td>
+          <td>${escapeHtml(cp.name)}</td>
+          <td>${escapeHtml(cp.building || '-')}</td>
+          <td>${escapeHtml(cp.floor || '-')}</td>
+          <td><canvas id="${canvasId}" width="70" height="70"></canvas></td>
+          <td><button class="print-btn" onclick="printQr('${canvasId}', '${escapeHtml(cp.qr_code)}', '${escapeHtml(cp.name)}')">Print</button></td>
+        `;
+        body.appendChild(tr);
+      });
+
+      checkpoints.forEach(cp => {
+        const canvas = document.getElementById('qr-' + cp.id);
+        if (canvas) QRCode.toCanvas(canvas, cp.qr_code, { width: 70, margin: 1 }, () => {});
+      });
+    } catch (err) {
+      body.innerHTML = '<tr><td colspan="6" style="color:red;">Failed to load checkpoints</td></tr>';
+    }
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  function printQr(canvasId, code, name) {
+    const canvas = document.getElementById(canvasId);
+    const dataUrl = canvas.toDataURL('image/png');
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html><head><title>Print QR - ${escapeHtml(code)}</title></head>
+      <body style="text-align:center; font-family:Arial, sans-serif; padding:40px;">
+        <h2>${escapeHtml(name)}</h2>
+        <p style="font-size:14px; color:#666;">Code: ${escapeHtml(code)}</p>
+        <img src="${dataUrl}" style="width:220px; height:220px;">
+        <script>window.onload = function() { window.print(); };</script>
+      </body></html>
+    `);
+    printWindow.document.close();
+  }
+
+  function init() {
+    loadUsage();
+    loadSites();
+  }
+  init();
+</script>
+
+</body>
+</html>
