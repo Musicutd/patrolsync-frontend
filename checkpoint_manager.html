@@ -10,14 +10,13 @@
   button { padding: 10px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
   button.print-btn { padding: 6px 12px; font-size: 13px; margin-right: 6px; }
   button.delete-btn { padding: 6px 12px; font-size: 13px; background: #dc2626; }
-  button.print-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .msg { margin-top: 10px; font-size: 14px; font-weight: bold; }
   .msg.error { color: #dc2626; }
   .msg.success { color: #16a34a; }
   .msg.warn { color: #d97706; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   td, th { border-bottom: 1px solid #eee; padding: 8px 6px; text-align: left; font-size: 14px; vertical-align: middle; }
-  canvas { display: block; }
+  .qr-img { width: 70px; height: 70px; display: block; }
   .qr-unavailable { font-size: 11px; color: #999; width: 70px; }
   .usage-bar-bg { width: 100%; height: 10px; background: #eee; border-radius: 5px; overflow: hidden; margin: 8px 0; }
   .usage-bar-fill { height: 100%; border-radius: 5px; transition: width 0.3s; background: #16a34a; }
@@ -96,44 +95,12 @@
     return false;
   }
 
-  // QR library loader with multiple CDN fallbacks. Some ad-blockers / privacy
-  // extensions flag "qrcode" in a script filename and silently block it, which
-  // previously crashed the whole checkpoint list with "QRCode is not defined".
-  // Now we try several sources and degrade gracefully if all are blocked.
-  let qrLibPromise = null;
-  const QR_CDN_URLS = [
-    'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js',
-    'https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js',
-    'https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js'
-  ];
-
-  function loadScriptOnce(url) {
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = url;
-      script.onload = () => resolve(true);
-      script.onerror = () => reject(new Error('failed to load ' + url));
-      document.head.appendChild(script);
-    });
-  }
-
-  async function ensureQrLib() {
-    if (window.QRCode) return true;
-    if (qrLibPromise) return qrLibPromise;
-
-    qrLibPromise = (async () => {
-      for (const url of QR_CDN_URLS) {
-        try {
-          await loadScriptOnce(url);
-          if (window.QRCode) return true;
-        } catch (err) {
-          console.warn('QR lib source failed:', url);
-        }
-      }
-      return false;
-    })();
-
-    return qrLibPromise;
+  // QR images are now rendered server-side by our own backend (patrolsync-backend
+  // .onrender.com), not fetched from a third-party CDN script. This avoids any
+  // network-level filtering (corporate firewalls, ISP content filters) that
+  // blocked jsdelivr/unpkg even in Incognito mode with no extensions active.
+  function qrImageUrl(code) {
+    return API_BASE + '/api/qr-image?text=' + encodeURIComponent(code) + '&token=' + encodeURIComponent(token);
   }
 
   let currentUsage = null;
@@ -275,47 +242,36 @@
 
     checkpoints.forEach(cp => {
       const tr = document.createElement('tr');
-      const canvasId = 'qr-' + cp.id;
+      const imgId = 'qr-' + cp.id;
       tr.innerHTML =
         '<td>' + escapeHtml(cp.qr_code) + '</td>' +
         '<td>' + escapeHtml(cp.name) + '</td>' +
         '<td>' + escapeHtml(cp.building || '-') + '</td>' +
         '<td>' + escapeHtml(cp.floor || '-') + '</td>' +
-        '<td><canvas id="' + canvasId + '" width="70" height="70"></canvas></td>' +
+        '<td><img id="' + imgId + '" class="qr-img" alt="QR code"></td>' +
         '<td class="action-cell">' +
-          '<button class="print-btn" data-canvas="' + canvasId + '" data-code="' + escapeHtml(cp.qr_code) + '" data-name="' + escapeHtml(cp.name) + '">Print</button>' +
+          '<button class="print-btn" data-img="' + imgId + '" data-code="' + escapeHtml(cp.qr_code) + '" data-name="' + escapeHtml(cp.name) + '">Print</button>' +
           '<button class="delete-btn" data-id="' + cp.id + '" data-code="' + escapeHtml(cp.qr_code) + '">Delete</button>' +
         '</td>';
       body.appendChild(tr);
     });
 
-    // Try to load the QR library; if it succeeds, render real QR codes and
-    // enable Print. If it fails everywhere, show a plain fallback so the rest
-    // of the table (codes, delete) still works fully.
-    const qrReady = await ensureQrLib();
-    if (qrReady) {
-      checkpoints.forEach(cp => {
-        const canvas = document.getElementById('qr-' + cp.id);
-        if (canvas) QRCode.toCanvas(canvas, cp.qr_code, { width: 70, margin: 1 }, () => {});
-      });
-    } else {
-      checkpoints.forEach(cp => {
-        const canvas = document.getElementById('qr-' + cp.id);
-        if (canvas) {
+    checkpoints.forEach(cp => {
+      const img = document.getElementById('qr-' + cp.id);
+      if (img) {
+        img.src = qrImageUrl(cp.qr_code);
+        img.onerror = function () {
           const span = document.createElement('span');
           span.className = 'qr-unavailable';
-          span.textContent = 'QR blocked by browser/extension';
-          canvas.replaceWith(span);
-        }
-      });
-      document.querySelectorAll('.print-btn').forEach(btn => { btn.disabled = true; });
-      listMsg.textContent = 'QR code images could not load (likely blocked by an ad-blocker or privacy extension). Checkpoint codes and delete still work normally.';
-      listMsg.className = 'msg warn';
-    }
+          span.textContent = 'QR failed to load';
+          img.replaceWith(span);
+        };
+      }
+    });
 
     document.querySelectorAll('.print-btn').forEach(btn => {
       btn.addEventListener('click', function () {
-        printQr(this.getAttribute('data-canvas'), this.getAttribute('data-code'), this.getAttribute('data-name'));
+        printQr(this.getAttribute('data-img'), this.getAttribute('data-code'), this.getAttribute('data-name'));
       });
     });
 
@@ -353,13 +309,12 @@
     });
   }
 
-  function printQr(canvasId, code, name) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas || !canvas.toDataURL) {
-      alert('QR image is unavailable in this browser (likely blocked). Try disabling ad-block for this site, or use a different browser.');
+  function printQr(imgId, code, name) {
+    const img = document.getElementById(imgId);
+    if (!img || !img.src) {
+      alert('QR image is unavailable right now.');
       return;
     }
-    const dataUrl = canvas.toDataURL('image/png');
     const printWindow = window.open('', '_blank');
     const safeCode = escapeHtml(code);
     const safeName = escapeHtml(name);
@@ -370,7 +325,7 @@
       '<body style="text-align:center; font-family:Arial, sans-serif; padding:40px;">' +
       '<h2>' + safeName + '</h2>' +
       '<p style="font-size:14px; color:#666;">Code: ' + safeCode + '</p>' +
-      '<img src="' + dataUrl + '" style="width:220px; height:220px;">' +
+      '<img src="' + img.src + '" style="width:220px; height:220px;">' +
       scriptOpen + 'window.onload = function() { window.print(); };' + scriptClose +
       '</body></html>';
     printWindow.document.write(html);
@@ -380,7 +335,6 @@
   function init() {
     loadUsage();
     loadSites();
-    ensureQrLib();
   }
   init();
 </script>
