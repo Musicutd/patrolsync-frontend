@@ -9,7 +9,8 @@
   .card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
   input, select { display: block; width: 100%; padding: 8px; margin: 6px 0 12px; box-sizing: border-box; }
   button { padding: 10px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
-  button.print-btn { padding: 6px 12px; font-size: 13px; }
+  button.print-btn { padding: 6px 12px; font-size: 13px; margin-right: 6px; }
+  button.delete-btn { padding: 6px 12px; font-size: 13px; background: #dc2626; }
   .msg { margin-top: 10px; font-size: 14px; font-weight: bold; }
   .msg.error { color: #dc2626; }
   .msg.success { color: #16a34a; }
@@ -24,6 +25,7 @@
   .limit-hit { color: #dc2626; font-size: 13px; margin-top: 6px; }
   a.back-link { font-size: 13px; color: #2563eb; }
   .hidden { display: none; }
+  .action-cell { white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -52,9 +54,10 @@
 <div class="card">
   <h3>All Checkpoints</h3>
   <select id="filterSite" onchange="loadCheckpoints()"><option value="">All sites</option></select>
+  <div id="listMsg" class="msg"></div>
   <table id="cpTable">
     <thead>
-      <tr><th>Code</th><th>Location</th><th>Building</th><th>Floor</th><th>QR Code</th><th></th></tr>
+      <tr><th>Code</th><th>Location</th><th>Building</th><th>Floor</th><th>QR Code</th><th>Actions</th></tr>
     </thead>
     <tbody id="cpBody"></tbody>
   </table>
@@ -126,7 +129,7 @@
         createBtn.style.opacity = '1';
       }
     } catch (err) {
-      document.getElementById('usageText').textContent = 'Failed to load usage';
+      document.getElementById('usageText').textContent = 'Failed to load usage: ' + err.message;
       console.error(err.message);
     }
   }
@@ -154,6 +157,8 @@
       loadCheckpoints();
     } catch (err) {
       console.error('loadSites failed:', err.message);
+      document.getElementById('listMsg').textContent = 'Failed to load sites: ' + err.message;
+      document.getElementById('listMsg').className = 'msg error';
     }
   }
 
@@ -201,6 +206,8 @@
   async function loadCheckpoints() {
     const siteFilter = document.getElementById('filterSite').value;
     const body = document.getElementById('cpBody');
+    const listMsg = document.getElementById('listMsg');
+    listMsg.textContent = '';
     body.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
 
     try {
@@ -209,7 +216,7 @@
         : API_BASE + '/api/checkpoints?tenant_id=' + tenantId;
       const res = await fetch(url, { headers: authHeaders() });
       const checkpoints = await res.json();
-      if (!res.ok) { if (handleAuthError(checkpoints.error)) return; throw new Error(checkpoints.error || 'Failed to load checkpoints'); }
+      if (!res.ok) { if (handleAuthError(checkpoints.error)) return; throw new Error(checkpoints.error || ('Server returned status ' + res.status)); }
 
       body.innerHTML = '';
       if (checkpoints.length === 0) {
@@ -226,7 +233,10 @@
           '<td>' + escapeHtml(cp.building || '-') + '</td>' +
           '<td>' + escapeHtml(cp.floor || '-') + '</td>' +
           '<td><canvas id="' + canvasId + '" width="70" height="70"></canvas></td>' +
-          '<td><button class="print-btn" data-canvas="' + canvasId + '" data-code="' + escapeHtml(cp.qr_code) + '" data-name="' + escapeHtml(cp.name) + '">Print</button></td>';
+          '<td class="action-cell">' +
+            '<button class="print-btn" data-canvas="' + canvasId + '" data-code="' + escapeHtml(cp.qr_code) + '" data-name="' + escapeHtml(cp.name) + '">Print</button>' +
+            '<button class="delete-btn" data-id="' + cp.id + '" data-code="' + escapeHtml(cp.qr_code) + '">Delete</button>' +
+          '</td>';
         body.appendChild(tr);
       });
 
@@ -240,8 +250,36 @@
           printQr(this.getAttribute('data-canvas'), this.getAttribute('data-code'), this.getAttribute('data-name'));
         });
       });
+
+      document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+          deleteCheckpoint(this.getAttribute('data-id'), this.getAttribute('data-code'));
+        });
+      });
     } catch (err) {
-      body.innerHTML = '<tr><td colspan="6" style="color:red;">Failed to load checkpoints</td></tr>';
+      body.innerHTML = '';
+      listMsg.textContent = 'Failed to load checkpoints: ' + err.message;
+      listMsg.className = 'msg error';
+    }
+  }
+
+  async function deleteCheckpoint(id, code) {
+    if (!confirm('Delete checkpoint "' + code + '"? This also removes its scan history and cannot be undone.')) return;
+    const listMsg = document.getElementById('listMsg');
+    try {
+      const res = await fetch(API_BASE + '/api/checkpoints/' + id + '?tenant_id=' + tenantId, {
+        method: 'DELETE',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to delete checkpoint'); }
+      listMsg.textContent = 'Checkpoint deleted.';
+      listMsg.className = 'msg success';
+      loadUsage();
+      loadCheckpoints();
+    } catch (err) {
+      listMsg.textContent = err.message;
+      listMsg.className = 'msg error';
     }
   }
 
