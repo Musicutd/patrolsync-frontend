@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Checkpoint Manager - PatrolSync</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
   body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
   .card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
@@ -11,12 +10,15 @@
   button { padding: 10px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
   button.print-btn { padding: 6px 12px; font-size: 13px; margin-right: 6px; }
   button.delete-btn { padding: 6px 12px; font-size: 13px; background: #dc2626; }
+  button.print-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .msg { margin-top: 10px; font-size: 14px; font-weight: bold; }
   .msg.error { color: #dc2626; }
   .msg.success { color: #16a34a; }
+  .msg.warn { color: #d97706; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   td, th { border-bottom: 1px solid #eee; padding: 8px 6px; text-align: left; font-size: 14px; vertical-align: middle; }
   canvas { display: block; }
+  .qr-unavailable { font-size: 11px; color: #999; width: 70px; }
   .usage-bar-bg { width: 100%; height: 10px; background: #eee; border-radius: 5px; overflow: hidden; margin: 8px 0; }
   .usage-bar-fill { height: 100%; border-radius: 5px; transition: width 0.3s; background: #16a34a; }
   .usage-bar-fill.warn { background: #d97706; }
@@ -92,6 +94,46 @@
       return true;
     }
     return false;
+  }
+
+  // QR library loader with multiple CDN fallbacks. Some ad-blockers / privacy
+  // extensions flag "qrcode" in a script filename and silently block it, which
+  // previously crashed the whole checkpoint list with "QRCode is not defined".
+  // Now we try several sources and degrade gracefully if all are blocked.
+  let qrLibPromise = null;
+  const QR_CDN_URLS = [
+    'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js',
+    'https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js',
+    'https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js'
+  ];
+
+  function loadScriptOnce(url) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.onload = () => resolve(true);
+      script.onerror = () => reject(new Error('failed to load ' + url));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function ensureQrLib() {
+    if (window.QRCode) return true;
+    if (qrLibPromise) return qrLibPromise;
+
+    qrLibPromise = (async () => {
+      for (const url of QR_CDN_URLS) {
+        try {
+          await loadScriptOnce(url);
+          if (window.QRCode) return true;
+        } catch (err) {
+          console.warn('QR lib source failed:', url);
+        }
+      }
+      return false;
+    })();
+
+    return qrLibPromise;
   }
 
   let currentUsage = null;
@@ -210,57 +252,78 @@
     listMsg.textContent = '';
     body.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
 
+    let checkpoints;
     try {
       const url = siteFilter
         ? API_BASE + '/api/checkpoints?tenant_id=' + tenantId + '&site_id=' + siteFilter
         : API_BASE + '/api/checkpoints?tenant_id=' + tenantId;
       const res = await fetch(url, { headers: authHeaders() });
-      const checkpoints = await res.json();
+      checkpoints = await res.json();
       if (!res.ok) { if (handleAuthError(checkpoints.error)) return; throw new Error(checkpoints.error || ('Server returned status ' + res.status)); }
-
-      body.innerHTML = '';
-      if (checkpoints.length === 0) {
-        body.innerHTML = '<tr><td colspan="6">No checkpoints yet.</td></tr>';
-        return;
-      }
-
-      checkpoints.forEach(cp => {
-        const tr = document.createElement('tr');
-        const canvasId = 'qr-' + cp.id;
-        tr.innerHTML =
-          '<td>' + escapeHtml(cp.qr_code) + '</td>' +
-          '<td>' + escapeHtml(cp.name) + '</td>' +
-          '<td>' + escapeHtml(cp.building || '-') + '</td>' +
-          '<td>' + escapeHtml(cp.floor || '-') + '</td>' +
-          '<td><canvas id="' + canvasId + '" width="70" height="70"></canvas></td>' +
-          '<td class="action-cell">' +
-            '<button class="print-btn" data-canvas="' + canvasId + '" data-code="' + escapeHtml(cp.qr_code) + '" data-name="' + escapeHtml(cp.name) + '">Print</button>' +
-            '<button class="delete-btn" data-id="' + cp.id + '" data-code="' + escapeHtml(cp.qr_code) + '">Delete</button>' +
-          '</td>';
-        body.appendChild(tr);
-      });
-
-      checkpoints.forEach(cp => {
-        const canvas = document.getElementById('qr-' + cp.id);
-        if (canvas) QRCode.toCanvas(canvas, cp.qr_code, { width: 70, margin: 1 }, () => {});
-      });
-
-      document.querySelectorAll('.print-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-          printQr(this.getAttribute('data-canvas'), this.getAttribute('data-code'), this.getAttribute('data-name'));
-        });
-      });
-
-      document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-          deleteCheckpoint(this.getAttribute('data-id'), this.getAttribute('data-code'));
-        });
-      });
     } catch (err) {
       body.innerHTML = '';
       listMsg.textContent = 'Failed to load checkpoints: ' + err.message;
       listMsg.className = 'msg error';
+      return;
     }
+
+    body.innerHTML = '';
+    if (checkpoints.length === 0) {
+      body.innerHTML = '<tr><td colspan="6">No checkpoints yet.</td></tr>';
+      return;
+    }
+
+    checkpoints.forEach(cp => {
+      const tr = document.createElement('tr');
+      const canvasId = 'qr-' + cp.id;
+      tr.innerHTML =
+        '<td>' + escapeHtml(cp.qr_code) + '</td>' +
+        '<td>' + escapeHtml(cp.name) + '</td>' +
+        '<td>' + escapeHtml(cp.building || '-') + '</td>' +
+        '<td>' + escapeHtml(cp.floor || '-') + '</td>' +
+        '<td><canvas id="' + canvasId + '" width="70" height="70"></canvas></td>' +
+        '<td class="action-cell">' +
+          '<button class="print-btn" data-canvas="' + canvasId + '" data-code="' + escapeHtml(cp.qr_code) + '" data-name="' + escapeHtml(cp.name) + '">Print</button>' +
+          '<button class="delete-btn" data-id="' + cp.id + '" data-code="' + escapeHtml(cp.qr_code) + '">Delete</button>' +
+        '</td>';
+      body.appendChild(tr);
+    });
+
+    // Try to load the QR library; if it succeeds, render real QR codes and
+    // enable Print. If it fails everywhere, show a plain fallback so the rest
+    // of the table (codes, delete) still works fully.
+    const qrReady = await ensureQrLib();
+    if (qrReady) {
+      checkpoints.forEach(cp => {
+        const canvas = document.getElementById('qr-' + cp.id);
+        if (canvas) QRCode.toCanvas(canvas, cp.qr_code, { width: 70, margin: 1 }, () => {});
+      });
+    } else {
+      checkpoints.forEach(cp => {
+        const canvas = document.getElementById('qr-' + cp.id);
+        if (canvas) {
+          const span = document.createElement('span');
+          span.className = 'qr-unavailable';
+          span.textContent = 'QR blocked by browser/extension';
+          canvas.replaceWith(span);
+        }
+      });
+      document.querySelectorAll('.print-btn').forEach(btn => { btn.disabled = true; });
+      listMsg.textContent = 'QR code images could not load (likely blocked by an ad-blocker or privacy extension). Checkpoint codes and delete still work normally.';
+      listMsg.className = 'msg warn';
+    }
+
+    document.querySelectorAll('.print-btn').forEach(btn => {
+      btn.addEventListener('click', function () {
+        printQr(this.getAttribute('data-canvas'), this.getAttribute('data-code'), this.getAttribute('data-name'));
+      });
+    });
+
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', function () {
+        deleteCheckpoint(this.getAttribute('data-id'), this.getAttribute('data-code'));
+      });
+    });
   }
 
   async function deleteCheckpoint(id, code) {
@@ -292,6 +355,10 @@
 
   function printQr(canvasId, code, name) {
     const canvas = document.getElementById(canvasId);
+    if (!canvas || !canvas.toDataURL) {
+      alert('QR image is unavailable in this browser (likely blocked). Try disabling ad-block for this site, or use a different browser.');
+      return;
+    }
     const dataUrl = canvas.toDataURL('image/png');
     const printWindow = window.open('', '_blank');
     const safeCode = escapeHtml(code);
@@ -313,6 +380,7 @@
   function init() {
     loadUsage();
     loadSites();
+    ensureQrLib();
   }
   init();
 </script>
