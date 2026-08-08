@@ -15,6 +15,7 @@
     button.dismiss { background: #64748b; width: auto; padding: 4px 10px; margin: 0; font-size: 12px; }
     button.qrbtn { background: #7c3aed; width: auto; padding: 4px 10px; margin: 0 0 0 8px; font-size: 12px; }
     button.resetpw { background: #d97706; width: auto; padding: 4px 10px; margin: 0 0 0 8px; font-size: 12px; }
+    button.managerlink { background: #7c3aed; margin-bottom: 10px; }
     section { border: 1px solid #ddd; border-radius: 6px; padding: 15px; margin-bottom: 20px; }
     #header { display: flex; justify-content: space-between; align-items: center; }
     ul { list-style: none; padding: 0; }
@@ -143,6 +144,7 @@
 
   <section>
     <h3>Checkpoints</h3>
+    <button class="managerlink" onclick="window.location.href='checkpoint_manager.html'">🗂 Open Full Checkpoint Manager (with QR codes)</button>
     <select id="checkpointSite">
       <option value="">Select a site</option>
     </select>
@@ -272,6 +274,21 @@
       window.location.href = 'signup.html';
     }
 
+    // Global handling: if any API call comes back with an expired/invalid token,
+    // clear the stale session and send the admin back to login with a clear reason,
+    // instead of leaving the page in a silent half-loaded state.
+    function handleAuthError(message) {
+      if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('tenant_id');
+        localStorage.removeItem('user_email');
+        alert('Your session has expired. Please log in again.');
+        window.location.href = 'login.html';
+        return true;
+      }
+      return false;
+    }
+
     function fetchWithTimeout(url, options, ms) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), ms || 8000);
@@ -333,7 +350,7 @@
           body: JSON.stringify({ tenant_id: Number(tenantId), new_password: newPassword })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to reset password');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to reset password'); }
         statusDiv.textContent = 'Password reset successfully.';
         statusDiv.className = 'status success';
         setTimeout(closeResetPwModal, 1200);
@@ -349,6 +366,7 @@
       try {
         const res = await fetchWithTimeout(API_BASE + '/api/notifications?tenant_id=' + tenantId, { headers: authHeaders() }, 8000);
         const alerts = await res.json();
+        if (!res.ok && handleAuthError(alerts.error)) return;
         list.innerHTML = '';
 
         if (!res.ok || alerts.length === 0) {
@@ -398,7 +416,8 @@
           method: 'PATCH',
           headers: authHeaders()
         });
-        if (!res.ok) throw new Error('Failed to dismiss');
+        const data = await res.json();
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error('Failed to dismiss'); }
         loadAlerts();
       } catch (err) {
         alert('Failed to dismiss alert: ' + err.message);
@@ -453,7 +472,7 @@
           body: JSON.stringify({ timezone })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to save timezone');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to save timezone'); }
         currentTenant = data;
         statusDiv.textContent = 'Timezone saved to ' + data.timezone + '. Fixed schedules will now use this timezone.';
         statusDiv.className = 'status success';
@@ -482,7 +501,7 @@
         ]);
         allPlans = await plansRes.json();
         const usageData = await usageRes.json();
-        if (!usageRes.ok) throw new Error(usageData.error || 'Failed to load usage');
+        if (!usageRes.ok) { if (handleAuthError(usageData.error)) return; throw new Error(usageData.error || 'Failed to load usage'); }
 
         const plan = usageData.plan;
         badge.textContent = plan;
@@ -547,7 +566,7 @@
           body: JSON.stringify({ plan: newPlan })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to change plan');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to change plan'); }
         statusDiv.textContent = 'Plan changed to ' + data.plan + '.';
         statusDiv.className = 'status success';
         loadPlanAndUsage();
@@ -575,6 +594,7 @@
       try {
         const res = await fetchWithTimeout(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() }, 8000);
         const sites = await res.json();
+        if (!res.ok && handleAuthError(sites.error)) return;
         currentSites = sites;
 
         const list = document.getElementById('siteList');
@@ -610,7 +630,7 @@
           body: JSON.stringify({ tenant_id: Number(tenantId), name, address })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to add site');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to add site'); }
         statusDiv.textContent = 'Site added.';
         statusDiv.className = 'status success';
         document.getElementById('siteName').value = '';
@@ -639,6 +659,7 @@
       try {
         const res = await fetchWithTimeout(API_BASE + '/api/users?tenant_id=' + tenantId + '&role=guard', { headers: authHeaders() }, 8000);
         const guards = await res.json();
+        if (!res.ok && handleAuthError(guards.error)) return;
         currentGuards = guards;
         const list = document.getElementById('guardList');
         list.innerHTML = '';
@@ -684,7 +705,7 @@
           body: JSON.stringify({ tenant_id: Number(tenantId), email, role: 'guard', password })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to add guard');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to add guard'); }
         statusDiv.textContent = 'Guard added.';
         statusDiv.className = 'status success';
         document.getElementById('guardEmail').value = '';
@@ -706,7 +727,7 @@
           headers: authHeaders()
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to remove guard');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to remove guard'); }
         statusDiv.textContent = 'Guard removed.';
         statusDiv.className = 'status success';
         loadGuards();
@@ -723,6 +744,7 @@
       try {
         const res = await fetchWithTimeout(API_BASE + '/api/guard-assignments?tenant_id=' + tenantId, { headers: authHeaders() }, 8000);
         const assignments = await res.json();
+        if (!res.ok && handleAuthError(assignments.error)) return;
         list.innerHTML = '';
         if (assignments.length === 0) {
           list.innerHTML = '<li>No assignments yet — guards have no assigned sites.</li>';
@@ -764,7 +786,7 @@
           })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to assign guard');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to assign guard'); }
         statusDiv.textContent = 'Guard assigned to site.';
         statusDiv.className = 'status success';
         document.getElementById('assignRoundSize').value = '';
@@ -784,7 +806,7 @@
           headers: authHeaders()
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to remove assignment');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to remove assignment'); }
         statusDiv.textContent = 'Assignment removed.';
         statusDiv.className = 'status success';
         loadAssignments();
@@ -804,6 +826,7 @@
       try {
         const res = await fetchWithTimeout(API_BASE + '/api/checkpoints?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() }, 8000);
         const checkpoints = await res.json();
+        if (!res.ok && handleAuthError(checkpoints.error)) return;
         checkpoints.forEach(cp => {
           const li = document.createElement('li');
           const label = document.createElement('span');
@@ -858,7 +881,7 @@
           })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to add checkpoint');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to add checkpoint'); }
         statusDiv.textContent = 'Checkpoint added.';
         statusDiv.className = 'status success';
         document.getElementById('checkpointName').value = '';
@@ -885,7 +908,7 @@
           })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to log scan');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to log scan'); }
         const confirmMsg = document.createElement('span');
         confirmMsg.textContent = ' ✓ scanned ' + new Date(data.scanned_at || Date.now()).toLocaleTimeString();
         confirmMsg.style.color = 'green';
@@ -914,6 +937,7 @@
       try {
         const res = await fetchWithTimeout(API_BASE + '/api/patrol-schedules?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() }, 8000);
         const schedules = await res.json();
+        if (!res.ok && handleAuthError(schedules.error)) return;
         schedules.forEach(s => {
           const li = document.createElement('li');
           let summary = '';
@@ -948,7 +972,7 @@
           headers: authHeaders()
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to remove schedule');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to remove schedule'); }
         statusDiv.textContent = 'Schedule removed.';
         statusDiv.className = 'status success';
         loadSchedules();
@@ -998,7 +1022,7 @@
           })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to add schedule');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to add schedule'); }
         statusDiv.textContent = 'Schedule added.';
         statusDiv.className = 'status success';
         document.getElementById('intervalHours').value = '';
@@ -1019,6 +1043,7 @@
       try {
         const res = await fetch(API_BASE + '/api/patrol-compliance?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() });
         const compliance = await res.json();
+        if (!res.ok) { if (handleAuthError(compliance.error)) return; }
         if (compliance.length === 0) {
           list.innerHTML = '<li>No checkpoints found for this site</li>';
           return;
@@ -1062,7 +1087,7 @@
           })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to submit incident');
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to submit incident'); }
         statusDiv.textContent = 'Incident submitted.';
         statusDiv.className = 'status success';
         document.getElementById('incidentDescription').value = '';
@@ -1085,6 +1110,7 @@
         const url = API_BASE + '/api/incidents?tenant_id=' + tenantId + (dateVal ? '&date=' + dateVal : '');
         const res = await fetchWithTimeout(url, { headers: authHeaders() }, 8000);
         const incidents = await res.json();
+        if (!res.ok && handleAuthError(incidents.error)) return;
         const list = document.getElementById('incidentList');
         list.innerHTML = '';
         if (incidents.length === 0) {
