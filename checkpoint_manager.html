@@ -10,6 +10,7 @@
   button { padding: 10px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
   button.print-btn { padding: 6px 12px; font-size: 13px; margin-right: 6px; }
   button.delete-btn { padding: 6px 12px; font-size: 13px; background: #dc2626; }
+  button.locate-btn { background: #16a34a; margin-top: 0; }
   .msg { margin-top: 10px; font-size: 14px; font-weight: bold; }
   .msg.error { color: #dc2626; }
   .msg.success { color: #16a34a; }
@@ -25,8 +26,25 @@
   .usage-label { display: flex; justify-content: space-between; font-size: 13px; color: #444; }
   .limit-hit { color: #dc2626; font-size: 13px; margin-top: 6px; }
   a.back-link { font-size: 13px; color: #2563eb; }
+  a.gps-link { color: #2563eb; font-size: 13px; }
   .hidden { display: none; }
   .action-cell { white-space: nowrap; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; }
+  .toggle-label { font-size: 14px; font-weight: bold; color: #333; }
+  .switch { position: relative; display: inline-block; width: 46px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .2s; border-radius: 24px; }
+  .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .2s; border-radius: 50%; }
+  input:checked + .slider { background-color: #2563eb; }
+  input:checked + .slider:before { transform: translateX(22px); }
+
+  .gps-fields { display: flex; gap: 8px; align-items: flex-start; }
+  .gps-fields > div { flex: 1; }
+  .gps-fields input { margin-bottom: 0; }
+  .locate-wrap { display: flex; align-items: flex-end; }
+  .locate-wrap button { width: auto; padding: 8px 12px; font-size: 13px; white-space: nowrap; }
+  .gps-hint { font-size: 12px; color: #666; margin: 4px 0 12px; }
 </style>
 </head>
 <body>
@@ -48,6 +66,31 @@
   <input id="cpLocation" placeholder="Location name (e.g. Main Gate)">
   <input id="cpBuilding" placeholder="Building (optional)">
   <input id="cpFloor" placeholder="Floor (optional)">
+
+  <div class="toggle-row">
+    <span class="toggle-label">📍 Include GPS Coordinates</span>
+    <label class="switch">
+      <input type="checkbox" id="gpsToggle" onchange="toggleGpsFields()">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div id="gpsFields" class="hidden">
+    <p class="gps-hint">Optional — pinpoints this checkpoint on a map. Enter manually or use your current location.</p>
+    <div class="gps-fields">
+      <div>
+        <input id="cpLat" placeholder="Latitude (e.g. 35.8989)" type="text">
+      </div>
+      <div>
+        <input id="cpLng" placeholder="Longitude (e.g. 14.5146)" type="text">
+      </div>
+      <div class="locate-wrap">
+        <button type="button" class="locate-btn" onclick="useMyLocation()">📍 Use My Location</button>
+      </div>
+    </div>
+    <div id="gpsStatus" class="msg"></div>
+  </div>
+
   <button id="createBtn" onclick="addCheckpoint()">Create + Generate QR</button>
   <div id="cpMsg" class="msg"></div>
 </div>
@@ -58,7 +101,7 @@
   <div id="listMsg" class="msg"></div>
   <table id="cpTable">
     <thead>
-      <tr><th>Code</th><th>Location</th><th>Building</th><th>Floor</th><th>QR Code</th><th>Actions</th></tr>
+      <tr><th>Code</th><th>Location</th><th>Building</th><th>Floor</th><th>GPS</th><th>QR Code</th><th>Actions</th></tr>
     </thead>
     <tbody id="cpBody"></tbody>
   </table>
@@ -95,12 +138,42 @@
     return false;
   }
 
-  // QR images are now rendered server-side by our own backend (patrolsync-backend
-  // .onrender.com), not fetched from a third-party CDN script. This avoids any
-  // network-level filtering (corporate firewalls, ISP content filters) that
-  // blocked jsdelivr/unpkg even in Incognito mode with no extensions active.
   function qrImageUrl(code) {
     return API_BASE + '/api/qr-image?text=' + encodeURIComponent(code) + '&token=' + encodeURIComponent(token);
+  }
+
+  function toggleGpsFields() {
+    const on = document.getElementById('gpsToggle').checked;
+    document.getElementById('gpsFields').classList.toggle('hidden', !on);
+    if (!on) {
+      document.getElementById('cpLat').value = '';
+      document.getElementById('cpLng').value = '';
+      document.getElementById('gpsStatus').textContent = '';
+    }
+  }
+
+  function useMyLocation() {
+    const statusDiv = document.getElementById('gpsStatus');
+    if (!navigator.geolocation) {
+      statusDiv.textContent = 'Geolocation is not supported by this browser.';
+      statusDiv.className = 'msg error';
+      return;
+    }
+    statusDiv.textContent = 'Getting your location...';
+    statusDiv.className = 'msg';
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        document.getElementById('cpLat').value = pos.coords.latitude.toFixed(6);
+        document.getElementById('cpLng').value = pos.coords.longitude.toFixed(6);
+        statusDiv.textContent = 'Location captured (accuracy ~' + Math.round(pos.coords.accuracy) + 'm).';
+        statusDiv.className = 'msg success';
+      },
+      function (err) {
+        statusDiv.textContent = 'Could not get location: ' + err.message;
+        statusDiv.className = 'msg error';
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   }
 
   let currentUsage = null;
@@ -171,16 +244,35 @@
     }
   }
 
+  function isValidCoord(val, min, max) {
+    if (val === '' || val === null) return true;
+    const num = Number(val);
+    return !isNaN(num) && num >= min && num <= max;
+  }
+
   async function addCheckpoint() {
     const siteId = document.getElementById('cpSite').value;
     const code = document.getElementById('cpCode').value.trim();
     const location_name = document.getElementById('cpLocation').value.trim();
     const building = document.getElementById('cpBuilding').value.trim();
     const floor = document.getElementById('cpFloor').value.trim();
+    const gpsOn = document.getElementById('gpsToggle').checked;
+    const lat = document.getElementById('cpLat').value.trim();
+    const lng = document.getElementById('cpLng').value.trim();
     const msgDiv = document.getElementById('cpMsg');
 
     if (!siteId) { msgDiv.textContent = 'Please select a site'; msgDiv.className = 'msg error'; return; }
     if (!code || !location_name) { msgDiv.textContent = 'Code and location name are required'; msgDiv.className = 'msg error'; return; }
+
+    if (gpsOn) {
+      if ((lat && !lng) || (!lat && lng)) {
+        msgDiv.textContent = 'Enter both latitude and longitude, or leave both blank';
+        msgDiv.className = 'msg error';
+        return;
+      }
+      if (!isValidCoord(lat, -90, 90)) { msgDiv.textContent = 'Latitude must be between -90 and 90'; msgDiv.className = 'msg error'; return; }
+      if (!isValidCoord(lng, -180, 180)) { msgDiv.textContent = 'Longitude must be between -180 and 180'; msgDiv.className = 'msg error'; return; }
+    }
 
     try {
       const res = await fetch(API_BASE + '/api/checkpoints', {
@@ -192,7 +284,9 @@
           name: location_name,
           qr_code: code,
           building: building || null,
-          floor: floor || null
+          floor: floor || null,
+          latitude: (gpsOn && lat) ? Number(lat) : null,
+          longitude: (gpsOn && lng) ? Number(lng) : null
         })
       });
       const data = await res.json();
@@ -204,6 +298,9 @@
       document.getElementById('cpLocation').value = '';
       document.getElementById('cpBuilding').value = '';
       document.getElementById('cpFloor').value = '';
+      document.getElementById('cpLat').value = '';
+      document.getElementById('cpLng').value = '';
+      document.getElementById('gpsStatus').textContent = '';
       loadUsage();
       loadCheckpoints();
     } catch (err) {
@@ -217,7 +314,7 @@
     const body = document.getElementById('cpBody');
     const listMsg = document.getElementById('listMsg');
     listMsg.textContent = '';
-    body.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+    body.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
 
     let checkpoints;
     try {
@@ -236,18 +333,24 @@
 
     body.innerHTML = '';
     if (checkpoints.length === 0) {
-      body.innerHTML = '<tr><td colspan="6">No checkpoints yet.</td></tr>';
+      body.innerHTML = '<tr><td colspan="7">No checkpoints yet.</td></tr>';
       return;
     }
 
     checkpoints.forEach(cp => {
       const tr = document.createElement('tr');
       const imgId = 'qr-' + cp.id;
+      const hasGps = cp.latitude !== null && cp.latitude !== undefined && cp.longitude !== null && cp.longitude !== undefined;
+      const gpsCell = hasGps
+        ? '<a class="gps-link" target="_blank" href="https://maps.google.com/?q=' + cp.latitude + ',' + cp.longitude + '">' +
+            Number(cp.latitude).toFixed(4) + ', ' + Number(cp.longitude).toFixed(4) + '</a>'
+        : '-';
       tr.innerHTML =
         '<td>' + escapeHtml(cp.qr_code) + '</td>' +
         '<td>' + escapeHtml(cp.name) + '</td>' +
         '<td>' + escapeHtml(cp.building || '-') + '</td>' +
         '<td>' + escapeHtml(cp.floor || '-') + '</td>' +
+        '<td>' + gpsCell + '</td>' +
         '<td><img id="' + imgId + '" class="qr-img" alt="QR code"></td>' +
         '<td class="action-cell">' +
           '<button class="print-btn" data-img="' + imgId + '" data-code="' + escapeHtml(cp.qr_code) + '" data-name="' + escapeHtml(cp.name) + '">Print</button>' +
