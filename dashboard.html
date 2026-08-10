@@ -76,7 +76,7 @@
     .sos-none { color: #16a34a; font-weight: bold; padding: 4px 0; }
     .sos-guard-row { font-size: 13px; color: #991b1b; padding: 4px 0; }
 
-    #qrModal, #resetPwModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+    #qrModal, #resetPwModal, #photoViewerModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
     #qrModalContent, #resetPwModalContent { background: white; padding: 24px; border-radius: 8px; text-align: center; max-width: 320px; }
     #qrModalContent canvas { margin: 10px auto; display: block; }
     #qrModalContent button, #resetPwModalContent button { margin-top: 10px; }
@@ -88,6 +88,30 @@
 
     /* --- Emergency contacts section --- */
     .emergency-label { font-size: 13px; font-weight: bold; display: block; margin-top: 8px; color: #333; }
+
+    /* --- Incident photo viewer --- */
+    .incident-row-main { flex: 1; }
+    .photo-badge {
+      display: inline-block;
+      margin-left: 8px;
+      background: #0891b2;
+      color: white;
+      border-radius: 10px;
+      padding: 2px 9px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .photo-badge:hover { background: #0e7490; }
+    #photoViewerModal { z-index: 1100; background: rgba(0,0,0,0.85); }
+    #photoViewerContent {
+      background: white; padding: 20px; border-radius: 8px;
+      max-width: 90%; max-height: 85vh; overflow-y: auto; text-align: center;
+    }
+    #photoViewerImages img {
+      max-width: 100%; max-height: 60vh; border-radius: 6px; margin: 8px 0; display: block;
+    }
+    #photoViewerContent button { margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -273,6 +297,14 @@
       <button onclick="confirmResetPassword()">Reset Password</button>
       <button class="qr-close" onclick="closeResetPwModal()">Cancel</button>
       <div id="resetPwStatus" class="status"></div>
+    </div>
+  </div>
+
+  <div id="photoViewerModal">
+    <div id="photoViewerContent">
+      <h3>Incident Photos</h3>
+      <div id="photoViewerImages"></div>
+      <button class="qr-close" onclick="closeIncidentPhotos()">Close</button>
     </div>
   </div>
 
@@ -1207,6 +1239,8 @@
       loadIncidents();
     }
 
+    // Now renders a photo badge (e.g. "📷 2") for any incident that has
+    // attached evidence photos, clicking it opens the lightbox viewer below.
     async function loadIncidents() {
       const dateVal = document.getElementById('incidentDateFilter').value;
       try {
@@ -1222,13 +1256,50 @@
         }
         incidents.forEach(i => {
           const li = document.createElement('li');
-          li.innerHTML = '<span class="sev-' + i.severity + '">[' + i.severity.toUpperCase() + ']</span> ' +
-            i.description + ' — ' + new Date(i.reported_at).toLocaleString();
+          const mainSpan = document.createElement('span');
+          mainSpan.className = 'incident-row-main';
+          mainSpan.innerHTML = '<span class="sev-' + i.severity + '">[' + i.severity.toUpperCase() + ']</span> ' +
+            escapeHtml(i.description) + ' — ' + new Date(i.reported_at).toLocaleString();
+
+          if (i.photo_count > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'photo-badge';
+            badge.textContent = '📷 ' + i.photo_count;
+            badge.onclick = () => openIncidentPhotos(i.id);
+            mainSpan.appendChild(badge);
+          }
+
+          li.appendChild(mainSpan);
           list.appendChild(li);
         });
       } catch (err) {
         console.error('loadIncidents failed:', err.message);
       }
+    }
+
+    async function openIncidentPhotos(incidentId) {
+      const modal = document.getElementById('photoViewerModal');
+      const container = document.getElementById('photoViewerImages');
+      container.innerHTML = 'Loading...';
+      modal.style.display = 'flex';
+      try {
+        const res = await fetch(API_BASE + '/api/incidents/' + incidentId + '/photos?tenant_id=' + tenantId, {
+          headers: authHeaders()
+        });
+        const photos = await res.json();
+        if (!res.ok) { if (handleAuthError(photos.error)) return; throw new Error(photos.error || 'Failed to load photos'); }
+        if (photos.length === 0) {
+          container.innerHTML = '<p>No photos found.</p>';
+          return;
+        }
+        container.innerHTML = photos.map(p => '<img src="' + p.photo_data + '" alt="Incident evidence photo">').join('');
+      } catch (err) {
+        container.innerHTML = '<p class="error">' + err.message + '</p>';
+      }
+    }
+
+    function closeIncidentPhotos() {
+      document.getElementById('photoViewerModal').style.display = 'none';
     }
 
     function init() {
