@@ -85,6 +85,9 @@
     .assign-row select { flex: 1; min-width: 120px; }
     .assign-row input { flex: 0 0 90px; }
     .assign-row button { width: auto; flex-shrink: 0; padding: 10px 14px; }
+
+    /* --- Emergency contacts section --- */
+    .emergency-label { font-size: 13px; font-weight: bold; display: block; margin-top: 8px; color: #333; }
   </style>
 </head>
 <body>
@@ -133,6 +136,17 @@
       <button onclick="saveTimezone()">Save</button>
     </div>
     <div id="timezoneStatus" class="status"></div>
+  </section>
+
+  <section>
+    <h3>Emergency Contacts (SOS)</h3>
+    <p style="font-size:13px; color:#666;">Guards see "Call" and "WhatsApp" buttons next to their SOS button. Set either or both — a personal mobile for calls and a separate ops/WhatsApp line, for example. Leave a field blank to hide that button on the guard app.</p>
+    <label class="emergency-label">Phone number (for "Call Admin")</label>
+    <input type="text" id="emergencyPhoneInput" placeholder="e.g. +356 7912 3456">
+    <label class="emergency-label">WhatsApp number (for "WhatsApp Admin")</label>
+    <input type="text" id="emergencyWhatsappInput" placeholder="e.g. +356 7912 3456">
+    <button onclick="saveEmergencyContacts()">Save Emergency Contacts</button>
+    <div id="emergencyContactsStatus" class="status"></div>
   </section>
 
   <section>
@@ -532,6 +546,41 @@
         if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to save timezone'); }
         currentTenant = data;
         statusDiv.textContent = 'Timezone saved to ' + data.timezone + '. Fixed schedules will now use this timezone.';
+        statusDiv.className = 'status success';
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    // --- Emergency contacts (independent call number + WhatsApp number) ---
+    async function loadEmergencyContacts() {
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/tenants', {}, 8000);
+        const tenants = await res.json();
+        const tenant = tenants.find(t => t.id === Number(tenantId));
+        if (tenant) {
+          document.getElementById('emergencyPhoneInput').value = tenant.emergency_phone || '';
+          document.getElementById('emergencyWhatsappInput').value = tenant.emergency_whatsapp || '';
+        }
+      } catch (err) {
+        console.error('loadEmergencyContacts failed:', err.message);
+      }
+    }
+
+    async function saveEmergencyContacts() {
+      const phone = document.getElementById('emergencyPhoneInput').value.trim();
+      const whatsapp = document.getElementById('emergencyWhatsappInput').value.trim();
+      const statusDiv = document.getElementById('emergencyContactsStatus');
+      try {
+        const res = await fetch(API_BASE + '/api/tenants/' + tenantId + '/emergency-contacts', {
+          method: 'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({ emergency_phone: phone, emergency_whatsapp: whatsapp })
+        });
+        const data = await res.json();
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to save emergency contacts'); }
+        statusDiv.textContent = 'Emergency contacts saved.';
         statusDiv.className = 'status success';
       } catch (err) {
         statusDiv.textContent = err.message;
@@ -1193,6 +1242,7 @@
       loadGuards();
       loadAssignments();
       loadIncidents();
+      loadEmergencyContacts();
       setInterval(loadSosSummary, 10000);
       setInterval(loadAlerts, 60000);
     }
