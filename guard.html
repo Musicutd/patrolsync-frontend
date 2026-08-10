@@ -97,6 +97,22 @@
     }
     .photo-count-hint { font-size: 12px; color: #666; margin-top: 4px; }
     .photo-compressing { font-size: 12px; color: #0891b2; margin-top: 4px; }
+
+    /* --- Offline mode --- */
+    .connection-banner {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; border-radius: 8px; margin-bottom: 14px;
+      font-size: 13px; font-weight: bold;
+    }
+    .connection-banner.online { background: #dcfce7; color: #166534; }
+    .connection-banner.offline { background: #fef3c7; color: #92400e; }
+    .connection-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .connection-banner.online .connection-dot { background: #16a34a; }
+    .connection-banner.offline .connection-dot { background: #d97706; animation: sosPulse 1.5s infinite; }
+    @keyframes sosPulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    .sync-btn { background: #0891b2; width: auto; padding: 6px 12px; font-size: 12px; margin: 0; }
+    .queued-tag { color: #d97706; font-weight: bold; }
+    .synced-tag { color: #16a34a; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -121,6 +137,11 @@
       <button class="logout" onclick="doLogout()">Log Out</button>
     </div>
 
+    <div id="connectionBanner" class="connection-banner online">
+      <span><span class="connection-dot"></span><span id="connectionText">Online</span></span>
+      <button class="sync-btn hidden" id="syncNowBtn" onclick="syncQueue()">Sync Now</button>
+    </div>
+
     <section>
       <button id="sosBtn" class="sos-btn" onclick="triggerSos()">🆘 SOS — SEND EMERGENCY ALERT</button>
 
@@ -140,7 +161,7 @@
 
     <section>
       <h3>Scan a Checkpoint</h3>
-      <p class="hint">Point your camera at any checkpoint's QR label.</p>
+      <p class="hint">Point your camera at any checkpoint's QR label. Works even with no signal — scans are queued and synced automatically.</p>
       <button class="scanqr" onclick="openScanner()">📷 Open Camera Scanner</button>
       <div id="qrScanStatus" class="status"></div>
     </section>
@@ -154,6 +175,7 @@
           <div class="progress-bar-fill" id="progressBarFill" style="width:0%;"></div>
         </div>
         <div id="progressCompleteMsg" class="progress-complete hidden">✓ Round complete!</div>
+        <div id="pendingSyncHint" class="hint hidden"></div>
       </div>
       <button class="remaining" onclick="showRemaining()">Check Remaining Checkpoints</button>
     </section>
@@ -180,6 +202,7 @@
       <div id="photoPreviews" class="photo-previews"></div>
 
       <button onclick="submitIncident()">Submit Report</button>
+      <p class="hint">Incident reports require a connection to submit — they are not queued offline.</p>
       <div id="incidentStatus" class="status"></div>
     </section>
   </div>
@@ -311,6 +334,7 @@
 
         select.value = assignedSites[0].id;
         loadProgress();
+        refreshCheckpointCache();
       } catch (err) {
         console.error('loadAssignedSites failed:', err.message);
       }
@@ -325,21 +349,171 @@
       document.getElementById('progressCompleteMsg').classList.add('hidden');
     }
 
+    // --- Offline mode: checkpoint cache + scan queue ---
+    // Two localStorage-backed stores:
+    //   guard_checkpoint_cache: { [qr_code]: { id, name, site_id, site_name } }
+    //     refreshed opportunistically whenever online, so QR scans can be
+    //     validated and matched to a checkpoint even with zero connectivity.
+    //   guard_scan_queue: [ { localId, tenant_id, checkpoint_id, user_id,
+    //     latitude, longitude, scanned_at, checkpoint_name } ]
+    //     scans made while offline (or when a live request fails) are
+    //     pushed here instead of being lost, then flushed to the server
+    //     one-by-one as soon as connectivity returns.
+    function getCheckpointCacheKey() {
+      const { tenantId } = getSession();
+      return 'guard_checkpoint_cache_' + tenantId;
+    }
+    function getQueueKey() {
+      const { tenantId, userId } = getSession();
+      return 'guard_scan_queue_' + tenantId + '_' + userId;
+    }
+
+    function loadCheckpointCache() {
+      try {
+        return JSON.parse(localStorage.getItem(getCheckpointCacheKey()) || '{}');
+      } catch (err) {
+        return {};
+      }
+    }
+    function saveCheckpointCache(cache) {
+      localStorage.setItem(getCheckpointCacheKey(), JSON.stringify(cache));
+    }
+
+    function loadQueue() {
+      try {
+        return JSON.parse(localStorage.getItem(getQueueKey()) || '[]');
+      } catch (err) {
+        return [];
+      }
+    }
+    function saveQueue(queue) {
+      localStorage.setItem(getQueueKey(), JSON.stringify(queue));
+    }
+
+    async function refreshCheckpointCache() {
+      if (!navigator.onLine) return;
+      const { tenantId } = getSession();
+      const cache = loadCheckpointCache();
+      try {
+        for (const site of assignedSites) {
+          const res = await fetch(API_BASE + '/api/checkpoints?tenant_id=' + tenantId + '&site_id=' + site.id, { headers: authHeaders() });
+          if (!res.ok) continue;
+          const checkpoints = await res.json();
+          checkpoints.forEach(cp => {
+            cache[cp.qr_code] = { id: cp.id, name: cp.name, site_id: cp.site_id, site_name: site.name };
+          });
+        }
+        saveCheckpointCache(cache);
+      } catch (err) {
+        console.error('refreshCheckpointCache failed (likely offline):', err.message);
+      }
+    }
+
+    function updateConnectionBanner() {
+      const banner = document.getElementById('connectionBanner');
+      const text = document.getElementById('connectionText');
+      const syncBtn = document.getElementById('syncNowBtn');
+      const queue = loadQueue();
+
+      if (navigator.onLine) {
+        banner.className = 'connection-banner online';
+        text.textContent = queue.length > 0 ? 'Online — syncing ' + queue.length + ' queued scan(s)...' : 'Online';
+        syncBtn.classList.toggle('hidden', queue.length === 0);
+      } else {
+        banner.className = 'connection-banner offline';
+        text.textContent = 'Offline' + (queue.length > 0 ? ' — ' + queue.length + ' scan(s) queued' : ' — scans will be queued');
+        syncBtn.classList.add('hidden');
+      }
+    }
+
+    window.addEventListener('online', () => { updateConnectionBanner(); syncQueue(); refreshCheckpointCache(); });
+    window.addEventListener('offline', updateConnectionBanner);
+
+    async function syncQueue() {
+      if (!navigator.onLine) return;
+      let queue = loadQueue();
+      if (queue.length === 0) { updateConnectionBanner(); return; }
+
+      updateConnectionBanner();
+      const remaining = [];
+      for (const item of queue) {
+        try {
+          const res = await fetch(API_BASE + '/api/patrol-logs', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+              tenant_id: item.tenant_id,
+              checkpoint_id: item.checkpoint_id,
+              user_id: item.user_id,
+              latitude: item.latitude,
+              longitude: item.longitude,
+              scanned_at: item.scanned_at
+            })
+          });
+          if (!res.ok) {
+            remaining.push(item);
+          }
+        } catch (err) {
+          remaining.push(item);
+          break;
+        }
+      }
+      saveQueue(remaining);
+      updateConnectionBanner();
+      loadProgress();
+      if (remaining.length === 0) {
+        const statusEl = document.getElementById('qrScanStatus');
+        if (statusEl) {
+          statusEl.textContent = '✓ All queued scans synced successfully.';
+          statusEl.className = 'status success';
+        }
+      }
+    }
+
     async function loadProgress() {
       const { tenantId, userId } = getSession();
       const siteId = document.getElementById('siteSelect').value;
       if (!siteId) { resetProgressDisplay(); return; }
+
+      const queue = loadQueue();
+      const queuedForSite = queue.filter(q => String(q.site_id) === String(siteId));
+      const pendingHint = document.getElementById('pendingSyncHint');
+
+      if (!navigator.onLine) {
+        // Fully offline: show queued-only progress from local queue, since
+        // we can't reach the server to get the authoritative count.
+        const uniqueCheckpoints = new Set(queuedForSite.map(q => q.checkpoint_id));
+        document.getElementById('progressCount').textContent = uniqueCheckpoints.size;
+        document.getElementById('progressTarget').textContent = '(offline — showing queued scans only)';
+        document.getElementById('progressBarFill').style.width = '0%';
+        document.getElementById('progressCompleteMsg').classList.add('hidden');
+        pendingHint.textContent = queuedForSite.length + ' scan(s) waiting to sync once back online.';
+        pendingHint.classList.toggle('hidden', queuedForSite.length === 0);
+        return;
+      }
 
       try {
         const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, { headers: authHeaders() });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to load progress');
 
-        document.getElementById('progressCount').textContent = data.scanned_count;
+        // Merge in any still-queued scans not yet reflected server-side,
+        // so the guard's count doesn't appear to "go backward" right after
+        // scanning offline and before the sync completes.
+        const queuedCheckpointIds = new Set(queuedForSite.map(q => q.checkpoint_id));
+        const remainingAfterQueue = data.remaining.filter(cp => !queuedCheckpointIds.has(cp.checkpoint_id));
+        const effectiveScanned = data.scanned_count + queuedForSite.filter(q =>
+          data.remaining.some(r => r.checkpoint_id === q.checkpoint_id)
+        ).length;
+
+        document.getElementById('progressCount').textContent = effectiveScanned;
         document.getElementById('progressTarget').textContent = 'out of ' + data.target;
-        const pct = data.target > 0 ? Math.min(100, (data.scanned_count / data.target) * 100) : 0;
+        const pct = data.target > 0 ? Math.min(100, (effectiveScanned / data.target) * 100) : 0;
         document.getElementById('progressBarFill').style.width = pct + '%';
-        document.getElementById('progressCompleteMsg').classList.toggle('hidden', !data.round_complete);
+        document.getElementById('progressCompleteMsg').classList.toggle('hidden', effectiveScanned < data.target);
+
+        pendingHint.textContent = queuedForSite.length + ' scan(s) waiting to sync.';
+        pendingHint.classList.toggle('hidden', queuedForSite.length === 0);
       } catch (err) {
         console.error('loadProgress failed:', err.message);
       }
@@ -354,17 +528,26 @@
       list.innerHTML = '<li>Loading...</li>';
       document.getElementById('remainingModal').style.display = 'flex';
 
+      if (!navigator.onLine) {
+        list.innerHTML = '<li>You are offline — remaining checkpoints can\'t be checked right now. Queued scans will sync automatically once you\'re back online.</li>';
+        return;
+      }
+
       try {
         const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, { headers: authHeaders() });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to load remaining checkpoints');
 
+        const queue = loadQueue();
+        const queuedIds = new Set(queue.filter(q => String(q.site_id) === String(siteId)).map(q => q.checkpoint_id));
+        const trueRemaining = data.remaining.filter(cp => !queuedIds.has(cp.checkpoint_id));
+
         list.innerHTML = '';
-        if (data.remaining.length === 0) {
+        if (trueRemaining.length === 0) {
           list.innerHTML = '<li>✓ All checkpoints scanned for today!</li>';
           return;
         }
-        data.remaining.forEach(cp => {
+        trueRemaining.forEach(cp => {
           const li = document.createElement('li');
           li.textContent = cp.name;
           list.appendChild(li);
@@ -427,64 +610,122 @@
       requestAnimationFrame(scanFrame);
     }
 
+    // Core scan handler, now offline-aware:
+    // 1. If online, try the live lookup + log exactly as before.
+    // 2. If that fails for network reasons (fetch throws) OR the browser
+    //    reports offline, fall back to the local checkpoint cache to
+    //    validate the QR code, then push the scan into the local queue
+    //    with an accurate scanned_at timestamp instead of losing it.
     async function handleScannedCode(qrValue) {
       scannerActive = false;
       const statusDiv = document.getElementById('scannerStatus');
-      statusDiv.textContent = 'Found code: ' + qrValue + ' — looking up checkpoint...';
       const { tenantId, userId } = getSession();
 
-      try {
-        const lookupRes = await fetch(API_BASE + '/api/checkpoints/lookup?tenant_id=' + tenantId + '&qr_code=' + encodeURIComponent(qrValue), {
-          headers: authHeaders()
-        });
-        const checkpoint = await lookupRes.json();
-        if (!lookupRes.ok) throw new Error(checkpoint.error || 'Checkpoint not found');
+      if (navigator.onLine) {
+        statusDiv.textContent = 'Found code: ' + qrValue + ' — looking up checkpoint...';
+        try {
+          const lookupRes = await fetch(API_BASE + '/api/checkpoints/lookup?tenant_id=' + tenantId + '&qr_code=' + encodeURIComponent(qrValue), {
+            headers: authHeaders()
+          });
+          const checkpoint = await lookupRes.json();
+          if (!lookupRes.ok) throw new Error(checkpoint.error || 'Checkpoint not found');
 
-        const isAssigned = assignedSites.some(s => s.id === checkpoint.site_id);
-        if (!isAssigned) {
-          throw new Error('This checkpoint belongs to "' + checkpoint.site_name + '", which is not one of your assigned sites.');
-        }
-
-        statusDiv.textContent = 'Logging scan for "' + checkpoint.name + '" (' + checkpoint.site_name + ')...';
-
-        const scanRes = await fetch(API_BASE + '/api/patrol-logs', {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({
-            tenant_id: Number(tenantId),
-            checkpoint_id: checkpoint.id,
-            user_id: Number(userId)
-          })
-        });
-        const scanData = await scanRes.json();
-        if (!scanRes.ok) throw new Error(scanData.error || 'Failed to log scan');
-
-        statusDiv.textContent = '✓ Scanned "' + checkpoint.name + '" successfully!';
-        setTimeout(() => {
-          closeScanner();
-          const qrScanStatus = document.getElementById('qrScanStatus');
-          qrScanStatus.textContent = '✓ ' + checkpoint.name + ' scanned at ' + new Date(scanData.scanned_at).toLocaleTimeString();
-          qrScanStatus.className = 'status success';
-          loadProgress();
-        }, 1200);
-      } catch (err) {
-        statusDiv.textContent = '✗ ' + err.message;
-        setTimeout(() => {
-          if (document.getElementById('scannerModal').style.display !== 'none') {
-            scannerActive = true;
-            statusDiv.textContent = 'Point your camera at a checkpoint QR code...';
-            requestAnimationFrame(scanFrame);
+          const isAssigned = assignedSites.some(s => s.id === checkpoint.site_id);
+          if (!isAssigned) {
+            throw new Error('This checkpoint belongs to "' + checkpoint.site_name + '", which is not one of your assigned sites.');
           }
-        }, 2500);
+
+          statusDiv.textContent = 'Logging scan for "' + checkpoint.name + '" (' + checkpoint.site_name + ')...';
+
+          const scanRes = await fetch(API_BASE + '/api/patrol-logs', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+              tenant_id: Number(tenantId),
+              checkpoint_id: checkpoint.id,
+              user_id: Number(userId)
+            })
+          });
+          const scanData = await scanRes.json();
+          if (!scanRes.ok) throw new Error(scanData.error || 'Failed to log scan');
+
+          statusDiv.textContent = '✓ Scanned "' + checkpoint.name + '" successfully!';
+          finishScanUI(statusDiv, 'success');
+          return;
+        } catch (err) {
+          // If it's a genuine validation error (checkpoint not found / wrong
+          // site), don't silently queue it — show the real error. Only fall
+          // through to offline queueing for network-level failures.
+          if (err.message.includes('not found') || err.message.includes('not one of your assigned')) {
+            statusDiv.textContent = '✗ ' + err.message;
+            retryFrameAfterDelay(statusDiv);
+            return;
+          }
+          console.warn('Online scan failed, falling back to offline queue:', err.message);
+        }
       }
+
+      queueScanOffline(qrValue, statusDiv);
+    }
+
+    function queueScanOffline(qrValue, statusDiv) {
+      const { tenantId, userId } = getSession();
+      const cache = loadCheckpointCache();
+      const cached = cache[qrValue];
+
+      if (!cached) {
+        statusDiv.textContent = '✗ Unknown checkpoint (not in offline cache). Connect to the internet at least once at this site before going offline.';
+        retryFrameAfterDelay(statusDiv);
+        return;
+      }
+
+      const isAssigned = assignedSites.some(s => s.id === cached.site_id);
+      if (!isAssigned) {
+        statusDiv.textContent = '✗ This checkpoint belongs to "' + cached.site_name + '", which is not one of your assigned sites.';
+        retryFrameAfterDelay(statusDiv);
+        return;
+      }
+
+      const queue = loadQueue();
+      queue.push({
+        localId: Date.now() + '-' + Math.random().toString(36).slice(2),
+        tenant_id: Number(tenantId),
+        site_id: cached.site_id,
+        checkpoint_id: cached.id,
+        checkpoint_name: cached.name,
+        user_id: Number(userId),
+        latitude: null,
+        longitude: null,
+        scanned_at: new Date().toISOString()
+      });
+      saveQueue(queue);
+      updateConnectionBanner();
+
+      statusDiv.textContent = '📥 Queued offline: "' + cached.name + '" — will sync automatically when back online.';
+      finishScanUI(statusDiv, 'queued');
+    }
+
+    function finishScanUI(statusDiv, kind) {
+      setTimeout(() => {
+        closeScanner();
+        const qrScanStatus = document.getElementById('qrScanStatus');
+        qrScanStatus.textContent = statusDiv.textContent;
+        qrScanStatus.className = 'status ' + (kind === 'queued' ? 'queued-tag' : 'success');
+        loadProgress();
+      }, 1400);
+    }
+
+    function retryFrameAfterDelay(statusDiv) {
+      setTimeout(() => {
+        if (document.getElementById('scannerModal').style.display !== 'none') {
+          scannerActive = true;
+          statusDiv.textContent = 'Point your camera at a checkpoint QR code...';
+          requestAnimationFrame(scanFrame);
+        }
+      }, 2500);
     }
 
     // --- Incident photo attachments ---
-    // Photos are compressed client-side via canvas (resized to max 1000px
-    // on the longest side, re-encoded as JPEG at 70% quality) before being
-    // base64-encoded and stored. This keeps typical phone camera photos
-    // (3-5MB) down to roughly 150-300KB each, well within what a JSON POST
-    // body and Postgres text column can handle comfortably.
     function compressImage(file, maxDimension, quality) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -561,6 +802,11 @@
       const severity = document.getElementById('incidentSeverity').value;
       const statusDiv = document.getElementById('incidentStatus');
 
+      if (!navigator.onLine) {
+        statusDiv.textContent = 'You are offline. Incident reports (especially with photos) require a connection — please try again once back online.';
+        statusDiv.className = 'status error';
+        return;
+      }
       if (!siteId) { statusDiv.textContent = 'No site assigned — cannot submit report'; statusDiv.className = 'status error'; return; }
       if (!description) { statusDiv.textContent = 'Description is required'; statusDiv.className = 'status error'; return; }
 
@@ -598,6 +844,7 @@
     }
 
     async function loadEmergencyContacts() {
+      if (!navigator.onLine) return;
       const { tenantId } = getSession();
       try {
         const res = await fetch(API_BASE + '/api/tenants');
@@ -660,6 +907,11 @@
       const btn = document.getElementById('sosBtn');
       const statusDiv = document.getElementById('sosStatusMsg');
 
+      if (!navigator.onLine) {
+        statusDiv.textContent = 'You are offline — the in-app SOS alert cannot be sent without a connection. Use Call or WhatsApp above if available on your phone plan.';
+        statusDiv.className = 'status error';
+        return;
+      }
       if (!siteId) {
         statusDiv.textContent = 'Cannot send SOS: no site assigned to your account.';
         statusDiv.className = 'status error';
@@ -744,8 +996,10 @@
       const { email } = getSession();
       document.getElementById('guardName').textContent = email || 'Guard';
       showScreen('guard');
+      updateConnectionBanner();
       loadAssignedSites();
       loadEmergencyContacts();
+      syncQueue();
     }
 
     function init() {
@@ -756,6 +1010,11 @@
         showScreen('login');
       }
     }
+
+    setInterval(() => {
+      if (navigator.onLine) syncQueue();
+    }, 30000);
+
     init();
   </script>
 </body>
