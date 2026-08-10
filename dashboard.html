@@ -64,6 +64,18 @@
     .alert-msg { font-weight: bold; color: #991b1b; }
     .alert-meta { font-size: 12px; color: #7f1d1d; margin-top: 2px; }
     .no-alerts { color: #16a34a; font-weight: bold; padding: 8px 0; }
+
+    /* --- SOS section --- */
+    .sos-section { border: 2px solid #dc2626; background: #fef2f2; }
+    .sos-header-row { display: flex; align-items: center; justify-content: space-between; }
+    .sos-title { display: flex; align-items: center; gap: 8px; }
+    .sos-badge { display: inline-block; background: #dc2626; color: white; border-radius: 10px; padding: 2px 10px; font-size: 13px; font-weight: bold; animation: sosPulse 1.5s infinite; }
+    .sos-badge.hidden { display: none; }
+    @keyframes sosPulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    .sos-open-btn { background: #dc2626; width: auto; padding: 10px 16px; font-size: 14px; margin-top: 8px; }
+    .sos-none { color: #16a34a; font-weight: bold; padding: 4px 0; }
+    .sos-guard-row { font-size: 13px; color: #991b1b; padding: 4px 0; }
+
     #qrModal, #resetPwModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
     #qrModalContent, #resetPwModalContent { background: white; padding: 24px; border-radius: 8px; text-align: center; max-width: 320px; }
     #qrModalContent canvas { margin: 10px auto; display: block; }
@@ -81,6 +93,18 @@
     <button class="logout" onclick="logout()">Log Out</button>
   </div>
   <p>Tenant ID: <span id="tenantIdLabel">-</span></p>
+
+  <section class="sos-section">
+    <div class="sos-header-row">
+      <div class="sos-title">
+        <h3 style="margin:0;">🆘 SOS Alerts</h3>
+        <span id="sosBadge" class="sos-badge hidden">0 active</span>
+      </div>
+    </div>
+    <p style="font-size:13px; color:#991b1b; margin-top:6px;">Live emergency alerts triggered by guards. Checked every 10 seconds.</p>
+    <div id="sosSummary"></div>
+    <button class="sos-open-btn" onclick="window.location.href='sos_monitor.html'">Open Full SOS Monitor →</button>
+  </section>
 
   <section class="alert-section">
     <h3>Alerts <span id="alertCountBadge" class="alert-count-badge hidden">0</span></h3>
@@ -360,6 +384,40 @@
       }
     }
 
+    // --- SOS summary widget ---
+    // Lightweight version of the full sos_monitor.html: just enough to make
+    // an active emergency impossible to miss from the main dashboard, with a
+    // one-click link to the full live monitor for details/resolving.
+    async function loadSosSummary() {
+      const badge = document.getElementById('sosBadge');
+      const summary = document.getElementById('sosSummary');
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/sos?tenant_id=' + tenantId + '&status=active', { headers: authHeaders() }, 8000);
+        const alerts = await res.json();
+        if (!res.ok) { if (handleAuthError(alerts.error)) return; throw new Error(alerts.error || 'Failed to load SOS alerts'); }
+
+        if (alerts.length === 0) {
+          badge.classList.add('hidden');
+          summary.innerHTML = '<div class="sos-none">✓ No active SOS alerts.</div>';
+          return;
+        }
+
+        badge.textContent = alerts.length + ' active';
+        badge.classList.remove('hidden');
+        summary.innerHTML = alerts.slice(0, 3).map(a =>
+          '<div class="sos-guard-row">🆘 ' + escapeHtml(a.guard_email) + ' at ' + escapeHtml(a.site_name) + '</div>'
+        ).join('') + (alerts.length > 3 ? '<div class="sos-guard-row">+' + (alerts.length - 3) + ' more...</div>' : '');
+      } catch (err) {
+        console.error('loadSosSummary failed:', err.message);
+        summary.innerHTML = '<div class="status error">Failed to load SOS status</div>';
+      }
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
     async function loadAlerts() {
       const list = document.getElementById('alertList');
       const badge = document.getElementById('alertCountBadge');
@@ -398,7 +456,6 @@
           dismissBtn.textContent = 'Dismiss';
           dismissBtn.className = 'dismiss';
           dismissBtn.onclick = () => dismissAlert(a.id);
-
           row.appendChild(infoDiv);
           row.appendChild(dismissBtn);
           li.appendChild(row);
@@ -506,7 +563,6 @@
         const plan = usageData.plan;
         badge.textContent = plan;
         badge.className = 'plan-badge plan-' + plan;
-
         const limits = usageData.limits;
         if (plan === 'enterprise') {
           priceLine.textContent = '€' + limits.monthly_price + '/mo base + pay-per-unit beyond base allocation';
@@ -610,7 +666,6 @@
         populateSiteDropdown(document.getElementById('scheduleSite'), sites);
         populateSiteDropdown(document.getElementById('complianceSite'), sites);
         populateSiteDropdown(document.getElementById('assignSite'), sites);
-
         if (document.getElementById('checkpointSite').value) loadCheckpoints();
         if (document.getElementById('scheduleSite').value) loadSchedules();
       } catch (err) {
@@ -831,7 +886,6 @@
           const li = document.createElement('li');
           const label = document.createElement('span');
           label.textContent = cp.name + ' (QR: ' + cp.qr_code + ')';
-
           const actionsDiv = document.createElement('div');
           actionsDiv.className = 'cp-actions';
 
@@ -1133,11 +1187,13 @@
         loadTimezones();
         loadPlanAndUsage();
       });
+      loadSosSummary();
       loadAlerts();
       loadSites();
       loadGuards();
       loadAssignments();
       loadIncidents();
+      setInterval(loadSosSummary, 10000);
       setInterval(loadAlerts, 60000);
     }
     init();
