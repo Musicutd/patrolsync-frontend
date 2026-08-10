@@ -65,6 +65,21 @@
     }
     .sos-active-banner.show { display: block; }
     .sos-safe-btn { background: #16a34a; padding: 10px; margin-top: 10px; }
+    .sos-contact-row { display: flex; gap: 8px; margin-top: 10px; }
+    .sos-contact-row a { flex: 1; text-decoration: none; }
+    .sos-call-btn, .sos-wa-btn {
+      display: block;
+      text-align: center;
+      padding: 14px 10px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 14px;
+      color: white;
+    }
+    .sos-call-btn { background: #16a34a; }
+    .sos-wa-btn { background: #22c55e; }
+    .sos-contact-hint { font-size: 12px; color: #666; margin-top: 6px; text-align: center; }
+    .sos-no-contact { font-size: 12px; color: #d97706; margin-top: 8px; text-align: center; }
     .hidden { display: none; }
   </style>
 </head>
@@ -92,6 +107,14 @@
 
     <section>
       <button id="sosBtn" class="sos-btn" onclick="triggerSos()">🆘 SOS — SEND EMERGENCY ALERT</button>
+
+      <div class="sos-contact-row">
+        <a id="sosCallLink" href="#" class="sos-call-btn">📞 Call Admin</a>
+        <a id="sosWaLink" href="#" class="sos-wa-btn" target="_blank">💬 WhatsApp Admin</a>
+      </div>
+      <div id="sosContactHint" class="sos-contact-hint hidden">These also notify your admin directly by phone/WhatsApp.</div>
+      <div id="sosNoContact" class="sos-no-contact hidden"></div>
+
       <div id="sosActiveBanner" class="sos-active-banner">
         ⚠️ Your SOS is active — an admin has been notified.
         <button class="sos-btn sos-safe-btn" onclick="cancelMySos()">I'm Safe — Cancel Alert</button>
@@ -159,6 +182,8 @@
     let scannerActive = false;
     let assignedSites = [];
     let activeSosId = null;
+    let emergencyPhone = null;
+    let emergencyWhatsapp = null;
 
     function getSession() {
       return {
@@ -461,10 +486,74 @@
       }
     }
 
-    // --- SOS logic ---
-    // Reuses this page's own getSession()/authHeaders() and the current
-    // value of #siteSelect — no new localStorage keys, no separate
-    // "current site" tracking needed.
+    // --- Emergency contacts (independent call number + WhatsApp number) ---
+    // Two separate tenant fields: emergency_phone (tel: link) and
+    // emergency_whatsapp (wa.me link). Either, both, or neither may be set.
+    // Buttons show/hide individually based on which numbers are configured.
+    function cleanPhoneForTel(raw) {
+      return raw.replace(/[^0-9+]/g, '');
+    }
+    function cleanPhoneForWhatsapp(raw) {
+      return raw.replace(/[^0-9]/g, '');
+    }
+
+    async function loadEmergencyContacts() {
+      const { tenantId } = getSession();
+      try {
+        const res = await fetch(API_BASE + '/api/tenants');
+        const tenants = await res.json();
+        const tenant = tenants.find(t => t.id === Number(tenantId));
+        emergencyPhone = (tenant && tenant.emergency_phone) ? tenant.emergency_phone.trim() : null;
+        emergencyWhatsapp = (tenant && tenant.emergency_whatsapp) ? tenant.emergency_whatsapp.trim() : null;
+        applyEmergencyContactLinks();
+      } catch (err) {
+        console.error('loadEmergencyContacts failed:', err.message);
+      }
+    }
+
+    function applyEmergencyContactLinks() {
+      const callLink = document.getElementById('sosCallLink');
+      const waLink = document.getElementById('sosWaLink');
+      const hint = document.getElementById('sosContactHint');
+      const noContact = document.getElementById('sosNoContact');
+
+      if (emergencyPhone) {
+        callLink.classList.remove('hidden');
+        callLink.href = 'tel:' + cleanPhoneForTel(emergencyPhone);
+      } else {
+        callLink.classList.add('hidden');
+      }
+
+      if (emergencyWhatsapp) {
+        waLink.classList.remove('hidden');
+        const { email } = getSession();
+        const siteId = document.getElementById('siteSelect').value;
+        const siteName = assignedSites.find(s => String(s.id) === String(siteId));
+        const waMessage = 'EMERGENCY: ' + (email || 'A guard') + ' needs help' +
+          (siteName ? ' at ' + siteName.name : '') + '. Please respond immediately.';
+        waLink.href = 'https://wa.me/' + cleanPhoneForWhatsapp(emergencyWhatsapp) + '?text=' + encodeURIComponent(waMessage);
+      } else {
+        waLink.classList.add('hidden');
+      }
+
+      if (!emergencyPhone && !emergencyWhatsapp) {
+        hint.classList.add('hidden');
+        noContact.classList.remove('hidden');
+        noContact.textContent = 'No emergency contact set by your admin yet — only the app alert will be sent.';
+      } else if (!emergencyPhone || !emergencyWhatsapp) {
+        hint.classList.remove('hidden');
+        noContact.classList.remove('hidden');
+        noContact.textContent = !emergencyPhone
+          ? 'No call number set — WhatsApp is available above.'
+          : 'No WhatsApp number set — call is available above.';
+      } else {
+        hint.classList.remove('hidden');
+        noContact.classList.add('hidden');
+      }
+    }
+
+    document.getElementById('siteSelect').addEventListener('change', applyEmergencyContactLinks);
+
     function triggerSos() {
       const { tenantId } = getSession();
       const siteId = document.getElementById('siteSelect').value;
@@ -499,7 +588,7 @@
             if (!ok) throw new Error(data.error || 'Failed to send SOS');
             activeSosId = data.id;
             document.getElementById('sosActiveBanner').classList.add('show');
-            statusDiv.textContent = 'Alert sent successfully.';
+            statusDiv.textContent = 'Alert sent successfully. Use Call/WhatsApp below for immediate backup.';
             statusDiv.className = 'status success';
             btn.textContent = '🆘 SOS ALREADY ACTIVE';
           })
@@ -556,6 +645,7 @@
       document.getElementById('guardName').textContent = email || 'Guard';
       showScreen('guard');
       loadAssignedSites();
+      loadEmergencyContacts();
     }
 
     function init() {
