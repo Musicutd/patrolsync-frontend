@@ -40,6 +40,32 @@
     #scannerModal canvas { display: none; }
     #scannerStatus { color: white; margin-top: 12px; text-align: center; font-size: 14px; }
     #scannerModal button { width: 80%; max-width: 300px; margin-top: 16px; }
+
+    /* --- SOS widget --- */
+    .sos-btn {
+      background: #dc2626;
+      padding: 18px;
+      font-size: 18px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 8px rgba(220,38,38,0.4);
+    }
+    .sos-btn:active { transform: scale(0.98); }
+    .sos-btn.sending { opacity: 0.6; cursor: wait; }
+    .sos-active-banner {
+      margin-top: 10px;
+      padding: 12px;
+      background: #fef2f2;
+      border: 1px solid #dc2626;
+      border-radius: 8px;
+      color: #991b1b;
+      font-size: 14px;
+      font-weight: bold;
+      text-align: center;
+      display: none;
+    }
+    .sos-active-banner.show { display: block; }
+    .sos-safe-btn { background: #16a34a; padding: 10px; margin-top: 10px; }
+    .hidden { display: none; }
   </style>
 </head>
 <body>
@@ -63,6 +89,15 @@
       <h2 id="guardName">Guard</h2>
       <button class="logout" onclick="doLogout()">Log Out</button>
     </div>
+
+    <section>
+      <button id="sosBtn" class="sos-btn" onclick="triggerSos()">🆘 SOS — SEND EMERGENCY ALERT</button>
+      <div id="sosActiveBanner" class="sos-active-banner">
+        ⚠️ Your SOS is active — an admin has been notified.
+        <button class="sos-btn sos-safe-btn" onclick="cancelMySos()">I'm Safe — Cancel Alert</button>
+      </div>
+      <div id="sosStatusMsg" class="status"></div>
+    </section>
 
     <section>
       <h3>Scan a Checkpoint</h3>
@@ -123,6 +158,7 @@
     let scannerStream = null;
     let scannerActive = false;
     let assignedSites = [];
+    let activeSosId = null;
 
     function getSession() {
       return {
@@ -423,6 +459,96 @@
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
       }
+    }
+
+    // --- SOS logic ---
+    // Reuses this page's own getSession()/authHeaders() and the current
+    // value of #siteSelect — no new localStorage keys, no separate
+    // "current site" tracking needed.
+    function triggerSos() {
+      const { tenantId } = getSession();
+      const siteId = document.getElementById('siteSelect').value;
+      const btn = document.getElementById('sosBtn');
+      const statusDiv = document.getElementById('sosStatusMsg');
+
+      if (!siteId) {
+        statusDiv.textContent = 'Cannot send SOS: no site assigned to your account.';
+        statusDiv.className = 'status error';
+        return;
+      }
+      if (!confirm('Send an emergency SOS alert to your site admin now?')) return;
+
+      btn.disabled = true;
+      btn.classList.add('sending');
+      btn.textContent = 'Sending alert...';
+      statusDiv.textContent = '';
+
+      function sendAlert(lat, lng) {
+        fetch(API_BASE + '/api/sos', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            latitude: lat,
+            longitude: lng
+          })
+        })
+          .then(res => res.json().then(data => ({ ok: res.ok, data })))
+          .then(({ ok, data }) => {
+            if (!ok) throw new Error(data.error || 'Failed to send SOS');
+            activeSosId = data.id;
+            document.getElementById('sosActiveBanner').classList.add('show');
+            statusDiv.textContent = 'Alert sent successfully.';
+            statusDiv.className = 'status success';
+            btn.textContent = '🆘 SOS ALREADY ACTIVE';
+          })
+          .catch(err => {
+            statusDiv.textContent = err.message;
+            statusDiv.className = 'status error';
+            btn.disabled = false;
+            btn.classList.remove('sending');
+            btn.textContent = '🆘 SOS — SEND EMERGENCY ALERT';
+          });
+      }
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => sendAlert(pos.coords.latitude, pos.coords.longitude),
+          () => sendAlert(null, null),
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      } else {
+        sendAlert(null, null);
+      }
+    }
+
+    function cancelMySos() {
+      const { tenantId } = getSession();
+      if (!activeSosId) return;
+      if (!confirm('Cancel this SOS alert?')) return;
+
+      fetch(API_BASE + '/api/sos/' + activeSosId + '/resolve', {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ tenant_id: Number(tenantId) })
+      })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) throw new Error(data.error || 'Failed to cancel SOS');
+          activeSosId = null;
+          document.getElementById('sosActiveBanner').classList.remove('show');
+          const btn = document.getElementById('sosBtn');
+          btn.disabled = false;
+          btn.classList.remove('sending');
+          btn.textContent = '🆘 SOS — SEND EMERGENCY ALERT';
+          document.getElementById('sosStatusMsg').textContent = 'Alert cancelled.';
+          document.getElementById('sosStatusMsg').className = 'status success';
+        })
+        .catch(err => {
+          document.getElementById('sosStatusMsg').textContent = err.message;
+          document.getElementById('sosStatusMsg').className = 'status error';
+        });
     }
 
     function startGuardSession() {
