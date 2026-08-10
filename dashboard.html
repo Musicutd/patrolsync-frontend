@@ -116,6 +116,10 @@
     .photo-download-btn { background: #16a34a; }
     .photo-delete-btn { background: #dc2626; }
     #photoViewerStatus { margin-top: 10px; font-size: 13px; }
+
+    /* --- Compliance reports (PDF + CSV) --- */
+    .report-btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .report-btn-row button { flex: 1; min-width: 140px; font-size: 13px; padding: 10px 8px; }
   </style>
 </head>
 <body>
@@ -256,6 +260,22 @@
     </select>
     <button onclick="loadCompliance()">Check Compliance</button>
     <ul id="complianceList"></ul>
+  </section>
+
+  <section>
+    <h3>📄 Compliance Reports</h3>
+    <p style="font-size:13px; color:#666;">Export checkpoint activity and incidents for a site over a date range. PDF gives a formatted client-facing summary; CSV gives raw rows for Excel/Google Sheets analysis.</p>
+    <select id="reportSite"><option value="">Select a site</option></select>
+    <div class="filter-row">
+      <input type="date" id="reportStartDate">
+      <input type="date" id="reportEndDate">
+    </div>
+    <div class="report-btn-row">
+      <button onclick="generateComplianceReport('pdf')">📄 PDF Report</button>
+      <button onclick="generateComplianceReport('scans-csv')">📊 Scan Log (CSV)</button>
+      <button onclick="generateComplianceReport('incidents-csv')">📊 Incidents (CSV)</button>
+    </div>
+    <div id="reportStatus" class="status"></div>
   </section>
 
   <section>
@@ -753,6 +773,7 @@
         populateSiteDropdown(document.getElementById('scheduleSite'), sites);
         populateSiteDropdown(document.getElementById('complianceSite'), sites);
         populateSiteDropdown(document.getElementById('assignSite'), sites);
+        populateSiteDropdown(document.getElementById('reportSite'), sites);
         if (document.getElementById('checkpointSite').value) loadCheckpoints();
         if (document.getElementById('scheduleSite').value) loadSchedules();
       } catch (err) {
@@ -1204,6 +1225,65 @@
         });
       } catch (err) {
         list.innerHTML = '<li class="error">Failed to load compliance</li>';
+      }
+    }
+
+    // Shared downloader for the three export types below. PDF and CSV both
+    // require the Authorization header, which a plain <a href> link can't
+    // send — so each is fetched as a blob client-side (same pattern as
+    // downloadQr()) and saved via a temporary anchor tag.
+    async function generateComplianceReport(kind) {
+      const siteId = document.getElementById('reportSite').value;
+      const startDate = document.getElementById('reportStartDate').value;
+      const endDate = document.getElementById('reportEndDate').value;
+      const statusDiv = document.getElementById('reportStatus');
+
+      if (!siteId) { statusDiv.textContent = 'Please select a site'; statusDiv.className = 'status error'; return; }
+      if (!startDate || !endDate) { statusDiv.textContent = 'Please select both a start and end date'; statusDiv.className = 'status error'; return; }
+      if (endDate < startDate) { statusDiv.textContent = 'End date must be on or after the start date'; statusDiv.className = 'status error'; return; }
+
+      const endpointMap = {
+        'pdf': '/api/reports/compliance-pdf',
+        'scans-csv': '/api/reports/compliance-csv',
+        'incidents-csv': '/api/reports/incidents-csv'
+      };
+      const labelMap = {
+        'pdf': 'PDF report',
+        'scans-csv': 'scan log CSV',
+        'incidents-csv': 'incidents CSV'
+      };
+
+      statusDiv.textContent = 'Generating ' + labelMap[kind] + '...';
+      statusDiv.className = 'status';
+
+      try {
+        const url = API_BASE + endpointMap[kind] + '?tenant_id=' + tenantId +
+          '&site_id=' + siteId + '&start_date=' + startDate + '&end_date=' + endDate;
+        const res = await fetch(url, { headers: authHeaders() });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (handleAuthError(data.error)) return;
+          throw new Error(data.error || ('Failed to generate ' + labelMap[kind]));
+        }
+
+        const blob = await res.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="(.+)"/);
+        link.download = match ? match[1] : ('report.' + (kind === 'pdf' ? 'pdf' : 'csv'));
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(blobUrl);
+
+        statusDiv.textContent = labelMap[kind].charAt(0).toUpperCase() + labelMap[kind].slice(1) + ' downloaded successfully.';
+        statusDiv.className = 'status success';
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
       }
     }
 
