@@ -111,7 +111,11 @@
     #photoViewerImages img {
       max-width: 100%; max-height: 60vh; border-radius: 6px; margin: 8px 0; display: block;
     }
-    #photoViewerContent button { margin-top: 12px; }
+    .photo-viewer-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .photo-viewer-actions button { width: auto; flex: 1; padding: 10px 14px; font-size: 13px; margin: 0; }
+    .photo-download-btn { background: #16a34a; }
+    .photo-delete-btn { background: #dc2626; }
+    #photoViewerStatus { margin-top: 10px; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -304,6 +308,11 @@
     <div id="photoViewerContent">
       <h3>Incident Photos</h3>
       <div id="photoViewerImages"></div>
+      <div class="photo-viewer-actions">
+        <button class="photo-download-btn" onclick="downloadAllIncidentPhotos()">⬇ Download All</button>
+        <button class="photo-delete-btn" onclick="deleteIncidentPhotos()">🗑 Delete Photos</button>
+      </div>
+      <div id="photoViewerStatus" class="status"></div>
       <button class="qr-close" onclick="closeIncidentPhotos()">Close</button>
     </div>
   </div>
@@ -431,9 +440,6 @@
     }
 
     // --- SOS summary widget ---
-    // Lightweight version of the full sos_monitor.html: just enough to make
-    // an active emergency impossible to miss from the main dashboard, with a
-    // one-click link to the full live monitor for details/resolving.
     async function loadSosSummary() {
       const badge = document.getElementById('sosBadge');
       const summary = document.getElementById('sosSummary');
@@ -1239,8 +1245,6 @@
       loadIncidents();
     }
 
-    // Now renders a photo badge (e.g. "📷 2") for any incident that has
-    // attached evidence photos, clicking it opens the lightbox viewer below.
     async function loadIncidents() {
       const dateVal = document.getElementById('incidentDateFilter').value;
       try {
@@ -1277,10 +1281,18 @@
       }
     }
 
+    // Photo viewer state — tracks which incident is currently open so
+    // Download All / Delete Photos know what to act on without re-fetching.
+    let currentPhotoIncidentId = null;
+    let currentPhotoList = [];
+
     async function openIncidentPhotos(incidentId) {
+      currentPhotoIncidentId = incidentId;
       const modal = document.getElementById('photoViewerModal');
       const container = document.getElementById('photoViewerImages');
+      const statusDiv = document.getElementById('photoViewerStatus');
       container.innerHTML = 'Loading...';
+      statusDiv.textContent = '';
       modal.style.display = 'flex';
       try {
         const res = await fetch(API_BASE + '/api/incidents/' + incidentId + '/photos?tenant_id=' + tenantId, {
@@ -1288,6 +1300,7 @@
         });
         const photos = await res.json();
         if (!res.ok) { if (handleAuthError(photos.error)) return; throw new Error(photos.error || 'Failed to load photos'); }
+        currentPhotoList = photos;
         if (photos.length === 0) {
           container.innerHTML = '<p>No photos found.</p>';
           return;
@@ -1298,8 +1311,64 @@
       }
     }
 
+    // Triggers a browser download for each photo currently shown, one at a
+    // time. Filenames include the incident id and photo index so multiple
+    // downloads from the same incident don't overwrite each other.
+    function downloadAllIncidentPhotos() {
+      const statusDiv = document.getElementById('photoViewerStatus');
+      if (currentPhotoList.length === 0) {
+        statusDiv.textContent = 'No photos to download.';
+        statusDiv.className = 'status error';
+        return;
+      }
+      currentPhotoList.forEach((p, i) => {
+        const link = document.createElement('a');
+        link.href = p.photo_data;
+        link.download = 'incident-' + currentPhotoIncidentId + '-photo-' + (i + 1) + '.jpg';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+      statusDiv.textContent = 'Downloaded ' + currentPhotoList.length + ' photo(s) to your device.';
+      statusDiv.className = 'status success';
+    }
+
+    // Deletes all photos for the open incident from the server. Only the
+    // photo rows are removed — the incident record and its description
+    // stay intact. Meant to be used after downloadAllIncidentPhotos() so
+    // evidence isn't lost, but doesn't force that order.
+    async function deleteIncidentPhotos() {
+      const statusDiv = document.getElementById('photoViewerStatus');
+      if (!currentPhotoIncidentId) return;
+      if (currentPhotoList.length === 0) {
+        statusDiv.textContent = 'No photos to delete.';
+        statusDiv.className = 'status error';
+        return;
+      }
+      if (!confirm('Delete all ' + currentPhotoList.length + ' photo(s) for this incident? Make sure you have downloaded copies first if you need them. This cannot be undone.')) return;
+
+      try {
+        const res = await fetch(API_BASE + '/api/incidents/' + currentPhotoIncidentId + '/photos?tenant_id=' + tenantId, {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to delete photos'); }
+        statusDiv.textContent = 'Deleted ' + data.deleted_count + ' photo(s) from the server.';
+        statusDiv.className = 'status success';
+        document.getElementById('photoViewerImages').innerHTML = '<p>All photos deleted.</p>';
+        currentPhotoList = [];
+        loadIncidents();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
     function closeIncidentPhotos() {
       document.getElementById('photoViewerModal').style.display = 'none';
+      currentPhotoIncidentId = null;
+      currentPhotoList = [];
     }
 
     function init() {
