@@ -81,6 +81,22 @@
     .sos-contact-hint { font-size: 12px; color: #666; margin-top: 6px; text-align: center; }
     .sos-no-contact { font-size: 12px; color: #d97706; margin-top: 8px; text-align: center; }
     .hidden { display: none; }
+
+    /* --- Incident photo attachments --- */
+    .photo-attach-btn { background: #0891b2; margin-top: 4px; }
+    .photo-previews { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .photo-thumb-wrap { position: relative; width: 72px; height: 72px; }
+    .photo-thumb-wrap img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; }
+    .photo-remove-btn {
+      position: absolute; top: -6px; right: -6px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #dc2626; color: white; border: none;
+      font-size: 12px; font-weight: bold; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    .photo-count-hint { font-size: 12px; color: #666; margin-top: 4px; }
+    .photo-compressing { font-size: 12px; color: #0891b2; margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -156,6 +172,13 @@
         <option value="high">High</option>
         <option value="critical">Critical</option>
       </select>
+
+      <button type="button" class="photo-attach-btn" onclick="document.getElementById('incidentPhotoInput').click()">📷 Attach Photo Evidence</button>
+      <input type="file" id="incidentPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handlePhotoSelected(event)">
+      <div class="photo-count-hint" id="photoCountHint">0 of 3 photos attached</div>
+      <div id="photoCompressing" class="photo-compressing hidden">Compressing photo...</div>
+      <div id="photoPreviews" class="photo-previews"></div>
+
       <button onclick="submitIncident()">Submit Report</button>
       <div id="incidentStatus" class="status"></div>
     </section>
@@ -184,6 +207,8 @@
     let activeSosId = null;
     let emergencyPhone = null;
     let emergencyWhatsapp = null;
+    let attachedPhotos = [];
+    const MAX_PHOTOS = 3;
 
     function getSession() {
       return {
@@ -454,6 +479,81 @@
       }
     }
 
+    // --- Incident photo attachments ---
+    // Photos are compressed client-side via canvas (resized to max 1000px
+    // on the longest side, re-encoded as JPEG at 70% quality) before being
+    // base64-encoded and stored. This keeps typical phone camera photos
+    // (3-5MB) down to roughly 150-300KB each, well within what a JSON POST
+    // body and Postgres text column can handle comfortably.
+    function compressImage(file, maxDimension, quality) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = (e) => { img.src = e.target.result; };
+        reader.onerror = reject;
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > height && width > maxDimension) {
+            height = Math.round(height * (maxDimension / width));
+            width = maxDimension;
+          } else if (height > maxDimension) {
+            width = Math.round(width * (maxDimension / height));
+            height = maxDimension;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handlePhotoSelected(event) {
+      const file = event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+
+      if (attachedPhotos.length >= MAX_PHOTOS) {
+        alert('You can attach up to ' + MAX_PHOTOS + ' photos per report.');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file.');
+        return;
+      }
+
+      document.getElementById('photoCompressing').classList.remove('hidden');
+      try {
+        const compressedDataUrl = await compressImage(file, 1000, 0.7);
+        attachedPhotos.push(compressedDataUrl);
+        renderPhotoPreviews();
+      } catch (err) {
+        alert('Failed to process photo: ' + err.message);
+      } finally {
+        document.getElementById('photoCompressing').classList.add('hidden');
+      }
+    }
+
+    function removePhoto(index) {
+      attachedPhotos.splice(index, 1);
+      renderPhotoPreviews();
+    }
+
+    function renderPhotoPreviews() {
+      const container = document.getElementById('photoPreviews');
+      container.innerHTML = attachedPhotos.map((dataUrl, i) =>
+        '<div class="photo-thumb-wrap">' +
+          '<img src="' + dataUrl + '" alt="Evidence photo ' + (i + 1) + '">' +
+          '<button type="button" class="photo-remove-btn" onclick="removePhoto(' + i + ')">✕</button>' +
+        '</div>'
+      ).join('');
+      document.getElementById('photoCountHint').textContent = attachedPhotos.length + ' of ' + MAX_PHOTOS + ' photos attached';
+    }
+
     async function submitIncident() {
       const { tenantId } = getSession();
       const siteId = document.getElementById('siteSelect').value;
@@ -472,14 +572,17 @@
             tenant_id: Number(tenantId),
             site_id: Number(siteId),
             description,
-            severity
+            severity,
+            photos: attachedPhotos
           })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to submit incident');
-        statusDiv.textContent = 'Incident submitted. Thank you.';
+        statusDiv.textContent = 'Incident submitted' + (attachedPhotos.length ? ' with ' + attachedPhotos.length + ' photo(s)' : '') + '. Thank you.';
         statusDiv.className = 'status success';
         document.getElementById('incidentDescription').value = '';
+        attachedPhotos = [];
+        renderPhotoPreviews();
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
@@ -487,9 +590,6 @@
     }
 
     // --- Emergency contacts (independent call number + WhatsApp number) ---
-    // Two separate tenant fields: emergency_phone (tel: link) and
-    // emergency_whatsapp (wa.me link). Either, both, or neither may be set.
-    // Buttons show/hide individually based on which numbers are configured.
     function cleanPhoneForTel(raw) {
       return raw.replace(/[^0-9+]/g, '');
     }
