@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>SOS Monitor - PatrolSync</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+  a.back-link { font-size: 13px; color: #2563eb; }
+  h2 { display: flex; align-items: center; gap: 10px; }
+  .live-dot { width: 10px; height: 10px; border-radius: 50%; background: #16a34a; display: inline-block; animation: pulse 2s infinite; }
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  .alert-card {
+    border: 2px solid #dc2626;
+    background: #fef2f2;
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .alert-top { display: flex; justify-content: space-between; align-items: baseline; }
+  .alert-guard { font-size: 17px; font-weight: bold; color: #991b1b; }
+  .alert-time { font-size: 13px; color: #7f1d1d; }
+  .alert-site { font-size: 14px; color: #444; margin-top: 4px; }
+  .alert-gps { font-size: 13px; margin-top: 6px; }
+  .alert-gps a { color: #2563eb; }
+  .resolve-btn {
+    margin-top: 12px;
+    padding: 8px 16px;
+    background: #16a34a;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .empty-state { text-align: center; color: #888; padding: 30px 0; }
+  .history-row { border-bottom: 1px solid #eee; padding: 8px 0; font-size: 13px; color: #555; }
+  .toast-flash {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(220,38,38,0.15);
+    pointer-events: none;
+    z-index: 999;
+    animation: flash 1s ease-out 3;
+  }
+  @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+  .msg { font-size: 14px; }
+  .msg.error { color: #dc2626; }
+</style>
+</head>
+<body>
+
+<p><a href="dashboard.html" class="back-link">← Back to Dashboard</a></p>
+<h2><span class="live-dot"></span> SOS Monitor</h2>
+
+<div class="card">
+  <h3 style="margin-top:0;">Active Alerts</h3>
+  <div id="activeMsg" class="msg"></div>
+  <div id="activeAlerts"></div>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Recent History</h3>
+  <div id="historyList"></div>
+</div>
+
+<audio id="sosSound" preload="auto">
+  <source src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=" type="audio/wav">
+</audio>
+
+<script>
+  const API_BASE = 'https://patrolsync-backend.onrender.com';
+  const token = localStorage.getItem('token');
+  const tenantId = localStorage.getItem('tenant_id');
+  const POLL_INTERVAL_MS = 5000;
+
+  if (!token || !tenantId) window.location.href = 'signup.html';
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.role !== 'admin') window.location.href = 'guard.html';
+  } catch (err) {
+    window.location.href = 'signup.html';
+  }
+
+  function authHeaders() {
+    return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+  }
+
+  function handleAuthError(message) {
+    if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('tenant_id');
+      alert('Your session has expired. Please log in again.');
+      window.location.href = 'login.html';
+      return true;
+    }
+    return false;
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  }
+
+  function timeAgo(dateStr) {
+    const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diffSec < 60) return diffSec + 's ago';
+    if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm ago';
+    return Math.floor(diffSec / 3600) + 'h ago';
+  }
+
+  let knownActiveIds = new Set();
+  let firstLoad = true;
+
+  function flashScreen() {
+    const flash = document.createElement('div');
+    flash.className = 'toast-flash';
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), 3200);
+    const sound = document.getElementById('sosSound');
+    sound.play().catch(() => {});
+  }
+
+  async function loadActiveAlerts() {
+    const container = document.getElementById('activeAlerts');
+    const msgDiv = document.getElementById('activeMsg');
+    try {
+      const res = await fetch(API_BASE + '/api/sos?tenant_id=' + tenantId + '&status=active', { headers: authHeaders() });
+      const alerts = await res.json();
+      if (!res.ok) { if (handleAuthError(alerts.error)) return; throw new Error(alerts.error || 'Failed to load alerts'); }
+
+      const newIncomingIds = alerts.filter(a => !knownActiveIds.has(a.id)).map(a => a.id);
+      if (!firstLoad && newIncomingIds.length > 0) flashScreen();
+      knownActiveIds = new Set(alerts.map(a => a.id));
+      firstLoad = false;
+
+      msgDiv.textContent = '';
+      if (alerts.length === 0) {
+        container.innerHTML = '<div class="empty-state">No active alerts. All guards are safe.</div>';
+        return;
+      }
+
+      container.innerHTML = alerts.map(a => {
+        const gpsLine = (a.latitude !== null && a.longitude !== null)
+          ? '<div class="alert-gps">📍 <a href="https://maps.google.com/?q=' + a.latitude + ',' + a.longitude + '" target="_blank">View location on map</a></div>'
+          : '<div class="alert-gps">📍 Location unavailable</div>';
+        return (
+          '<div class="alert-card">' +
+            '<div class="alert-top">' +
+              '<span class="alert-guard">🆘 ' + escapeHtml(a.guard_email) + '</span>' +
+              '<span class="alert-time">' + timeAgo(a.created_at) + '</span>' +
+            '</div>' +
+            '<div class="alert-site">Site: ' + escapeHtml(a.site_name) + '</div>' +
+            gpsLine +
+            '<button class="resolve-btn" onclick="resolveAlert(' + a.id + ')">Mark Resolved</button>' +
+          '</div>'
+        );
+      }).join('');
+    } catch (err) {
+      msgDiv.textContent = 'Failed to load alerts: ' + err.message;
+      msgDiv.className = 'msg error';
+    }
+  }
+
+  async function loadHistory() {
+    const container = document.getElementById('historyList');
+    try {
+      const res = await fetch(API_BASE + '/api/sos?tenant_id=' + tenantId + '&status=resolved', { headers: authHeaders() });
+      const alerts = await res.json();
+      if (!res.ok) { if (handleAuthError(alerts.error)) return; throw new Error(alerts.error || 'Failed to load history'); }
+
+      if (alerts.length === 0) {
+        container.innerHTML = '<div class="empty-state">No resolved alerts yet.</div>';
+        return;
+      }
+      container.innerHTML = alerts.map(a =>
+        '<div class="history-row">' +
+          escapeHtml(a.guard_email) + ' at ' + escapeHtml(a.site_name) +
+          ' — triggered ' + timeAgo(a.created_at) +
+          ', resolved ' + timeAgo(a.resolved_at) +
+        '</div>'
+      ).join('');
+    } catch (err) {
+      container.innerHTML = '<div class="msg error">Failed to load history: ' + err.message + '</div>';
+    }
+  }
+
+  async function resolveAlert(id) {
+    if (!confirm('Mark this SOS alert as resolved?')) return;
+    try {
+      const res = await fetch(API_BASE + '/api/sos/' + id + '/resolve', {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ tenant_id: Number(tenantId) })
+      });
+      const data = await res.json();
+      if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to resolve alert'); }
+      loadActiveAlerts();
+      loadHistory();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  function poll() {
+    loadActiveAlerts();
+  }
+
+  loadActiveAlerts();
+  loadHistory();
+  setInterval(poll, POLL_INTERVAL_MS);
+  setInterval(loadHistory, 30000);
+</script>
+
+</body>
+</html>
