@@ -13,12 +13,13 @@
   @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
 
   #mapContainer { width: 100%; height: 480px; border-radius: 8px; border: 1px solid #ddd; margin-top: 10px; }
-  .legend { display: flex; gap: 16px; margin-top: 10px; font-size: 13px; color: #444; }
+  .legend { display: flex; gap: 16px; margin-top: 10px; font-size: 13px; color: #444; flex-wrap: wrap; }
   .legend-item { display: flex; align-items: center; gap: 6px; }
   .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
   .dot-green { background: #16a34a; }
   .dot-amber { background: #d97706; }
   .dot-gray { background: #9ca3af; }
+  .legend-line { width: 20px; height: 3px; background: #7c3aed; display: inline-block; }
 
   .guard-list { margin-top: 20px; }
   .guard-list table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -30,6 +31,19 @@
   .empty-state { text-align: center; color: #888; padding: 30px 0; }
   .status { font-size: 14px; }
   .error { color: #dc2626; }
+  .trail-btn { background: #7c3aed; color: white; border: none; border-radius: 4px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+  .trail-btn:hover { background: #6d28d9; }
+
+  .trail-panel {
+    display: none; margin-top: 14px; padding: 14px; border: 1px solid #ddd; border-radius: 8px; background: #faf5ff;
+  }
+  .trail-panel.show { display: block; }
+  .trail-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .trail-header h3 { margin: 0; font-size: 15px; }
+  .trail-controls { display: flex; gap: 6px; align-items: center; }
+  .trail-controls select { padding: 6px 8px; font-size: 13px; border-radius: 4px; border: 1px solid #ccc; }
+  .trail-close-btn { background: #64748b; color: white; border: none; border-radius: 4px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .trail-summary { font-size: 13px; color: #555; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -45,12 +59,32 @@
   <div class="legend-item"><span class="legend-dot dot-green"></span> Updated within 2 min</div>
   <div class="legend-item"><span class="legend-dot dot-amber"></span> Updated 2–10 min ago</div>
   <div class="legend-item"><span class="legend-dot dot-gray"></span> Stale (10+ min) or offline</div>
+  <div class="legend-item"><span class="legend-line"></span> Movement trail</div>
+</div>
+
+<div id="trailPanel" class="trail-panel">
+  <div class="trail-header">
+    <h3 id="trailTitle">Movement Trail</h3>
+    <div class="trail-controls">
+      <label style="font-size:13px;">Last:</label>
+      <select id="trailHoursSelect" onchange="reloadTrail()">
+        <option value="1">1 hour</option>
+        <option value="4">4 hours</option>
+        <option value="8">8 hours</option>
+        <option value="12" selected>12 hours</option>
+        <option value="24">24 hours</option>
+        <option value="48">48 hours</option>
+      </select>
+      <button class="trail-close-btn" onclick="closeTrail()">Close Trail</button>
+    </div>
+  </div>
+  <div id="trailSummary" class="trail-summary"></div>
 </div>
 
 <div class="guard-list">
   <h3>Guard Status</h3>
   <table>
-    <thead><tr><th>Guard</th><th>Site</th><th>Last Updated</th><th>Status</th></tr></thead>
+    <thead><tr><th>Guard</th><th>Site</th><th>Last Updated</th><th>Status</th><th>Trail</th></tr></thead>
     <tbody id="guardTableBody"></tbody>
   </table>
 </div>
@@ -122,6 +156,14 @@
   }
 
   let firstLoad = true;
+  let latestGuardData = [];
+
+  // Trail state — tracks which guard's trail is currently drawn, so the
+  // regular 20s poll doesn't wipe it out and so "Close Trail" / changing
+  // the hours dropdown know what to redraw.
+  let activeTrailUserId = null;
+  let activeTrailLayer = null;
+  let activeTrailMarkers = [];
 
   async function loadGuardLocations() {
     const statusMsg = document.getElementById('statusMsg');
@@ -132,9 +174,10 @@
       if (!res.ok) { if (handleAuthError(locations.error)) return; throw new Error(locations.error || 'Failed to load guard locations'); }
 
       statusMsg.textContent = '';
+      latestGuardData = locations;
 
       if (locations.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No guard locations reported yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No guard locations reported yet.</td></tr>';
         Object.values(markers).forEach(m => map.removeLayer(m));
         for (const k in markers) delete markers[k];
         return;
@@ -172,7 +215,8 @@
           '<td>' + escapeHtml(loc.guard_email) + '</td>' +
           '<td>' + escapeHtml(loc.site_name || '-') + '</td>' +
           '<td>' + timeAgo(loc.updated_at) + '</td>' +
-          '<td><span class="status-badge badge-' + status + '">' + (status === 'green' ? 'Active' : status === 'amber' ? 'Idle' : 'Stale') + '</span></td>';
+          '<td><span class="status-badge badge-' + status + '">' + (status === 'green' ? 'Active' : status === 'amber' ? 'Idle' : 'Stale') + '</span></td>' +
+          '<td><button class="trail-btn" onclick="showTrail(' + loc.user_id + ', \\'' + escapeHtml(loc.guard_email).replace(/'/g, "\\\\'") + '\\')">View Trail</button></td>';
         tbody.appendChild(row);
       });
 
@@ -184,6 +228,73 @@
       statusMsg.textContent = 'Failed to load guard locations: ' + err.message;
       statusMsg.className = 'status error';
     }
+  }
+
+  // --- Movement trail (breadcrumb path over a time window) ---
+  function clearTrailLayers() {
+    if (activeTrailLayer) { map.removeLayer(activeTrailLayer); activeTrailLayer = null; }
+    activeTrailMarkers.forEach(m => map.removeLayer(m));
+    activeTrailMarkers = [];
+  }
+
+  async function showTrail(userId, guardEmail) {
+    activeTrailUserId = userId;
+    document.getElementById('trailTitle').textContent = 'Movement Trail — ' + guardEmail;
+    document.getElementById('trailPanel').classList.add('show');
+    await drawTrail();
+  }
+
+  function reloadTrail() {
+    if (activeTrailUserId !== null) drawTrail();
+  }
+
+  async function drawTrail() {
+    if (activeTrailUserId === null) return;
+    const hours = document.getElementById('trailHoursSelect').value;
+    const summaryDiv = document.getElementById('trailSummary');
+    summaryDiv.textContent = 'Loading trail...';
+
+    try {
+      const res = await fetch(
+        API_BASE + '/api/guard-locations/history?tenant_id=' + tenantId + '&user_id=' + activeTrailUserId + '&hours=' + hours,
+        { headers: authHeaders() }
+      );
+      const points = await res.json();
+      if (!res.ok) { if (handleAuthError(points.error)) return; throw new Error(points.error || 'Failed to load trail'); }
+
+      clearTrailLayers();
+
+      if (points.length === 0) {
+        summaryDiv.textContent = 'No location history found for this guard in the selected window.';
+        return;
+      }
+
+      const latlngs = points.map(p => [p.latitude, p.longitude]);
+      activeTrailLayer = L.polyline(latlngs, { color: '#7c3aed', weight: 3, opacity: 0.8 }).addTo(map);
+
+      const startMarker = L.circleMarker(latlngs[0], { radius: 6, color: '#16a34a', fillColor: '#16a34a', fillOpacity: 1 })
+        .bindPopup('Start: ' + new Date(points[0].recorded_at).toLocaleString())
+        .addTo(map);
+      const endMarker = L.circleMarker(latlngs[latlngs.length - 1], { radius: 6, color: '#dc2626', fillColor: '#dc2626', fillOpacity: 1 })
+        .bindPopup('Most recent: ' + new Date(points[points.length - 1].recorded_at).toLocaleString())
+        .addTo(map);
+      activeTrailMarkers = [startMarker, endMarker];
+
+      map.fitBounds(activeTrailLayer.getBounds(), { padding: [40, 40], maxZoom: 17 });
+
+      const firstTime = new Date(points[0].recorded_at);
+      const lastTime = new Date(points[points.length - 1].recorded_at);
+      summaryDiv.textContent = points.length + ' position(s) recorded, from ' +
+        firstTime.toLocaleString() + ' to ' + lastTime.toLocaleString() + '.';
+    } catch (err) {
+      summaryDiv.textContent = 'Failed to load trail: ' + err.message;
+    }
+  }
+
+  function closeTrail() {
+    activeTrailUserId = null;
+    clearTrailLayers();
+    document.getElementById('trailPanel').classList.remove('show');
   }
 
   loadGuardLocations();
