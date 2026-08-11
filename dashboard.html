@@ -80,7 +80,7 @@
     .map-section { border-color: #93c5fd; background: #eff6ff; }
     .map-open-btn { background: #2563eb; width: auto; padding: 10px 16px; font-size: 14px; margin-top: 8px; }
 
-    #qrModal, #resetPwModal, #photoViewerModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+    #qrModal, #resetPwModal, #photoViewerModal, #clientResetPwModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
     #qrModalContent, #resetPwModalContent { background: white; padding: 24px; border-radius: 8px; text-align: center; max-width: 320px; }
     #qrModalContent canvas { margin: 10px auto; display: block; }
     #qrModalContent button, #resetPwModalContent button { margin-top: 10px; }
@@ -124,6 +124,11 @@
     /* --- Compliance reports (PDF + CSV) --- */
     .report-btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
     .report-btn-row button { flex: 1; min-width: 140px; font-size: 13px; padding: 10px 8px; }
+
+    /* --- Client portal accounts --- */
+    .client-section { border-color: #a7f3d0; background: #f0fdf4; }
+    #clientResetPwModalContent { background: white; padding: 24px; border-radius: 8px; text-align: center; max-width: 320px; }
+    #clientResetPwModalContent button { margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -220,6 +225,17 @@
     </div>
     <div id="assignStatus" class="status"></div>
     <ul id="assignmentList"></ul>
+  </section>
+
+  <section class="client-section">
+    <h3>🔑 Client Portal Accounts</h3>
+    <p style="font-size:13px; color:#166534;">Create read-only login credentials for your clients. Each account is locked to exactly one site and can only view that site's compliance status, incidents, and PDF reports — they can never see other sites or touch guards/checkpoints. Share the login page URL and these credentials directly with your client.</p>
+    <select id="clientSite"><option value="">Select a site</option></select>
+    <input type="email" id="clientEmail" placeholder="Client email">
+    <input type="password" id="clientPassword" placeholder="Temporary password (min 6 characters)" minlength="6">
+    <button onclick="addClientUser()">Create Client Account</button>
+    <div id="clientAccountStatus" class="status"></div>
+    <ul id="clientAccountList"></ul>
   </section>
 
   <section>
@@ -331,6 +347,16 @@
       <button onclick="confirmResetPassword()">Reset Password</button>
       <button class="qr-close" onclick="closeResetPwModal()">Cancel</button>
       <div id="resetPwStatus" class="status"></div>
+    </div>
+  </div>
+
+  <div id="clientResetPwModal">
+    <div id="clientResetPwModalContent">
+      <h3 id="clientResetPwTitle">Reset Client Password</h3>
+      <input type="password" id="clientNewPasswordInput" placeholder="New password (min 6 characters)" minlength="6">
+      <button onclick="confirmClientResetPassword()">Reset Password</button>
+      <button class="qr-close" onclick="closeClientResetPwModal()">Cancel</button>
+      <div id="clientResetPwStatus" class="status"></div>
     </div>
   </div>
 
@@ -784,6 +810,7 @@
         populateSiteDropdown(document.getElementById('complianceSite'), sites);
         populateSiteDropdown(document.getElementById('assignSite'), sites);
         populateSiteDropdown(document.getElementById('reportSite'), sites);
+        populateSiteDropdown(document.getElementById('clientSite'), sites);
         if (document.getElementById('checkpointSite').value) loadCheckpoints();
         if (document.getElementById('scheduleSite').value) loadSchedules();
       } catch (err) {
@@ -983,6 +1010,134 @@
         statusDiv.textContent = 'Assignment removed.';
         statusDiv.className = 'status success';
         loadAssignments();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    // --- Client portal accounts ---
+    async function loadClientAccounts() {
+      const list = document.getElementById('clientAccountList');
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/client-users?tenant_id=' + tenantId, { headers: authHeaders() }, 8000);
+        const accounts = await res.json();
+        if (!res.ok && handleAuthError(accounts.error)) return;
+        list.innerHTML = '';
+        if (accounts.length === 0) {
+          list.innerHTML = '<li>No client accounts yet.</li>';
+          return;
+        }
+        accounts.forEach(a => {
+          const li = document.createElement('li');
+          const label = document.createElement('span');
+          label.textContent = a.email + ' → ' + a.site_name;
+
+          const actionsDiv = document.createElement('div');
+          actionsDiv.className = 'guard-actions';
+
+          const resetBtn = document.createElement('button');
+          resetBtn.textContent = 'Reset Password';
+          resetBtn.className = 'resetpw';
+          resetBtn.onclick = () => openClientResetPwModal(a.id, a.email);
+
+          const removeBtn = document.createElement('button');
+          removeBtn.textContent = 'Remove';
+          removeBtn.className = 'remove';
+          removeBtn.onclick = () => removeClientUser(a.id, a.email);
+
+          actionsDiv.appendChild(resetBtn);
+          actionsDiv.appendChild(removeBtn);
+          li.appendChild(label);
+          li.appendChild(actionsDiv);
+          list.appendChild(li);
+        });
+      } catch (err) {
+        console.error('loadClientAccounts failed:', err.message);
+      }
+    }
+
+    async function addClientUser() {
+      const siteId = document.getElementById('clientSite').value;
+      const email = document.getElementById('clientEmail').value.trim();
+      const password = document.getElementById('clientPassword').value;
+      const statusDiv = document.getElementById('clientAccountStatus');
+
+      if (!siteId) { statusDiv.textContent = 'Please select a site'; statusDiv.className = 'status error'; return; }
+      if (!email || !password) { statusDiv.textContent = 'Email and password are required'; statusDiv.className = 'status error'; return; }
+
+      try {
+        const res = await fetch(API_BASE + '/api/client-users', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ tenant_id: Number(tenantId), site_id: Number(siteId), email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to create client account'); }
+        statusDiv.textContent = 'Client account created.';
+        statusDiv.className = 'status success';
+        document.getElementById('clientEmail').value = '';
+        document.getElementById('clientPassword').value = '';
+        loadClientAccounts();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function removeClientUser(id, email) {
+      if (!confirm('Remove client account ' + email + '? They will immediately lose access to the portal.')) return;
+      const statusDiv = document.getElementById('clientAccountStatus');
+      try {
+        const res = await fetch(API_BASE + '/api/client-users/' + id + '?tenant_id=' + tenantId, {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to remove client account'); }
+        statusDiv.textContent = 'Client account removed.';
+        statusDiv.className = 'status success';
+        loadClientAccounts();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    let clientResetPwTargetId = null;
+
+    function openClientResetPwModal(id, email) {
+      clientResetPwTargetId = id;
+      document.getElementById('clientResetPwTitle').textContent = 'Reset Password — ' + email;
+      document.getElementById('clientNewPasswordInput').value = '';
+      document.getElementById('clientResetPwStatus').textContent = '';
+      document.getElementById('clientResetPwModal').style.display = 'flex';
+    }
+
+    function closeClientResetPwModal() {
+      document.getElementById('clientResetPwModal').style.display = 'none';
+      clientResetPwTargetId = null;
+    }
+
+    async function confirmClientResetPassword() {
+      const newPassword = document.getElementById('clientNewPasswordInput').value;
+      const statusDiv = document.getElementById('clientResetPwStatus');
+      if (!newPassword || newPassword.length < 6) {
+        statusDiv.textContent = 'Password must be at least 6 characters';
+        statusDiv.className = 'status error';
+        return;
+      }
+      try {
+        const res = await fetch(API_BASE + '/api/client-users/' + clientResetPwTargetId + '/reset-password', {
+          method: 'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({ tenant_id: Number(tenantId), new_password: newPassword })
+        });
+        const data = await res.json();
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to reset password'); }
+        statusDiv.textContent = 'Password reset successfully.';
+        statusDiv.className = 'status success';
+        setTimeout(closeClientResetPwModal, 1200);
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
@@ -1473,6 +1628,7 @@
       loadAssignments();
       loadIncidents();
       loadEmergencyContacts();
+      loadClientAccounts();
       setInterval(loadSosSummary, 10000);
       setInterval(loadAlerts, 60000);
     }
