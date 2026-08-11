@@ -118,11 +118,6 @@
     return false;
   }
 
-  function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
-  }
-
   function timeAgo(dateStr) {
     const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
     if (diffSec < 60) return diffSec + 's ago';
@@ -156,7 +151,6 @@
   }
 
   let firstLoad = true;
-  let latestGuardData = [];
 
   // Trail state — tracks which guard's trail is currently drawn, so the
   // regular 20s poll doesn't wipe it out and so "Close Trail" / changing
@@ -174,10 +168,16 @@
       if (!res.ok) { if (handleAuthError(locations.error)) return; throw new Error(locations.error || 'Failed to load guard locations'); }
 
       statusMsg.textContent = '';
-      latestGuardData = locations;
 
       if (locations.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No guard locations reported yet.</td></tr>';
+        tbody.innerHTML = '';
+        const emptyRow = document.createElement('tr');
+        const emptyCell = document.createElement('td');
+        emptyCell.colSpan = 5;
+        emptyCell.className = 'empty-state';
+        emptyCell.textContent = 'No guard locations reported yet.';
+        emptyRow.appendChild(emptyCell);
+        tbody.appendChild(emptyRow);
         Object.values(markers).forEach(m => map.removeLayer(m));
         for (const k in markers) delete markers[k];
         return;
@@ -204,19 +204,51 @@
         } else {
           markers[loc.user_id] = L.marker([loc.latitude, loc.longitude], { icon: makeDivIcon(colorHex[status]) }).addTo(map);
         }
-        markers[loc.user_id].bindPopup(
-          '<b>' + escapeHtml(loc.guard_email) + '</b><br>' +
-          (loc.site_name ? escapeHtml(loc.site_name) + '<br>' : '') +
-          timeAgo(loc.updated_at)
-        );
 
+        const popupDiv = document.createElement('div');
+        const nameEl = document.createElement('b');
+        nameEl.textContent = loc.guard_email;
+        popupDiv.appendChild(nameEl);
+        if (loc.site_name) {
+          popupDiv.appendChild(document.createElement('br'));
+          popupDiv.appendChild(document.createTextNode(loc.site_name));
+        }
+        popupDiv.appendChild(document.createElement('br'));
+        popupDiv.appendChild(document.createTextNode(timeAgo(loc.updated_at)));
+        markers[loc.user_id].bindPopup(popupDiv);
+
+        // Row built with DOM APIs (not string-concatenated onclick=) so
+        // guard emails or names containing quotes/apostrophes can never
+        // break the page's HTML/JS parsing.
         const row = document.createElement('tr');
-        row.innerHTML =
-          '<td>' + escapeHtml(loc.guard_email) + '</td>' +
-          '<td>' + escapeHtml(loc.site_name || '-') + '</td>' +
-          '<td>' + timeAgo(loc.updated_at) + '</td>' +
-          '<td><span class="status-badge badge-' + status + '">' + (status === 'green' ? 'Active' : status === 'amber' ? 'Idle' : 'Stale') + '</span></td>' +
-          '<td><button class="trail-btn" onclick="showTrail(' + loc.user_id + ', \\'' + escapeHtml(loc.guard_email).replace(/'/g, "\\\\'") + '\\')">View Trail</button></td>';
+
+        const guardCell = document.createElement('td');
+        guardCell.textContent = loc.guard_email;
+        row.appendChild(guardCell);
+
+        const siteCell = document.createElement('td');
+        siteCell.textContent = loc.site_name || '-';
+        row.appendChild(siteCell);
+
+        const updatedCell = document.createElement('td');
+        updatedCell.textContent = timeAgo(loc.updated_at);
+        row.appendChild(updatedCell);
+
+        const statusCell = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = 'status-badge badge-' + status;
+        badge.textContent = status === 'green' ? 'Active' : status === 'amber' ? 'Idle' : 'Stale';
+        statusCell.appendChild(badge);
+        row.appendChild(statusCell);
+
+        const trailCell = document.createElement('td');
+        const trailBtn = document.createElement('button');
+        trailBtn.className = 'trail-btn';
+        trailBtn.textContent = 'View Trail';
+        trailBtn.addEventListener('click', () => showTrail(loc.user_id, loc.guard_email));
+        trailCell.appendChild(trailBtn);
+        row.appendChild(trailCell);
+
         tbody.appendChild(row);
       });
 
@@ -237,11 +269,11 @@
     activeTrailMarkers = [];
   }
 
-  async function showTrail(userId, guardEmail) {
+  function showTrail(userId, guardEmail) {
     activeTrailUserId = userId;
     document.getElementById('trailTitle').textContent = 'Movement Trail — ' + guardEmail;
     document.getElementById('trailPanel').classList.add('show');
-    await drawTrail();
+    drawTrail();
   }
 
   function reloadTrail() {
