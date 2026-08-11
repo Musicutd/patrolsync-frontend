@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PatrolSync - My Certifications</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 16px; background: #f7f7f8; }
+    h2 { color: #222; }
+    button.backlink { background: none; color: #2563eb; text-decoration: underline; border: none; padding: 0; margin-bottom: 14px; font-size: 14px; cursor: pointer; }
+    section { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { border-bottom: 1px solid #eee; padding: 12px 0; }
+    li:last-child { border-bottom: none; }
+    .cert-name { font-weight: bold; font-size: 15px; }
+    .cert-meta { font-size: 13px; color: #666; margin-top: 3px; }
+    .cert-status-valid { color: #16a34a; font-weight: bold; }
+    .cert-status-expiring_soon { color: #d97706; font-weight: bold; }
+    .cert-status-expired { color: #dc2626; font-weight: bold; }
+    .status-line { margin-top: 6px; font-size: 14px; }
+    .empty-msg { color: #666; font-size: 14px; }
+    .error { color: red; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <button class="backlink" onclick="window.location.href='guard.html'">← Back to Guard App</button>
+  <h2>🎓 My Certifications</h2>
+  <p style="font-size:13px; color:#666;">Licenses and certifications on file for you, with expiry status.</p>
+
+  <section>
+    <ul id="certList"><li class="empty-msg">Loading...</li></ul>
+  </section>
+
+  <script>
+    const API_BASE = 'https://patrolsync-backend.onrender.com';
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('tenant_id');
+
+    if (!token || !tenantId) {
+      window.location.href = 'signup.html';
+    }
+
+    let currentUserId = null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      currentUserId = payload.user_id;
+    } catch (err) {
+      window.location.href = 'signup.html';
+    }
+
+    function authHeaders() {
+      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+    }
+
+    function handleAuthError(message) {
+      if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('tenant_id');
+        localStorage.removeItem('user_email');
+        alert('Your session has expired. Please log in again.');
+        window.location.href = 'login.html';
+        return true;
+      }
+      return false;
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    function certStatusLabel(cert) {
+      if (cert.status === 'expired') return '🔴 Expired ' + Math.abs(cert.days_remaining) + ' day(s) ago';
+      if (cert.status === 'expiring_soon') return '🟡 Expires in ' + cert.days_remaining + ' day(s)';
+      return '🟢 Valid (' + cert.days_remaining + ' days remaining)';
+    }
+
+    async function loadMyCertifications() {
+      const list = document.getElementById('certList');
+      try {
+        const res = await fetch(API_BASE + '/api/certifications?tenant_id=' + tenantId + '&user_id=' + currentUserId, {
+          headers: authHeaders()
+        });
+        const certs = await res.json();
+        if (!res.ok) { if (handleAuthError(certs.error)) return; throw new Error(certs.error || 'Failed to load certifications'); }
+
+        list.innerHTML = '';
+        if (certs.length === 0) {
+          list.innerHTML = '<li class="empty-msg">No certifications on file yet. Contact your admin if you believe this is incorrect.</li>';
+          return;
+        }
+
+        certs.forEach(c => {
+          const li = document.createElement('li');
+          li.innerHTML = '<div class="cert-name">' + escapeHtml(c.cert_name) + (c.cert_number ? ' (' + escapeHtml(c.cert_number) + ')' : '') + '</div>' +
+            '<div class="cert-meta">Expires: ' + new Date(c.expiry_date).toLocaleDateString() + '</div>' +
+            '<div class="status-line cert-status-' + c.status + '">' + certStatusLabel(c) + '</div>';
+          list.appendChild(li);
+        });
+      } catch (err) {
+        list.innerHTML = '<li class="error">Failed to load certifications: ' + err.message + '</li>';
+      }
+    }
+
+    loadMyCertifications();
+  </script>
+</body>
+</html>
