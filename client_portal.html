@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PatrolSync - Client Portal</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 16px; background: #f7f7f8; }
+    h2, h3 { color: #222; }
+    input, select, button { width: 100%; padding: 12px; margin: 6px 0; font-size: 15px; border-radius: 6px; border: 1px solid #ccc; }
+    button { background: #2563eb; color: white; border: none; font-weight: bold; cursor: pointer; }
+    button.logout { background: #dc2626; width: auto; padding: 8px 14px; font-size: 13px; }
+    section { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    #header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { border-bottom: 1px solid #eee; padding: 10px 0; font-size: 14px; }
+    .status { font-weight: bold; margin-top: 8px; font-size: 14px; }
+    .success { color: green; }
+    .error { color: red; }
+    #loginScreen, #portalScreen { display: none; }
+    .hint { font-size: 13px; color: #666; margin: 4px 0 10px; }
+    .comp-ok { color: green; font-weight: bold; }
+    .comp-overdue { color: #dc2626; font-weight: bold; }
+    .comp-unmonitored { color: #d97706; }
+    .comp-no_schedule { color: #999; }
+    .sev-low { color: #2563eb; }
+    .sev-medium { color: #d97706; }
+    .sev-high { color: #dc2626; font-weight: bold; }
+    .sev-critical { color: #7f1d1d; font-weight: bold; }
+    .site-name { font-size: 13px; color: #666; margin-top: -6px; margin-bottom: 12px; }
+    .filter-row { display: flex; gap: 6px; }
+    .filter-row button { width: auto; flex-shrink: 0; padding: 10px 14px; }
+    .badge-readonly {
+      display: inline-block; background: #f1f5f9; color: #475569;
+      border-radius: 10px; padding: 3px 10px; font-size: 11px; font-weight: bold; margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="loginScreen">
+    <h2>Client Portal Login</h2>
+    <p class="hint">This is a read-only view of your site's patrol activity and incident reports. Contact your security provider if you don't have login credentials.</p>
+    <section>
+      <input type="email" id="loginEmail" placeholder="Your email">
+      <input type="password" id="loginPassword" placeholder="Password">
+      <button onclick="doLogin()">Log In</button>
+      <div id="loginStatus" class="status"></div>
+    </section>
+  </div>
+
+  <div id="portalScreen">
+    <div id="header">
+      <div>
+        <h2 style="margin-bottom:0;">Client Portal <span class="badge-readonly">READ-ONLY</span></h2>
+      </div>
+      <button class="logout" onclick="doLogout()">Log Out</button>
+    </div>
+    <div class="site-name" id="siteInfoLine">Loading site info...</div>
+
+    <section>
+      <h3>Checkpoint Compliance</h3>
+      <p class="hint">Live status of every checkpoint at your site.</p>
+      <button onclick="loadCompliance()">Refresh</button>
+      <ul id="complianceList"></ul>
+    </section>
+
+    <section>
+      <h3>Incident Reports</h3>
+      <div class="filter-row">
+        <input type="date" id="incidentDateFilter">
+        <button onclick="loadIncidents()">Filter</button>
+      </div>
+      <button onclick="clearIncidentFilter()" style="background:#64748b;">Clear filter (show recent)</button>
+      <ul id="incidentList"></ul>
+    </section>
+
+    <section>
+      <h3>📄 Download Compliance Report (PDF)</h3>
+      <p class="hint">A formatted summary of checkpoint activity and incidents for a date range.</p>
+      <input type="date" id="reportStartDate">
+      <input type="date" id="reportEndDate">
+      <button onclick="downloadReport()">Download PDF</button>
+      <div id="reportStatus" class="status"></div>
+    </section>
+  </div>
+
+  <script>
+    const API_BASE = 'https://patrolsync-backend.onrender.com';
+
+    function getClientSession() {
+      return {
+        token: localStorage.getItem('client_token'),
+        tenantId: localStorage.getItem('client_tenant_id'),
+        siteId: localStorage.getItem('client_site_id'),
+        siteName: localStorage.getItem('client_site_name'),
+        email: localStorage.getItem('client_email')
+      };
+    }
+
+    function clientAuthHeaders() {
+      const { token } = getClientSession();
+      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+    }
+
+    function showScreen(name) {
+      document.getElementById('loginScreen').style.display = name === 'login' ? 'block' : 'none';
+      document.getElementById('portalScreen').style.display = name === 'portal' ? 'block' : 'none';
+    }
+
+    function clearClientSession() {
+      localStorage.removeItem('client_token');
+      localStorage.removeItem('client_tenant_id');
+      localStorage.removeItem('client_site_id');
+      localStorage.removeItem('client_site_name');
+      localStorage.removeItem('client_email');
+    }
+
+    async function doLogin() {
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const statusDiv = document.getElementById('loginStatus');
+
+      if (!email || !password) {
+        statusDiv.textContent = 'Email and password are required';
+        statusDiv.className = 'status error';
+        return;
+      }
+
+      try {
+        const res = await fetch(API_BASE + '/api/client-auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Login failed');
+
+        clearClientSession();
+        localStorage.setItem('client_token', data.token);
+        localStorage.setItem('client_tenant_id', data.tenant_id);
+        localStorage.setItem('client_site_id', data.site_id);
+        localStorage.setItem('client_site_name', data.site_name || '');
+        localStorage.setItem('client_email', data.client.email);
+
+        statusDiv.textContent = '';
+        startPortalSession();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    function doLogout() {
+      clearClientSession();
+      showScreen('login');
+    }
+
+    function handleAuthError(message) {
+      if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
+        clearClientSession();
+        alert('Your session has expired. Please log in again.');
+        showScreen('login');
+        return true;
+      }
+      return false;
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    async function loadSiteInfo() {
+      try {
+        const res = await fetch(API_BASE + '/api/client-portal/site-info', { headers: clientAuthHeaders() });
+        const data = await res.json();
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to load site info'); }
+        document.getElementById('siteInfoLine').textContent =
+          data.tenant_name + ' — ' + data.site_name + (data.address ? ' (' + data.address + ')' : '');
+      } catch (err) {
+        document.getElementById('siteInfoLine').textContent = 'Failed to load site info';
+      }
+    }
+
+    async function loadCompliance() {
+      const list = document.getElementById('complianceList');
+      list.innerHTML = '<li>Loading...</li>';
+      try {
+        const res = await fetch(API_BASE + '/api/client-portal/compliance', { headers: clientAuthHeaders() });
+        const compliance = await res.json();
+        if (!res.ok) { if (handleAuthError(compliance.error)) return; throw new Error(compliance.error || 'Failed to load compliance'); }
+
+        list.innerHTML = '';
+        if (compliance.length === 0) {
+          list.innerHTML = '<li>No checkpoints configured for this site.</li>';
+          return;
+        }
+        compliance.forEach(c => {
+          const li = document.createElement('li');
+          let statusText = '';
+          if (c.status === 'ok') statusText = '✓ On schedule';
+          else if (c.status === 'overdue') statusText = '⚠ Overdue' + (c.hours_overdue ? ' by ' + c.hours_overdue + 'h' : ' (never scanned)');
+          else if (c.status === 'unmonitored') statusText = '— No schedule set';
+          else statusText = '— No schedule';
+
+          const lastScanText = c.last_scan ? new Date(c.last_scan).toLocaleString() : 'never';
+          li.innerHTML = '<div>' + escapeHtml(c.checkpoint_name) + '</div>' +
+            '<div style="font-size:12px; color:#666;">Last scan: ' + lastScanText + '</div>' +
+            '<div class="comp-' + c.status + '">' + statusText + '</div>';
+          list.appendChild(li);
+        });
+      } catch (err) {
+        list.innerHTML = '<li class="error">Failed to load compliance: ' + err.message + '</li>';
+      }
+    }
+
+    function clearIncidentFilter() {
+      document.getElementById('incidentDateFilter').value = '';
+      loadIncidents();
+    }
+
+    async function loadIncidents() {
+      const dateVal = document.getElementById('incidentDateFilter').value;
+      const list = document.getElementById('incidentList');
+      list.innerHTML = '<li>Loading...</li>';
+      try {
+        const url = API_BASE + '/api/client-portal/incidents' + (dateVal ? '?date=' + dateVal : '');
+        const res = await fetch(url, { headers: clientAuthHeaders() });
+        const incidents = await res.json();
+        if (!res.ok) { if (handleAuthError(incidents.error)) return; throw new Error(incidents.error || 'Failed to load incidents'); }
+
+        list.innerHTML = '';
+        if (incidents.length === 0) {
+          list.innerHTML = '<li>No incidents' + (dateVal ? ' on ' + dateVal : ' reported recently') + '.</li>';
+          return;
+        }
+        incidents.forEach(i => {
+          const li = document.createElement('li');
+          li.innerHTML = '<span class="sev-' + i.severity + '">[' + i.severity.toUpperCase() + ']</span> ' +
+            escapeHtml(i.description) + ' — ' + new Date(i.reported_at).toLocaleString() +
+            (i.photo_count > 0 ? ' (📷 ' + i.photo_count + ' photo' + (i.photo_count > 1 ? 's' : '') + ')' : '');
+          list.appendChild(li);
+        });
+      } catch (err) {
+        list.innerHTML = '<li class="error">Failed to load incidents: ' + err.message + '</li>';
+      }
+    }
+
+    async function downloadReport() {
+      const startDate = document.getElementById('reportStartDate').value;
+      const endDate = document.getElementById('reportEndDate').value;
+      const statusDiv = document.getElementById('reportStatus');
+
+      if (!startDate || !endDate) { statusDiv.textContent = 'Please select both dates'; statusDiv.className = 'status error'; return; }
+      if (endDate < startDate) { statusDiv.textContent = 'End date must be on or after start date'; statusDiv.className = 'status error'; return; }
+
+      statusDiv.textContent = 'Generating report...';
+      statusDiv.className = 'status';
+
+      try {
+        const url = API_BASE + '/api/client-portal/reports/compliance-pdf?start_date=' + startDate + '&end_date=' + endDate;
+        const res = await fetch(url, { headers: clientAuthHeaders() });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (handleAuthError(data.error)) return;
+          throw new Error(data.error || 'Failed to generate report');
+        }
+
+        const blob = await res.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="(.+)"/);
+        link.download = match ? match[1] : 'compliance-report.pdf';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(blobUrl);
+
+        statusDiv.textContent = 'Report downloaded.';
+        statusDiv.className = 'status success';
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    function startPortalSession() {
+      showScreen('portal');
+      loadSiteInfo();
+      loadCompliance();
+      loadIncidents();
+    }
+
+    function init() {
+      const { token, tenantId } = getClientSession();
+      if (token && tenantId) {
+        startPortalSession();
+      } else {
+        showScreen('login');
+      }
+    }
+    init();
+  </script>
+</body>
+</html>
