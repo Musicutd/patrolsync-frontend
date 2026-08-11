@@ -117,7 +117,7 @@
         </select>
       </div>
     </div>
-    <button onclick="generatePreview()">Generate Preview</button>
+    <button id="generateBtn" onclick="generatePreview()">Generate Preview</button>
     <div id="generateStatus" class="status"></div>
   </section>
 
@@ -307,6 +307,32 @@
       return selected;
     }
 
+    // Renders a single checkpoint's QR code onto an offscreen canvas and
+    // returns a PNG data URL. Wrapped in its own try/catch (rather than
+    // relying on the caller) so one bad/missing qr_code value produces a
+    // clear, specific error instead of silently hanging the whole batch.
+    function renderQrToDataUrl(qrText, qrPx) {
+      return new Promise((resolve, reject) => {
+        if (typeof QRCode === 'undefined') {
+          reject(new Error('QR code library did not load. Check your internet connection and refresh the page.'));
+          return;
+        }
+        if (!qrText || typeof qrText !== 'string' || qrText.trim() === '') {
+          reject(new Error('Checkpoint has an empty or invalid QR code value.'));
+          return;
+        }
+        const canvas = document.createElement('canvas');
+        try {
+          QRCode.toCanvas(canvas, qrText, { width: qrPx, margin: 1 }, (err) => {
+            if (err) reject(err);
+            else resolve(canvas.toDataURL('image/png'));
+          });
+        } catch (syncErr) {
+          reject(syncErr);
+        }
+      });
+    }
+
     // generatedPages holds everything needed for both the on-screen preview
     // and the PDF export, so QR codes are only rendered once per generate
     // click and both outputs stay perfectly in sync.
@@ -315,6 +341,7 @@
 
     async function generatePreview() {
       const statusDiv = document.getElementById('generateStatus');
+      const generateBtn = document.getElementById('generateBtn');
       const selected = getSelectedCheckpoints();
       if (selected.length === 0) {
         statusDiv.textContent = 'Select at least one checkpoint';
@@ -322,57 +349,73 @@
         return;
       }
 
-      currentPaperSize = document.getElementById('paperSizeSelect').value;
-      const perSheet = Number(document.getElementById('perSheetSelect').value);
-      const [rows, cols] = computeGrid(perSheet);
-      const paper = PAPER_SIZES[currentPaperSize];
+      generateBtn.disabled = true;
 
-      const marginMm = 10;
-      const gapMm = 4;
-      const usableW = paper.w - 2 * marginMm - (cols - 1) * gapMm;
-      const usableH = paper.h - 2 * marginMm - (rows - 1) * gapMm;
-      const cellW = usableW / cols;
-      const cellH = usableH / rows;
-      const qrSizeMm = Math.max(10, Math.min(cellW, cellH) - 10);
+      try {
+        currentPaperSize = document.getElementById('paperSizeSelect').value;
+        const perSheet = Number(document.getElementById('perSheetSelect').value);
+        const [rows, cols] = computeGrid(perSheet);
+        const paper = PAPER_SIZES[currentPaperSize];
 
-      statusDiv.textContent = 'Rendering QR codes...';
-      statusDiv.className = 'status';
+        const marginMm = 10;
+        const gapMm = 4;
+        const usableW = paper.w - 2 * marginMm - (cols - 1) * gapMm;
+        const usableH = paper.h - 2 * marginMm - (rows - 1) * gapMm;
+        const cellW = usableW / cols;
+        const cellH = usableH / rows;
+        const qrSizeMm = Math.max(10, Math.min(cellW, cellH) - 10);
 
-      const pxPerMm = 96 / 25.4;
-      const qrPx = Math.round(qrSizeMm * pxPerMm * 3);
+        statusDiv.textContent = 'Rendering QR codes... (0/' + selected.length + ')';
+        statusDiv.className = 'status';
 
-      generatedPages = [];
-      const chunks = [];
-      for (let i = 0; i < selected.length; i += perSheet) {
-        chunks.push(selected.slice(i, i + perSheet));
-      }
+        const pxPerMm = 96 / 25.4;
+        const qrPx = Math.round(qrSizeMm * pxPerMm * 3);
 
-      for (const chunk of chunks) {
-        const cells = [];
-        for (const cp of chunk) {
-          const canvas = document.createElement('canvas');
-          await new Promise((resolve, reject) => {
-            QRCode.toCanvas(canvas, cp.qr_code, { width: qrPx, margin: 1 }, (err) => err ? reject(err) : resolve());
-          });
-          cells.push({
-            id: cp.id,
-            name: cp.name,
-            qrCode: cp.qr_code,
-            siteName: cp.site_name,
-            dataUrl: canvas.toDataURL('image/png'),
-            qrSizeMm
-          });
+        generatedPages = [];
+        const chunks = [];
+        for (let i = 0; i < selected.length; i += perSheet) {
+          chunks.push(selected.slice(i, i + perSheet));
         }
-        generatedPages.push({ cells, rows, cols, cellW, cellH, marginMm, gapMm });
-      }
 
-      renderPreviewDom(paper);
-      document.getElementById('previewSection').style.display = 'block';
-      document.getElementById('pageCountLabel').textContent =
-        selected.length + ' checkpoint(s) across ' + generatedPages.length + ' ' + currentPaperSize + ' sheet(s), ' + perSheet + ' per sheet.';
-      statusDiv.textContent = 'Preview ready — scroll down to print or download.';
-      statusDiv.className = 'status success';
-      document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
+        let rendered = 0;
+        for (const chunk of chunks) {
+          const cells = [];
+          for (const cp of chunk) {
+            let dataUrl;
+            try {
+              dataUrl = await renderQrToDataUrl(cp.qr_code, qrPx);
+            } catch (qrErr) {
+              throw new Error('Failed to render QR for "' + (cp.name || cp.qr_code || 'checkpoint') + '": ' + qrErr.message);
+            }
+            rendered++;
+            statusDiv.textContent = 'Rendering QR codes... (' + rendered + '/' + selected.length + ')';
+            cells.push({
+              id: cp.id,
+              name: cp.name,
+              qrCode: cp.qr_code,
+              siteName: cp.site_name,
+              dataUrl,
+              qrSizeMm
+            });
+          }
+          generatedPages.push({ cells, rows, cols, cellW, cellH, marginMm, gapMm });
+        }
+
+        renderPreviewDom(paper);
+        document.getElementById('previewSection').style.display = 'block';
+        document.getElementById('pageCountLabel').textContent =
+          selected.length + ' checkpoint(s) across ' + generatedPages.length + ' ' + currentPaperSize + ' sheet(s), ' + perSheet + ' per sheet.';
+        statusDiv.textContent = 'Preview ready — scroll down to print or download.';
+        statusDiv.className = 'status success';
+        document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        console.error('generatePreview failed:', err);
+        statusDiv.textContent = 'Failed to generate preview: ' + err.message;
+        statusDiv.className = 'status error';
+        generatedPages = [];
+      } finally {
+        generateBtn.disabled = false;
+      }
     }
 
     function renderPreviewDom(paper) {
@@ -458,6 +501,9 @@
       statusDiv.className = 'status';
 
       try {
+        if (!window.jspdf || !window.jspdf.jsPDF) {
+          throw new Error('PDF library did not load. Check your internet connection and refresh the page.');
+        }
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: currentPaperSize.toLowerCase() });
 
@@ -491,6 +537,7 @@
         statusDiv.textContent = 'PDF downloaded successfully.';
         statusDiv.className = 'status success';
       } catch (err) {
+        console.error('downloadPdf failed:', err);
         statusDiv.textContent = 'Failed to build PDF: ' + err.message;
         statusDiv.className = 'status error';
       }
