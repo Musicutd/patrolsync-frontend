@@ -303,6 +303,7 @@
     }
 
     function doLogout() {
+      stopLocationReporting();
       clearAllSessions();
       showScreen('login');
     }
@@ -992,6 +993,53 @@
         });
     }
 
+    // --- Live guard map: periodic location reporting ---
+    // Silently reports this guard's GPS position to the backend every 45
+    // seconds while logged in with the app open and a site selected. Does
+    // NOT run in the background if the tab/app is closed — browsers don't
+    // allow that without a paid background-location permission, and that's
+    // a deliberate privacy choice here too. Failures (offline, permission
+    // denied) are swallowed silently so they never interrupt the guard's
+    // actual workflow.
+    let locationReportInterval = null;
+
+    function reportCurrentLocation() {
+      if (!navigator.geolocation || !navigator.onLine) return;
+      const { tenantId } = getSession();
+      const siteId = document.getElementById('siteSelect') ? document.getElementById('siteSelect').value : null;
+      if (!tenantId) return;
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          fetch(API_BASE + '/api/guard-locations', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+              tenant_id: Number(tenantId),
+              site_id: siteId ? Number(siteId) : null,
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude
+            })
+          }).catch(err => console.warn('Location report failed (likely offline):', err.message));
+        },
+        (err) => console.warn('Geolocation unavailable for live map:', err.message),
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
+      );
+    }
+
+    function startLocationReporting() {
+      if (locationReportInterval) return;
+      reportCurrentLocation();
+      locationReportInterval = setInterval(reportCurrentLocation, 45000);
+    }
+
+    function stopLocationReporting() {
+      if (locationReportInterval) {
+        clearInterval(locationReportInterval);
+        locationReportInterval = null;
+      }
+    }
+
     function startGuardSession() {
       const { email } = getSession();
       document.getElementById('guardName').textContent = email || 'Guard';
@@ -1000,6 +1048,7 @@
       loadAssignedSites();
       loadEmergencyContacts();
       syncQueue();
+      startLocationReporting();
     }
 
     function init() {
