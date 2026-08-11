@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PatrolSync - Print QR Codes</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto; padding: 20px; }
+    h2, h3 { color: #222; }
+    input, select, button { padding: 10px; margin: 6px 0; box-sizing: border-box; font-size: 14px; }
+    select, button { border-radius: 4px; border: 1px solid #ccc; }
+    button { background: #2563eb; color: white; border: none; cursor: pointer; }
+    button.secondary { background: #64748b; }
+    button.printbtn { background: #16a34a; }
+    button.pdfbtn { background: #7c3aed; }
+    button.backlink { background: none; color: #2563eb; text-decoration: underline; padding: 0; margin-bottom: 14px; }
+    section { border: 1px solid #ddd; border-radius: 6px; padding: 15px; margin-bottom: 20px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .row > div { flex: 1; min-width: 160px; }
+    label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: #333; }
+    .status { font-weight: bold; margin-top: 8px; }
+    .success { color: green; }
+    .error { color: red; }
+    #checkpointChecklist { max-height: 260px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; padding: 10px; margin-top: 8px; }
+    .cp-check-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f3f3f3; }
+    .cp-check-row input { width: auto; margin: 0; }
+    .cp-check-row label { font-weight: normal; margin: 0; cursor: pointer; }
+    .select-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .select-actions button { width: auto; padding: 6px 12px; font-size: 12px; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .toolbar button { width: auto; padding: 10px 18px; }
+    .empty-msg { color: #666; font-size: 13px; }
+
+    /* --- Print preview area (screen) --- */
+    #previewWrapper { overflow-x: auto; background: #e2e8f0; padding: 20px; border-radius: 6px; margin-top: 16px; }
+    .print-page {
+      background: white;
+      margin: 0 auto 24px auto;
+      box-shadow: 0 0 8px rgba(0,0,0,0.2);
+      display: grid;
+      box-sizing: border-box;
+      padding: 10mm;
+      gap: 4mm;
+    }
+    .qr-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      border: 1px dashed #bbb;
+      box-sizing: border-box;
+      padding: 2mm;
+      overflow: hidden;
+    }
+    .qr-cell img { display: block; }
+    .qr-cell .cp-name { font-weight: bold; font-size: 3.2mm; text-align: center; margin-top: 1.5mm; line-height: 1.1; }
+    .qr-cell .cp-code { font-size: 2.6mm; color: #555; text-align: center; margin-top: 0.5mm; }
+    .qr-cell .cp-site { font-size: 2.3mm; color: #999; text-align: center; }
+    .page-label { text-align: center; font-size: 12px; color: #475569; margin-bottom: 4px; }
+
+    /* --- Print output --- */
+    @media print {
+      body * { visibility: hidden; }
+      #previewWrapper, #previewWrapper * { visibility: visible; }
+      #previewWrapper { position: absolute; top: 0; left: 0; padding: 0; background: white; overflow: visible; }
+      .print-page { box-shadow: none; margin: 0; page-break-after: always; }
+      .page-label { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <button class="backlink" onclick="window.location.href='dashboard.html'">← Back to Dashboard</button>
+  <h2>🖨️ Print / Export Checkpoint QR Codes</h2>
+  <p style="font-size:13px; color:#666;">Select a site and the checkpoints you want printed, choose your paper size and how many codes per sheet, then generate a preview. From there you can print directly or download a matching PDF.</p>
+
+  <section>
+    <h3>1. Select Checkpoints</h3>
+    <div class="row">
+      <div>
+        <label>Site</label>
+        <select id="siteSelect"><option value="">Select a site</option></select>
+      </div>
+    </div>
+    <div id="checkpointChecklist"><p class="empty-msg">Select a site to load its checkpoints.</p></div>
+    <div class="select-actions">
+      <button class="secondary" onclick="toggleAllCheckpoints(true)">Select All</button>
+      <button class="secondary" onclick="toggleAllCheckpoints(false)">Clear All</button>
+    </div>
+  </section>
+
+  <section>
+    <h3>2. Layout Options</h3>
+    <div class="row">
+      <div>
+        <label>Paper Size</label>
+        <select id="paperSizeSelect">
+          <option value="A4">A4 (210 × 297 mm)</option>
+          <option value="A3">A3 (297 × 420 mm)</option>
+        </select>
+      </div>
+      <div>
+        <label>QR Codes per Sheet</label>
+        <select id="perSheetSelect">
+          <option value="1">1 per sheet</option>
+          <option value="2">2 per sheet</option>
+          <option value="4" selected>4 per sheet</option>
+          <option value="6">6 per sheet</option>
+          <option value="8">8 per sheet</option>
+          <option value="9">9 per sheet</option>
+          <option value="12">12 per sheet</option>
+          <option value="16">16 per sheet</option>
+          <option value="20">20 per sheet</option>
+          <option value="24">24 per sheet</option>
+        </select>
+      </div>
+    </div>
+    <button onclick="generatePreview()">Generate Preview</button>
+    <div id="generateStatus" class="status"></div>
+  </section>
+
+  <section id="previewSection" style="display:none;">
+    <h3>3. Preview & Export</h3>
+    <p id="pageCountLabel" style="font-size:13px; color:#666;"></p>
+    <div class="toolbar">
+      <button class="printbtn" onclick="printSheets()">🖨️ Print</button>
+      <button class="pdfbtn" onclick="downloadPdf()">⬇ Download PDF</button>
+    </div>
+    <div id="pdfStatus" class="status"></div>
+    <div id="previewWrapper"></div>
+  </section>
+
+  <script>
+    const API_BASE = 'https://patrolsync-backend.onrender.com';
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('tenant_id');
+
+    if (!token || !tenantId) {
+      window.location.href = 'signup.html';
+    }
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.role !== 'admin') {
+        window.location.href = 'guard.html';
+      }
+    } catch (err) {
+      window.location.href = 'signup.html';
+    }
+
+    function authHeaders() {
+      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+    }
+
+    function handleAuthError(message) {
+      if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('tenant_id');
+        localStorage.removeItem('user_email');
+        alert('Your session has expired. Please log in again.');
+        window.location.href = 'login.html';
+        return true;
+      }
+      return false;
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    // Paper dimensions in millimeters (portrait only).
+    const PAPER_SIZES = {
+      A4: { w: 210, h: 297 },
+      A3: { w: 297, h: 420 }
+    };
+
+    // Sensible row/column splits for common "per sheet" counts, so cells
+    // stay squarish rather than one long strip. Falls back to a
+    // square-root based split for any count not listed here.
+    const GRID_LOOKUP = {
+      1: [1, 1], 2: [1, 2], 3: [1, 3], 4: [2, 2], 6: [2, 3],
+      8: [2, 4], 9: [3, 3], 12: [3, 4], 16: [4, 4], 20: [4, 5], 24: [4, 6]
+    };
+
+    function computeGrid(n) {
+      if (GRID_LOOKUP[n]) return GRID_LOOKUP[n];
+      const cols = Math.ceil(Math.sqrt(n));
+      const rows = Math.ceil(n / cols);
+      return [rows, cols];
+    }
+
+    async function loadSites() {
+      const select = document.getElementById('siteSelect');
+      try {
+        const res = await fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() });
+        const sites = await res.json();
+        if (!res.ok) { if (handleAuthError(sites.error)) return; throw new Error(sites.error || 'Failed to load sites'); }
+        select.innerHTML = '<option value="">Select a site</option>';
+        sites.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.name;
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('loadSites failed:', err.message);
+      }
+    }
+
+    let currentCheckpoints = [];
+
+    document.getElementById('siteSelect').addEventListener('change', loadCheckpointsForChecklist);
+
+    async function loadCheckpointsForChecklist() {
+      const siteId = document.getElementById('siteSelect').value;
+      const container = document.getElementById('checkpointChecklist');
+      if (!siteId) {
+        container.innerHTML = '<p class="empty-msg">Select a site to load its checkpoints.</p>';
+        currentCheckpoints = [];
+        return;
+      }
+      container.innerHTML = '<p class="empty-msg">Loading...</p>';
+      try {
+        const res = await fetch(API_BASE + '/api/checkpoints?tenant_id=' + tenantId + '&site_id=' + siteId, { headers: authHeaders() });
+        const checkpoints = await res.json();
+        if (!res.ok) { if (handleAuthError(checkpoints.error)) return; throw new Error(checkpoints.error || 'Failed to load checkpoints'); }
+        currentCheckpoints = checkpoints;
+
+        if (checkpoints.length === 0) {
+          container.innerHTML = '<p class="empty-msg">No checkpoints found for this site.</p>';
+          return;
+        }
+
+        const siteName = document.getElementById('siteSelect').selectedOptions[0].textContent;
+        container.innerHTML = '';
+        checkpoints.forEach(cp => {
+          const row = document.createElement('div');
+          row.className = 'cp-check-row';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.id = 'cp-check-' + cp.id;
+          checkbox.value = cp.id;
+          checkbox.checked = true;
+          checkbox.dataset.siteName = siteName;
+          const label = document.createElement('label');
+          label.setAttribute('for', checkbox.id);
+          label.textContent = cp.name + ' (QR: ' + cp.qr_code + ')';
+          row.appendChild(checkbox);
+          row.appendChild(label);
+          container.appendChild(row);
+        });
+      } catch (err) {
+        container.innerHTML = '<p class="error">Failed to load checkpoints: ' + err.message + '</p>';
+      }
+    }
+
+    function toggleAllCheckpoints(checked) {
+      document.querySelectorAll('#checkpointChecklist input[type="checkbox"]').forEach(cb => cb.checked = checked);
+    }
+
+    function getSelectedCheckpoints() {
+      const selected = [];
+      document.querySelectorAll('#checkpointChecklist input[type="checkbox"]:checked').forEach(cb => {
+        const id = Number(cb.value);
+        const cp = currentCheckpoints.find(c => c.id === id);
+        if (cp) selected.push({ ...cp, site_name: cb.dataset.siteName || '' });
+      });
+      return selected;
+    }
+
+    // generatedPages holds everything needed for both the on-screen preview
+    // and the PDF export, so QR codes are only rendered once per generate
+    // click and both outputs stay perfectly in sync.
+    let generatedPages = [];
+    let currentPaperSize = 'A4';
+
+    async function generatePreview() {
+      const statusDiv = document.getElementById('generateStatus');
+      const selected = getSelectedCheckpoints();
+      if (selected.length === 0) {
+        statusDiv.textContent = 'Select at least one checkpoint';
+        statusDiv.className = 'status error';
+        return;
+      }
+
+      currentPaperSize = document.getElementById('paperSizeSelect').value;
+      const perSheet = Number(document.getElementById('perSheetSelect').value);
+      const [rows, cols] = computeGrid(perSheet);
+      const paper = PAPER_SIZES[currentPaperSize];
+
+      const marginMm = 10;
+      const gapMm = 4;
+      const usableW = paper.w - 2 * marginMm - (cols - 1) * gapMm;
+      const usableH = paper.h - 2 * marginMm - (rows - 1) * gapMm;
+      const cellW = usableW / cols;
+      const cellH = usableH / rows;
+      const qrSizeMm = Math.max(10, Math.min(cellW, cellH) - 10);
+
+      statusDiv.textContent = 'Rendering QR codes...';
+      statusDiv.className = 'status';
+
+      const pxPerMm = 96 / 25.4;
+      const qrPx = Math.round(qrSizeMm * pxPerMm * 3);
+
+      generatedPages = [];
+      const chunks = [];
+      for (let i = 0; i < selected.length; i += perSheet) {
+        chunks.push(selected.slice(i, i + perSheet));
+      }
+
+      for (const chunk of chunks) {
+        const cells = [];
+        for (const cp of chunk) {
+          const canvas = document.createElement('canvas');
+          await new Promise((resolve, reject) => {
+            QRCode.toCanvas(canvas, cp.qr_code, { width: qrPx, margin: 1 }, (err) => err ? reject(err) : resolve());
+          });
+          cells.push({
+            id: cp.id,
+            name: cp.name,
+            qrCode: cp.qr_code,
+            siteName: cp.site_name,
+            dataUrl: canvas.toDataURL('image/png'),
+            qrSizeMm
+          });
+        }
+        generatedPages.push({ cells, rows, cols, cellW, cellH, marginMm, gapMm });
+      }
+
+      renderPreviewDom(paper);
+      document.getElementById('previewSection').style.display = 'block';
+      document.getElementById('pageCountLabel').textContent =
+        selected.length + ' checkpoint(s) across ' + generatedPages.length + ' ' + currentPaperSize + ' sheet(s), ' + perSheet + ' per sheet.';
+      statusDiv.textContent = 'Preview ready — scroll down to print or download.';
+      statusDiv.className = 'status success';
+      document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function renderPreviewDom(paper) {
+      const wrapper = document.getElementById('previewWrapper');
+      wrapper.innerHTML = '';
+
+      generatedPages.forEach((page, idx) => {
+        const label = document.createElement('div');
+        label.className = 'page-label';
+        label.textContent = 'Sheet ' + (idx + 1) + ' of ' + generatedPages.length;
+        wrapper.appendChild(label);
+
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'print-page';
+        pageDiv.style.width = paper.w + 'mm';
+        pageDiv.style.height = paper.h + 'mm';
+        pageDiv.style.gridTemplateColumns = 'repeat(' + page.cols + ', 1fr)';
+        pageDiv.style.gridTemplateRows = 'repeat(' + page.rows + ', 1fr)';
+
+        page.cells.forEach(cell => {
+          const cellDiv = document.createElement('div');
+          cellDiv.className = 'qr-cell';
+
+          const img = document.createElement('img');
+          img.src = cell.dataUrl;
+          img.style.width = cell.qrSizeMm + 'mm';
+          img.style.height = cell.qrSizeMm + 'mm';
+
+          const nameDiv = document.createElement('div');
+          nameDiv.className = 'cp-name';
+          nameDiv.textContent = cell.name;
+
+          const codeDiv = document.createElement('div');
+          codeDiv.className = 'cp-code';
+          codeDiv.textContent = 'Code: ' + cell.qrCode;
+
+          cellDiv.appendChild(img);
+          cellDiv.appendChild(nameDiv);
+          cellDiv.appendChild(codeDiv);
+
+          if (cell.siteName) {
+            const siteDiv = document.createElement('div');
+            siteDiv.className = 'cp-site';
+            siteDiv.textContent = cell.siteName;
+            cellDiv.appendChild(siteDiv);
+          }
+
+          pageDiv.appendChild(cellDiv);
+        });
+
+        // Pad remaining grid slots so cells stay evenly sized even when
+        // the last sheet isn't completely full.
+        for (let i = page.cells.length; i < page.rows * page.cols; i++) {
+          const emptyDiv = document.createElement('div');
+          emptyDiv.style.border = 'none';
+          pageDiv.appendChild(emptyDiv);
+        }
+
+        wrapper.appendChild(pageDiv);
+      });
+    }
+
+    function printSheets() {
+      if (generatedPages.length === 0) { alert('Generate a preview first'); return; }
+      let styleEl = document.getElementById('dynamicPrintStyle');
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'dynamicPrintStyle';
+        document.head.appendChild(styleEl);
+      }
+      styleEl.textContent = '@page { size: ' + currentPaperSize + ' portrait; margin: 0; }';
+      window.print();
+    }
+
+    async function downloadPdf() {
+      const statusDiv = document.getElementById('pdfStatus');
+      if (generatedPages.length === 0) {
+        statusDiv.textContent = 'Generate a preview first';
+        statusDiv.className = 'status error';
+        return;
+      }
+      statusDiv.textContent = 'Building PDF...';
+      statusDiv.className = 'status';
+
+      try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: currentPaperSize.toLowerCase() });
+
+        generatedPages.forEach((page, pageIndex) => {
+          if (pageIndex > 0) doc.addPage(currentPaperSize.toLowerCase(), 'portrait');
+
+          const colWidth = page.cellW + page.gapMm;
+          const rowHeight = page.cellH + page.gapMm;
+
+          page.cells.forEach((cell, i) => {
+            const col = i % page.cols;
+            const row = Math.floor(i / page.cols);
+            const cellX = page.marginMm + col * colWidth;
+            const cellY = page.marginMm + row * rowHeight;
+
+            const qrX = cellX + (page.cellW - cell.qrSizeMm) / 2;
+            const qrY = cellY + 1;
+
+            doc.addImage(cell.dataUrl, 'PNG', qrX, qrY, cell.qrSizeMm, cell.qrSizeMm);
+
+            doc.setFontSize(9);
+            doc.text(cell.name, cellX + page.cellW / 2, qrY + cell.qrSizeMm + 4, { align: 'center', maxWidth: page.cellW });
+            doc.setFontSize(7);
+            doc.setTextColor(120);
+            doc.text('Code: ' + cell.qrCode, cellX + page.cellW / 2, qrY + cell.qrSizeMm + 8, { align: 'center', maxWidth: page.cellW });
+            doc.setTextColor(0);
+          });
+        });
+
+        doc.save('checkpoint-qr-codes-' + currentPaperSize + '.pdf');
+        statusDiv.textContent = 'PDF downloaded successfully.';
+        statusDiv.className = 'status success';
+      } catch (err) {
+        statusDiv.textContent = 'Failed to build PDF: ' + err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    loadSites();
+  </script>
+</body>
+</html>
