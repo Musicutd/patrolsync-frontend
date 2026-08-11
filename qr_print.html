@@ -22,6 +22,7 @@
     .status { font-weight: bold; margin-top: 8px; }
     .success { color: green; }
     .error { color: red; }
+    .info-banner { background: #eef2ff; border: 1px solid #a5b4fc; border-radius: 6px; padding: 10px 14px; font-size: 13px; color: #3730a3; margin-bottom: 14px; }
     #checkpointChecklist { max-height: 260px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; padding: 10px; margin-top: 8px; }
     .cp-check-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f3f3f3; }
     .cp-check-row input { width: auto; margin: 0; }
@@ -70,9 +71,10 @@
   </style>
 </head>
 <body>
-  <button class="backlink" onclick="window.location.href='dashboard.html'">← Back to Dashboard</button>
+  <button class="backlink" onclick="window.location.href='checkpoint_manager.html'">← Back to Checkpoint Manager</button>
   <h2>🖨️ Print / Export Checkpoint QR Codes</h2>
   <p style="font-size:13px; color:#666;">Select a site and the checkpoints you want printed, choose your paper size and how many codes per sheet, then generate a preview. From there you can print directly or download a matching PDF.</p>
+  <div id="preselectBanner" class="info-banner" style="display:none;"></div>
 
   <section>
     <h3>1. Select Checkpoints</h3>
@@ -189,6 +191,21 @@
       return [rows, cols];
     }
 
+    // If checkpoint_manager.html handed off a pre-selection (specific
+    // checkpoint IDs ticked there, all belonging to one site), read it once
+    // here so this page opens pre-filtered instead of defaulting to
+    // "select all checkpoints for whichever site is picked first."
+    let pendingPreselect = null;
+    try {
+      const raw = sessionStorage.getItem('qrPrintPreselect');
+      if (raw) {
+        pendingPreselect = JSON.parse(raw);
+        sessionStorage.removeItem('qrPrintPreselect');
+      }
+    } catch (err) {
+      pendingPreselect = null;
+    }
+
     async function loadSites() {
       const select = document.getElementById('siteSelect');
       try {
@@ -202,9 +219,31 @@
           opt.textContent = s.name;
           select.appendChild(opt);
         });
+
+        if (pendingPreselect && pendingPreselect.site_id) {
+          const matchingOption = Array.from(select.options).find(o => o.value === String(pendingPreselect.site_id));
+          if (matchingOption) {
+            select.value = String(pendingPreselect.site_id);
+            await loadCheckpointsForChecklist();
+            applyPreselect();
+          }
+        }
       } catch (err) {
         console.error('loadSites failed:', err.message);
       }
+    }
+
+    function applyPreselect() {
+      if (!pendingPreselect || !Array.isArray(pendingPreselect.checkpoint_ids)) return;
+      const idSet = new Set(pendingPreselect.checkpoint_ids.map(String));
+      document.querySelectorAll('#checkpointChecklist input[type="checkbox"]').forEach(cb => {
+        cb.checked = idSet.has(cb.value);
+      });
+
+      const banner = document.getElementById('preselectBanner');
+      banner.style.display = 'block';
+      banner.textContent = '✓ ' + pendingPreselect.checkpoint_ids.length + ' checkpoint(s) pre-selected from Checkpoint Manager. Adjust selection below if needed, then generate your preview.';
+      pendingPreselect = null;
     }
 
     let currentCheckpoints = [];
