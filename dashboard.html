@@ -80,7 +80,7 @@
     .map-section { border-color: #93c5fd; background: #eff6ff; }
     .map-open-btn { background: #2563eb; width: auto; padding: 10px 16px; font-size: 14px; margin-top: 8px; }
 
-    #qrModal, #resetPwModal, #photoViewerModal, #clientResetPwModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+    #qrModal, #resetPwModal, #photoViewerModal, #clientResetPwModal, #certModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
     #qrModalContent, #resetPwModalContent { background: white; padding: 24px; border-radius: 8px; text-align: center; max-width: 320px; }
     #qrModalContent canvas { margin: 10px auto; display: block; }
     #qrModalContent button, #resetPwModalContent button { margin-top: 10px; }
@@ -129,6 +129,22 @@
     .client-section { border-color: #a7f3d0; background: #f0fdf4; }
     #clientResetPwModalContent { background: white; padding: 24px; border-radius: 8px; text-align: center; max-width: 320px; }
     #clientResetPwModalContent button { margin-top: 10px; }
+
+    /* --- Guard certifications --- */
+    .cert-section { border-color: #fde68a; background: #fffbeb; }
+    .cert-widget-section { border-color: #fca5a5; background: #fff8f8; }
+    .cert-status-valid { color: #16a34a; font-weight: bold; }
+    .cert-status-expiring_soon { color: #d97706; font-weight: bold; }
+    .cert-status-expired { color: #dc2626; font-weight: bold; }
+    .cert-row-main { flex: 1; }
+    .cert-row-main .cert-name { font-weight: bold; }
+    .cert-row-main .cert-meta { font-size: 12px; color: #666; margin-top: 2px; }
+    button.cert-edit { background: #7c3aed; width: auto; padding: 4px 10px; margin: 0 0 0 8px; font-size: 12px; }
+    #certModalContent { background: white; padding: 24px; border-radius: 8px; text-align: left; max-width: 360px; width: 90%; }
+    #certModalContent button { margin-top: 10px; }
+    .cert-date-row { display: flex; gap: 8px; }
+    .cert-date-row > div { flex: 1; }
+    .cert-date-row label { font-size: 12px; font-weight: bold; color: #333; display: block; margin-bottom: 2px; }
   </style>
 </head>
 <body>
@@ -161,6 +177,13 @@
     <p style="font-size:13px; color:#7f1d1d;">Overdue checkpoints across all sites. Auto-refreshes; clears itself once the checkpoint is scanned again, or dismiss manually.</p>
     <button onclick="loadAlerts()">Refresh Alerts</button>
     <ul id="alertList"></ul>
+  </section>
+
+  <section class="cert-widget-section">
+    <h3>⚠️ Certifications Expiring <span id="certExpiringBadge" class="alert-count-badge hidden">0</span></h3>
+    <p style="font-size:13px; color:#7f1d1d;">Guard licenses/certifications that have expired or expire within 30 days, across all guards.</p>
+    <button onclick="loadExpiringCertifications()">Refresh</button>
+    <ul id="certExpiringList"></ul>
   </section>
 
   <section>
@@ -227,6 +250,15 @@
     <ul id="assignmentList"></ul>
   </section>
 
+  <section class="cert-section">
+    <h3>🎓 Guard Certifications</h3>
+    <p style="font-size:13px; color:#92400e;">Track licenses and certifications per guard (e.g. SIA license, first aid, fire warden) with expiry warnings.</p>
+    <select id="certGuardSelect"><option value="">Select a guard</option></select>
+    <div id="certGuardList"></div>
+    <button onclick="openAddCertModal()">+ Add Certification</button>
+    <div id="certStatus" class="status"></div>
+  </section>
+
   <section class="client-section">
     <h3>🔑 Client Portal Accounts</h3>
     <p style="font-size:13px; color:#166534;">Create read-only login credentials for your clients. Each account is locked to exactly one site and can only view that site's compliance status, incidents, and PDF reports — they can never see other sites or touch guards/checkpoints. Accounts are capped per plan (see Plan & Usage above) — share the login page URL and these credentials directly with your client.</p>
@@ -241,6 +273,7 @@
   <section>
     <h3>Checkpoints</h3>
     <button class="managerlink" onclick="window.location.href='checkpoint_manager.html'">🗂 Open Full Checkpoint Manager (with QR codes)</button>
+    <button class="managerlink" onclick="window.location.href='qr_print.html'">🖨️ Print QR Codes</button>
     <select id="checkpointSite">
       <option value="">Select a site</option>
     </select>
@@ -357,6 +390,27 @@
       <button onclick="confirmClientResetPassword()">Reset Password</button>
       <button class="qr-close" onclick="closeClientResetPwModal()">Cancel</button>
       <div id="clientResetPwStatus" class="status"></div>
+    </div>
+  </div>
+
+  <div id="certModal">
+    <div id="certModalContent">
+      <h3 id="certModalTitle">Add Certification</h3>
+      <input type="text" id="certNameInput" placeholder="Certification name (e.g. SIA License)">
+      <input type="text" id="certNumberInput" placeholder="Certificate/license number (optional)">
+      <div class="cert-date-row">
+        <div>
+          <label>Issue date (optional)</label>
+          <input type="date" id="certIssueDateInput">
+        </div>
+        <div>
+          <label>Expiry date</label>
+          <input type="date" id="certExpiryDateInput">
+        </div>
+      </div>
+      <button onclick="saveCertification()">Save</button>
+      <button class="qr-close" onclick="closeCertModal()">Cancel</button>
+      <div id="certModalStatus" class="status"></div>
     </div>
   </div>
 
@@ -586,6 +640,210 @@
         loadAlerts();
       } catch (err) {
         alert('Failed to dismiss alert: ' + err.message);
+      }
+    }
+
+    // --- Guard certifications ---
+
+    let certModalEditId = null;
+
+    function certStatusLabel(cert) {
+      if (cert.status === 'expired') return '🔴 Expired ' + Math.abs(cert.days_remaining) + ' day(s) ago';
+      if (cert.status === 'expiring_soon') return '🟡 Expires in ' + cert.days_remaining + ' day(s)';
+      return '🟢 Valid (' + cert.days_remaining + ' days remaining)';
+    }
+
+    async function loadExpiringCertifications() {
+      const list = document.getElementById('certExpiringList');
+      const badge = document.getElementById('certExpiringBadge');
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/certifications/expiring?tenant_id=' + tenantId, { headers: authHeaders() }, 8000);
+        const certs = await res.json();
+        if (!res.ok) { if (handleAuthError(certs.error)) return; throw new Error(certs.error || 'Failed to load certifications'); }
+
+        list.innerHTML = '';
+        if (certs.length === 0) {
+          badge.classList.add('hidden');
+          list.innerHTML = '<li class="no-alerts">✓ No certifications expiring or expired.</li>';
+          return;
+        }
+
+        badge.textContent = certs.length;
+        badge.classList.remove('hidden');
+
+        certs.forEach(c => {
+          const li = document.createElement('li');
+          li.innerHTML = '<span>' + escapeHtml(c.guard_email) + ' — ' + escapeHtml(c.cert_name) + '</span>' +
+            '<span class="cert-status-' + c.status + '">' + certStatusLabel(c) + '</span>';
+          list.appendChild(li);
+        });
+      } catch (err) {
+        console.error('loadExpiringCertifications failed:', err.message);
+        list.innerHTML = '<li class="error">Failed to load certifications</li>';
+      }
+    }
+
+    let currentGuardCerts = [];
+
+    async function loadGuardCertifications() {
+      const guardId = document.getElementById('certGuardSelect').value;
+      const container = document.getElementById('certGuardList');
+      if (!guardId) {
+        container.innerHTML = '';
+        currentGuardCerts = [];
+        return;
+      }
+      container.innerHTML = '<p style="font-size:13px; color:#666;">Loading...</p>';
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/certifications?tenant_id=' + tenantId + '&user_id=' + guardId, { headers: authHeaders() }, 8000);
+        const certs = await res.json();
+        if (!res.ok) { if (handleAuthError(certs.error)) return; throw new Error(certs.error || 'Failed to load certifications'); }
+        currentGuardCerts = certs;
+
+        if (certs.length === 0) {
+          container.innerHTML = '<p style="font-size:13px; color:#666;">No certifications on file for this guard.</p>';
+          return;
+        }
+
+        const ul = document.createElement('ul');
+        certs.forEach(c => {
+          const li = document.createElement('li');
+          const mainDiv = document.createElement('div');
+          mainDiv.className = 'cert-row-main';
+          mainDiv.innerHTML = '<div class="cert-name">' + escapeHtml(c.cert_name) + (c.cert_number ? ' (' + escapeHtml(c.cert_number) + ')' : '') + '</div>' +
+            '<div class="cert-meta">Expires: ' + new Date(c.expiry_date).toLocaleDateString() + '</div>' +
+            '<div class="cert-status-' + c.status + '">' + certStatusLabel(c) + '</div>';
+
+          const actionsDiv = document.createElement('div');
+          actionsDiv.className = 'guard-actions';
+          const editBtn = document.createElement('button');
+          editBtn.textContent = 'Edit';
+          editBtn.className = 'cert-edit';
+          editBtn.onclick = () => openEditCertModal(c.id);
+          const removeBtn = document.createElement('button');
+          removeBtn.textContent = 'Remove';
+          removeBtn.className = 'remove';
+          removeBtn.onclick = () => removeCertification(c.id, c.cert_name);
+
+          actionsDiv.appendChild(editBtn);
+          actionsDiv.appendChild(removeBtn);
+          li.appendChild(mainDiv);
+          li.appendChild(actionsDiv);
+          ul.appendChild(li);
+        });
+        container.innerHTML = '';
+        container.appendChild(ul);
+      } catch (err) {
+        container.innerHTML = '<p class="error">Failed to load certifications: ' + err.message + '</p>';
+      }
+    }
+
+    function openAddCertModal() {
+      const guardId = document.getElementById('certGuardSelect').value;
+      const statusDiv = document.getElementById('certStatus');
+      if (!guardId) {
+        statusDiv.textContent = 'Select a guard first';
+        statusDiv.className = 'status error';
+        return;
+      }
+      certModalEditId = null;
+      document.getElementById('certModalTitle').textContent = 'Add Certification';
+      document.getElementById('certNameInput').value = '';
+      document.getElementById('certNumberInput').value = '';
+      document.getElementById('certIssueDateInput').value = '';
+      document.getElementById('certExpiryDateInput').value = '';
+      document.getElementById('certModalStatus').textContent = '';
+      document.getElementById('certModal').style.display = 'flex';
+    }
+
+    function openEditCertModal(certId) {
+      const cert = currentGuardCerts.find(c => c.id === certId);
+      if (!cert) return;
+      certModalEditId = certId;
+      document.getElementById('certModalTitle').textContent = 'Edit Certification';
+      document.getElementById('certNameInput').value = cert.cert_name;
+      document.getElementById('certNumberInput').value = cert.cert_number || '';
+      document.getElementById('certIssueDateInput').value = cert.issue_date ? cert.issue_date.slice(0, 10) : '';
+      document.getElementById('certExpiryDateInput').value = cert.expiry_date.slice(0, 10);
+      document.getElementById('certModalStatus').textContent = '';
+      document.getElementById('certModal').style.display = 'flex';
+    }
+
+    function closeCertModal() {
+      document.getElementById('certModal').style.display = 'none';
+      certModalEditId = null;
+    }
+
+    async function saveCertification() {
+      const guardId = document.getElementById('certGuardSelect').value;
+      const certName = document.getElementById('certNameInput').value.trim();
+      const certNumber = document.getElementById('certNumberInput').value.trim();
+      const issueDate = document.getElementById('certIssueDateInput').value;
+      const expiryDate = document.getElementById('certExpiryDateInput').value;
+      const statusDiv = document.getElementById('certModalStatus');
+
+      if (!certName) { statusDiv.textContent = 'Certification name is required'; statusDiv.className = 'status error'; return; }
+      if (!expiryDate) { statusDiv.textContent = 'Expiry date is required'; statusDiv.className = 'status error'; return; }
+
+      try {
+        let res;
+        if (certModalEditId) {
+          res = await fetch(API_BASE + '/api/certifications/' + certModalEditId, {
+            method: 'PATCH',
+            headers: authHeaders(),
+            body: JSON.stringify({
+              tenant_id: Number(tenantId),
+              cert_name: certName,
+              cert_number: certNumber || null,
+              issue_date: issueDate || null,
+              expiry_date: expiryDate
+            })
+          });
+        } else {
+          res = await fetch(API_BASE + '/api/certifications', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+              tenant_id: Number(tenantId),
+              user_id: Number(guardId),
+              cert_name: certName,
+              cert_number: certNumber || null,
+              issue_date: issueDate || null,
+              expiry_date: expiryDate
+            })
+          });
+        }
+        const data = await res.json();
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to save certification'); }
+
+        statusDiv.textContent = 'Saved.';
+        statusDiv.className = 'status success';
+        setTimeout(closeCertModal, 800);
+        loadGuardCertifications();
+        loadExpiringCertifications();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    async function removeCertification(certId, certName) {
+      if (!confirm('Remove certification "' + certName + '"? This cannot be undone.')) return;
+      const statusDiv = document.getElementById('certStatus');
+      try {
+        const res = await fetch(API_BASE + '/api/certifications/' + certId + '?tenant_id=' + tenantId, {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to remove certification'); }
+        statusDiv.textContent = 'Certification removed.';
+        statusDiv.className = 'status success';
+        loadGuardCertifications();
+        loadExpiringCertifications();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
       }
     }
 
@@ -894,6 +1152,7 @@
           list.appendChild(li);
         });
         populateGuardDropdown(document.getElementById('assignGuard'), guards);
+        populateGuardDropdown(document.getElementById('certGuardSelect'), guards);
       } catch (err) {
         console.error('loadGuards failed:', err.message);
       }
@@ -1153,6 +1412,7 @@
     }
 
     document.getElementById('checkpointSite').addEventListener('change', loadCheckpoints);
+    document.getElementById('certGuardSelect').addEventListener('change', loadGuardCertifications);
 
     async function loadCheckpoints() {
       const siteId = document.getElementById('checkpointSite').value;
@@ -1631,6 +1891,7 @@
       });
       loadSosSummary();
       loadAlerts();
+      loadExpiringCertifications();
       loadSites();
       loadGuards();
       loadAssignments();
@@ -1639,6 +1900,7 @@
       loadClientAccounts();
       setInterval(loadSosSummary, 10000);
       setInterval(loadAlerts, 60000);
+      setInterval(loadExpiringCertifications, 60000);
     }
     init();
   </script>
