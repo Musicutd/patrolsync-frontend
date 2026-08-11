@@ -229,7 +229,7 @@
 
   <section class="client-section">
     <h3>🔑 Client Portal Accounts</h3>
-    <p style="font-size:13px; color:#166534;">Create read-only login credentials for your clients. Each account is locked to exactly one site and can only view that site's compliance status, incidents, and PDF reports — they can never see other sites or touch guards/checkpoints. Share the login page URL and these credentials directly with your client.</p>
+    <p style="font-size:13px; color:#166534;">Create read-only login credentials for your clients. Each account is locked to exactly one site and can only view that site's compliance status, incidents, and PDF reports — they can never see other sites or touch guards/checkpoints. Accounts are capped per plan (see Plan & Usage above) — share the login page URL and these credentials directly with your client.</p>
     <select id="clientSite"><option value="">Select a site</option></select>
     <input type="email" id="clientEmail" placeholder="Client email">
     <input type="password" id="clientPassword" placeholder="Temporary password (min 6 characters)" minlength="6">
@@ -690,6 +690,12 @@
       return 'usage-ok';
     }
 
+    // Converts a snake_case usage key (e.g. "client_accounts") into a
+    // human label ("Client Accounts") for the usage bar list.
+    function usageKeyLabel(key) {
+      return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+
     async function loadPlanAndUsage() {
       const badge = document.getElementById('planBadge');
       const priceLine = document.getElementById('planPriceLine');
@@ -711,11 +717,11 @@
           priceLine.textContent = '€' + limits.monthly_price + '/mo base + pay-per-unit beyond base allocation';
         } else {
           priceLine.textContent = '€' + limits.monthly_price + '/mo — up to ' + limits.locations + ' location(s), ' +
-            limits.checkpoints + ' checkpoint(s), ' + limits.guards + ' guard(s)';
+            limits.checkpoints + ' checkpoint(s), ' + limits.guards + ' guard(s), ' + limits.client_accounts + ' client account(s)';
         }
 
         barsDiv.innerHTML = '';
-        ['locations', 'checkpoints', 'guards'].forEach(key => {
+        ['locations', 'checkpoints', 'guards', 'client_accounts'].forEach(key => {
           const current = usageData.usage[key];
           const max = limits[key];
           const isInf = max === null || max === undefined || max === 'Infinity' || max === Infinity;
@@ -726,7 +732,7 @@
           item.className = 'usage-item';
           const label = document.createElement('div');
           label.className = 'usage-label';
-          label.innerHTML = '<span>' + key.charAt(0).toUpperCase() + key.slice(1) + '</span><span>' +
+          label.innerHTML = '<span>' + usageKeyLabel(key) + '</span><span>' +
             current + ' / ' + (isInf ? 'unlimited' : max) + '</span>';
           const barBg = document.createElement('div');
           barBg.className = 'usage-bar-bg';
@@ -1079,6 +1085,7 @@
         document.getElementById('clientEmail').value = '';
         document.getElementById('clientPassword').value = '';
         loadClientAccounts();
+        loadPlanAndUsage();
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
@@ -1098,6 +1105,7 @@
         statusDiv.textContent = 'Client account removed.';
         statusDiv.className = 'status success';
         loadClientAccounts();
+        loadPlanAndUsage();
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
