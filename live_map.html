@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Live Guard Map - PatrolSync</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 20px; }
+  a.back-link { font-size: 13px; color: #2563eb; }
+  h2 { display: flex; align-items: center; gap: 10px; }
+  .live-dot { width: 10px; height: 10px; border-radius: 50%; background: #16a34a; display: inline-block; animation: pulse 2s infinite; }
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+  #mapContainer { width: 100%; height: 480px; border-radius: 8px; border: 1px solid #ddd; margin-top: 10px; }
+  .legend { display: flex; gap: 16px; margin-top: 10px; font-size: 13px; color: #444; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot-green { background: #16a34a; }
+  .dot-amber { background: #d97706; }
+  .dot-gray { background: #9ca3af; }
+
+  .guard-list { margin-top: 20px; }
+  .guard-list table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .guard-list th, .guard-list td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eee; }
+  .status-badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: bold; color: white; }
+  .badge-green { background: #16a34a; }
+  .badge-amber { background: #d97706; }
+  .badge-gray { background: #9ca3af; }
+  .empty-state { text-align: center; color: #888; padding: 30px 0; }
+  .status { font-size: 14px; }
+  .error { color: #dc2626; }
+</style>
+</head>
+<body>
+
+<p><a href="dashboard.html" class="back-link">← Back to Dashboard</a></p>
+<h2><span class="live-dot"></span> Live Guard Map</h2>
+<p style="font-size:13px; color:#666;">Shows each guard's most recent reported position. Updates automatically every 20 seconds. Guards must have the app open with location permission granted for their position to appear.</p>
+
+<div id="statusMsg" class="status"></div>
+<div id="mapContainer"></div>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot dot-green"></span> Updated within 2 min</div>
+  <div class="legend-item"><span class="legend-dot dot-amber"></span> Updated 2–10 min ago</div>
+  <div class="legend-item"><span class="legend-dot dot-gray"></span> Stale (10+ min) or offline</div>
+</div>
+
+<div class="guard-list">
+  <h3>Guard Status</h3>
+  <table>
+    <thead><tr><th>Guard</th><th>Site</th><th>Last Updated</th><th>Status</th></tr></thead>
+    <tbody id="guardTableBody"></tbody>
+  </table>
+</div>
+
+<script>
+  const API_BASE = 'https://patrolsync-backend.onrender.com';
+  const token = localStorage.getItem('token');
+  const tenantId = localStorage.getItem('tenant_id');
+  const POLL_INTERVAL_MS = 20000;
+
+  if (!token || !tenantId) window.location.href = 'signup.html';
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.role !== 'admin') window.location.href = 'guard.html';
+  } catch (err) {
+    window.location.href = 'signup.html';
+  }
+
+  function authHeaders() {
+    return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+  }
+
+  function handleAuthError(message) {
+    if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('tenant_id');
+      alert('Your session has expired. Please log in again.');
+      window.location.href = 'login.html';
+      return true;
+    }
+    return false;
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  }
+
+  function timeAgo(dateStr) {
+    const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diffSec < 60) return diffSec + 's ago';
+    if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm ago';
+    return Math.floor(diffSec / 3600) + 'h ago';
+  }
+
+  function freshnessStatus(dateStr) {
+    const diffMin = (Date.now() - new Date(dateStr).getTime()) / 60000;
+    if (diffMin <= 2) return 'green';
+    if (diffMin <= 10) return 'amber';
+    return 'gray';
+  }
+
+  const map = L.map('mapContainer').setView([35.8989, 14.5146], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  const markers = {};
+  const colorHex = { green: '#16a34a', amber: '#d97706', gray: '#9ca3af' };
+
+  function makeDivIcon(color) {
+    return L.divIcon({
+      className: 'guard-marker',
+      html: '<div style="width:16px;height:16px;border-radius:50%;background:' + color + ';border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.4);"></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+  }
+
+  let firstLoad = true;
+
+  async function loadGuardLocations() {
+    const statusMsg = document.getElementById('statusMsg');
+    const tbody = document.getElementById('guardTableBody');
+    try {
+      const res = await fetch(API_BASE + '/api/guard-locations?tenant_id=' + tenantId, { headers: authHeaders() });
+      const locations = await res.json();
+      if (!res.ok) { if (handleAuthError(locations.error)) return; throw new Error(locations.error || 'Failed to load guard locations'); }
+
+      statusMsg.textContent = '';
+
+      if (locations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No guard locations reported yet.</td></tr>';
+        Object.values(markers).forEach(m => map.removeLayer(m));
+        for (const k in markers) delete markers[k];
+        return;
+      }
+
+      const activeIds = new Set(locations.map(l => l.user_id));
+      Object.keys(markers).forEach(id => {
+        if (!activeIds.has(Number(id))) {
+          map.removeLayer(markers[id]);
+          delete markers[id];
+        }
+      });
+
+      tbody.innerHTML = '';
+      const bounds = [];
+
+      locations.forEach(loc => {
+        const status = freshnessStatus(loc.updated_at);
+        bounds.push([loc.latitude, loc.longitude]);
+
+        if (markers[loc.user_id]) {
+          markers[loc.user_id].setLatLng([loc.latitude, loc.longitude]);
+          markers[loc.user_id].setIcon(makeDivIcon(colorHex[status]));
+        } else {
+          markers[loc.user_id] = L.marker([loc.latitude, loc.longitude], { icon: makeDivIcon(colorHex[status]) }).addTo(map);
+        }
+        markers[loc.user_id].bindPopup(
+          '<b>' + escapeHtml(loc.guard_email) + '</b><br>' +
+          (loc.site_name ? escapeHtml(loc.site_name) + '<br>' : '') +
+          timeAgo(loc.updated_at)
+        );
+
+        const row = document.createElement('tr');
+        row.innerHTML =
+          '<td>' + escapeHtml(loc.guard_email) + '</td>' +
+          '<td>' + escapeHtml(loc.site_name || '-') + '</td>' +
+          '<td>' + timeAgo(loc.updated_at) + '</td>' +
+          '<td><span class="status-badge badge-' + status + '">' + (status === 'green' ? 'Active' : status === 'amber' ? 'Idle' : 'Stale') + '</span></td>';
+        tbody.appendChild(row);
+      });
+
+      if (firstLoad && bounds.length > 0) {
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+        firstLoad = false;
+      }
+    } catch (err) {
+      statusMsg.textContent = 'Failed to load guard locations: ' + err.message;
+      statusMsg.className = 'status error';
+    }
+  }
+
+  loadGuardLocations();
+  setInterval(loadGuardLocations, POLL_INTERVAL_MS);
+</script>
+
+</body>
+</html>
