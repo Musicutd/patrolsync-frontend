@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Checkpoint Manager - PatrolSync</title>
 <style>
-  body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+  body { font-family: Arial, sans-serif; max-width: 950px; margin: 40px auto; padding: 0 20px; }
   .card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
   input, select { display: block; width: 100%; padding: 8px; margin: 6px 0 12px; box-sizing: border-box; }
   button { padding: 10px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
@@ -29,6 +29,8 @@
   a.gps-link { color: #2563eb; font-size: 13px; }
   .hidden { display: none; }
   .action-cell { white-space: nowrap; }
+  .check-col { width: 28px; }
+  .row-check, .select-all-check { width: auto; margin: 0; }
 
   .toggle-row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; }
   .toggle-label { font-size: 14px; font-weight: bold; color: #333; }
@@ -45,6 +47,14 @@
   .locate-wrap { display: flex; align-items: flex-end; }
   .locate-wrap button { width: auto; padding: 8px 12px; font-size: 13px; white-space: nowrap; }
   .gps-hint { font-size: 12px; color: #666; margin: 4px 0 12px; }
+
+  /* --- Bulk print toolbar --- */
+  .bulk-print-card { border-color: #a5b4fc; background: #eef2ff; }
+  .bulk-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .bulk-toolbar button { width: auto; padding: 10px 16px; font-size: 13px; }
+  button.bulk-selected-btn { background: #4f46e5; }
+  button.bulk-open-btn { background: #7c3aed; }
+  button.select-link-btn { background: none; color: #2563eb; text-decoration: underline; padding: 4px 0; font-size: 13px; width: auto; }
 </style>
 </head>
 <body>
@@ -95,13 +105,28 @@
   <div id="cpMsg" class="msg"></div>
 </div>
 
+<div class="card bulk-print-card">
+  <h3>🖨️ Bulk Print / Export QR Codes</h3>
+  <p style="font-size:13px; color:#3730a3;">Print or download a printable sheet of QR codes — choose A3 or A4 paper and how many codes per sheet, so customers can post them at every checkpoint in one go. Tick specific checkpoints below and click "Print Selected", or open the tool directly to choose from any site.</p>
+  <div class="bulk-toolbar">
+    <button class="bulk-selected-btn" onclick="printSelectedCheckpoints()">🖨️ Print Selected (<span id="selectedCount">0</span>)</button>
+    <button class="bulk-open-btn" onclick="window.location.href='qr_print.html'">Open Bulk Print Tool →</button>
+  </div>
+</div>
+
 <div class="card">
   <h3>All Checkpoints</h3>
   <select id="filterSite" onchange="loadCheckpoints()"><option value="">All sites</option></select>
   <div id="listMsg" class="msg"></div>
+  <button class="select-link-btn" onclick="toggleAllRows(true)">Select all visible</button>
+  &nbsp;·&nbsp;
+  <button class="select-link-btn" onclick="toggleAllRows(false)">Clear selection</button>
   <table id="cpTable">
     <thead>
-      <tr><th>Code</th><th>Location</th><th>Building</th><th>Floor</th><th>GPS</th><th>QR Code</th><th>Actions</th></tr>
+      <tr>
+        <th class="check-col"><input type="checkbox" id="selectAllCp" class="select-all-check" onchange="toggleAllRows(this.checked)"></th>
+        <th>Code</th><th>Location</th><th>Building</th><th>Floor</th><th>GPS</th><th>QR Code</th><th>Actions</th>
+      </tr>
     </thead>
     <tbody id="cpBody"></tbody>
   </table>
@@ -178,6 +203,7 @@
 
   let currentUsage = null;
   let currentSites = [];
+  let currentCheckpointsList = [];
 
   async function loadUsage() {
     try {
@@ -314,7 +340,7 @@
     const body = document.getElementById('cpBody');
     const listMsg = document.getElementById('listMsg');
     listMsg.textContent = '';
-    body.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
+    body.innerHTML = '<tr><td colspan="8">Loading...</td></tr>';
 
     let checkpoints;
     try {
@@ -331,9 +357,12 @@
       return;
     }
 
+    currentCheckpointsList = checkpoints;
     body.innerHTML = '';
+    updateSelectedCount();
+
     if (checkpoints.length === 0) {
-      body.innerHTML = '<tr><td colspan="7">No checkpoints yet.</td></tr>';
+      body.innerHTML = '<tr><td colspan="8">No checkpoints yet.</td></tr>';
       return;
     }
 
@@ -346,6 +375,7 @@
             Number(cp.latitude).toFixed(4) + ', ' + Number(cp.longitude).toFixed(4) + '</a>'
         : '-';
       tr.innerHTML =
+        '<td class="check-col"><input type="checkbox" class="row-check" value="' + cp.id + '" data-site="' + cp.site_id + '" onchange="updateSelectedCount()"></td>' +
         '<td>' + escapeHtml(cp.qr_code) + '</td>' +
         '<td>' + escapeHtml(cp.name) + '</td>' +
         '<td>' + escapeHtml(cp.building || '-') + '</td>' +
@@ -383,6 +413,48 @@
         deleteCheckpoint(this.getAttribute('data-id'), this.getAttribute('data-code'));
       });
     });
+  }
+
+  // --- Bulk selection + handoff to the full print tool (qr_print.html) ---
+
+  function toggleAllRows(checked) {
+    document.querySelectorAll('#cpBody .row-check').forEach(cb => cb.checked = checked);
+    document.getElementById('selectAllCp').checked = checked;
+    updateSelectedCount();
+  }
+
+  function updateSelectedCount() {
+    const count = document.querySelectorAll('#cpBody .row-check:checked').length;
+    document.getElementById('selectedCount').textContent = count;
+  }
+
+  // Bulk printing (choosing A3/A4 and codes-per-sheet, then printing or
+  // downloading a PDF) happens on qr_print.html, which needs a single
+  // site to work with. We hand off the selected checkpoint IDs via
+  // sessionStorage (read once, then cleared) so the tool opens pre-filtered
+  // to exactly what was ticked here instead of defaulting to "select all".
+  function printSelectedCheckpoints() {
+    const checked = Array.from(document.querySelectorAll('#cpBody .row-check:checked'));
+    const listMsg = document.getElementById('listMsg');
+
+    if (checked.length === 0) {
+      listMsg.textContent = 'Tick at least one checkpoint to print.';
+      listMsg.className = 'msg error';
+      return;
+    }
+
+    const siteIds = new Set(checked.map(cb => cb.getAttribute('data-site')));
+    if (siteIds.size > 1) {
+      listMsg.textContent = 'Selected checkpoints span multiple sites. Filter to one site first, then select and print.';
+      listMsg.className = 'msg error';
+      return;
+    }
+
+    const siteId = checked[0].getAttribute('data-site');
+    const checkpointIds = checked.map(cb => Number(cb.value));
+
+    sessionStorage.setItem('qrPrintPreselect', JSON.stringify({ site_id: siteId, checkpoint_ids: checkpointIds }));
+    window.location.href = 'qr_print.html';
   }
 
   async function deleteCheckpoint(id, code) {
