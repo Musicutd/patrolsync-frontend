@@ -99,11 +99,7 @@
     .photo-compressing { font-size: 12px; color: #0891b2; margin-top: 4px; }
 
     /* --- Offline mode --- */
-    .connection-banner {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 14px; border-radius: 8px; margin-bottom: 14px;
-      font-size: 13px; font-weight: bold;
-    }
+    .connection-banner { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; font-weight: bold; }
     .connection-banner.online { background: #dcfce7; color: #166534; }
     .connection-banner.offline { background: #fef3c7; color: #92400e; }
     .connection-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
@@ -113,12 +109,20 @@
     .sync-btn { background: #0891b2; width: auto; padding: 6px 12px; font-size: 12px; margin: 0; }
     .queued-tag { color: #d97706; font-weight: bold; }
     .synced-tag { color: #16a34a; font-weight: bold; }
+
+    /* --- My Shifts widget --- */
+    .shift-open-btn { background: #7c3aed; margin-top: 8px; }
+    .shift-today-row { border-bottom: 1px solid #f3f3f3; padding: 8px 0; font-size: 14px; }
+    .shift-today-row:last-child { border-bottom: none; }
+    .shift-today-site { font-weight: bold; }
+    .shift-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white; margin-left: 6px; }
+    .shift-badge.full_time { background: #16a34a; }
+    .shift-badge.part_time { background: #d97706; }
   </style>
 </head>
 <body>
-
   <div id="loginScreen">
-    <h2>PatrolSync — Guard Login</h2>
+    <h2>PatrolSync Guard Login</h2>
     <section>
       <input type="email" id="loginEmail" placeholder="Your email">
       <input type="password" id="loginPassword" placeholder="Password">
@@ -126,9 +130,7 @@
       <div id="loginStatus" class="status"></div>
       <p class="hint">Ask your site admin if you don't have login credentials yet.</p>
     </section>
-    <div class="admin-link">
-      <a href="login.html">Are you an admin? Log in here →</a>
-    </div>
+    <div class="admin-link"><a href="login.html">Are you an admin? Log in here →</a></div>
   </div>
 
   <div id="guardScreen">
@@ -144,17 +146,15 @@
 
     <section>
       <button id="sosBtn" class="sos-btn" onclick="triggerSos()">🆘 SOS — SEND EMERGENCY ALERT</button>
-
       <div class="sos-contact-row">
-        <a id="sosCallLink" href="#" class="sos-call-btn">📞 Call Admin</a>
-        <a id="sosWaLink" href="#" class="sos-wa-btn" target="_blank">💬 WhatsApp Admin</a>
+        <a id="sosCallLink" href="#" class="sos-call-btn hidden">📞 Call Admin</a>
+        <a id="sosWaLink" href="#" class="sos-wa-btn hidden" target="_blank">💬 WhatsApp Admin</a>
       </div>
       <div id="sosContactHint" class="sos-contact-hint hidden">These also notify your admin directly by phone/WhatsApp.</div>
       <div id="sosNoContact" class="sos-no-contact hidden"></div>
-
       <div id="sosActiveBanner" class="sos-active-banner">
-        ⚠️ Your SOS is active — an admin has been notified.
-        <button class="sos-btn sos-safe-btn" onclick="cancelMySos()">I'm Safe — Cancel Alert</button>
+        🆘 Your SOS is active — an admin has been notified.
+        <button class="sos-btn sos-safe-btn" onclick="cancelMySos()">✓ I'm Safe — Cancel Alert</button>
       </div>
       <div id="sosStatusMsg" class="status"></div>
     </section>
@@ -171,13 +171,18 @@
       <div class="progress-wrap">
         <span class="progress-count" id="progressCount">0</span>
         <span class="progress-target" id="progressTarget">out of 0</span>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill" id="progressBarFill" style="width:0%;"></div>
-        </div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBarFill" style="width:0%;"></div></div>
         <div id="progressCompleteMsg" class="progress-complete hidden">✓ Round complete!</div>
-        <div id="pendingSyncHint" class="hint hidden"></div>
       </div>
+      <div id="pendingSyncHint" class="hint hidden"></div>
       <button class="remaining" onclick="showRemaining()">Check Remaining Checkpoints</button>
+    </section>
+
+    <section>
+      <h3>📅 My Shifts</h3>
+      <p class="hint">Your upcoming duty schedule, set by your admin.</p>
+      <div id="todayShiftSummary">Loading...</div>
+      <button class="shift-open-btn" onclick="window.location.href='my_shifts.html'">View Full Shift Schedule →</button>
     </section>
 
     <section id="siteSection">
@@ -194,13 +199,11 @@
         <option value="high">High</option>
         <option value="critical">Critical</option>
       </select>
-
       <button type="button" class="photo-attach-btn" onclick="document.getElementById('incidentPhotoInput').click()">📷 Attach Photo Evidence</button>
       <input type="file" id="incidentPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handlePhotoSelected(event)">
       <div class="photo-count-hint" id="photoCountHint">0 of 3 photos attached</div>
       <div id="photoCompressing" class="photo-compressing hidden">Compressing photo...</div>
       <div id="photoPreviews" class="photo-previews"></div>
-
       <button onclick="submitIncident()">Submit Report</button>
       <p class="hint">Incident reports require a connection to submit — they are not queued offline.</p>
       <div id="incidentStatus" class="status"></div>
@@ -310,29 +313,26 @@
 
     async function loadAssignedSites() {
       const { tenantId, userId } = getSession();
-
       try {
-        const res = await fetch(API_BASE + '/api/guard-assignments?tenant_id=' + tenantId + '&user_id=' + userId, { headers: authHeaders() });
+        const res = await fetch(API_BASE + '/api/guard-assignments?tenant_id=' + tenantId + '&user_id=' + userId, {
+          headers: authHeaders()
+        });
         const assignments = await res.json();
-
         assignedSites = assignments.map(a => ({ id: a.site_id, name: a.site_name, round_size: a.round_size }));
 
         const select = document.getElementById('siteSelect');
         select.innerHTML = '';
-
         if (assignedSites.length === 0) {
           select.innerHTML = '<option value="">No site assigned</option>';
           resetProgressDisplay();
           return;
         }
-
         assignedSites.forEach(s => {
           const opt = document.createElement('option');
           opt.value = s.id;
           opt.textContent = s.name;
           select.appendChild(opt);
         });
-
         select.value = assignedSites[0].id;
         loadProgress();
         refreshCheckpointCache();
@@ -340,7 +340,6 @@
         console.error('loadAssignedSites failed:', err.message);
       }
     }
-
     document.getElementById('siteSelect').addEventListener('change', loadProgress);
 
     function resetProgressDisplay() {
@@ -352,14 +351,14 @@
 
     // --- Offline mode: checkpoint cache + scan queue ---
     // Two localStorage-backed stores:
-    //   guard_checkpoint_cache: { [qr_code]: { id, name, site_id, site_name } }
-    //     refreshed opportunistically whenever online, so QR scans can be
-    //     validated and matched to a checkpoint even with zero connectivity.
-    //   guard_scan_queue: [ { localId, tenant_id, checkpoint_id, user_id,
-    //     latitude, longitude, scanned_at, checkpoint_name } ]
-    //     scans made while offline (or when a live request fails) are
-    //     pushed here instead of being lost, then flushed to the server
-    //     one-by-one as soon as connectivity returns.
+    // guard_checkpoint_cache: { qr_code: { id, name, site_id, site_name } }
+    // refreshed opportunistically whenever online, so QR scans can be
+    // validated and matched to a checkpoint even with zero connectivity.
+    // guard_scan_queue: [{ local_id, tenant_id, checkpoint_id, user_id,
+    // latitude, longitude, scanned_at, checkpoint_name }] — scans made
+    // while offline (or when a live request fails) are pushed here instead
+    // of being lost, then flushed to the server one-by-one as soon as
+    // connectivity returns.
     function getCheckpointCacheKey() {
       const { tenantId } = getSession();
       return 'guard_checkpoint_cache_' + tenantId;
@@ -368,24 +367,14 @@
       const { tenantId, userId } = getSession();
       return 'guard_scan_queue_' + tenantId + '_' + userId;
     }
-
     function loadCheckpointCache() {
-      try {
-        return JSON.parse(localStorage.getItem(getCheckpointCacheKey()) || '{}');
-      } catch (err) {
-        return {};
-      }
+      try { return JSON.parse(localStorage.getItem(getCheckpointCacheKey())) || {}; } catch (err) { return {}; }
     }
     function saveCheckpointCache(cache) {
       localStorage.setItem(getCheckpointCacheKey(), JSON.stringify(cache));
     }
-
     function loadQueue() {
-      try {
-        return JSON.parse(localStorage.getItem(getQueueKey()) || '[]');
-      } catch (err) {
-        return [];
-      }
+      try { return JSON.parse(localStorage.getItem(getQueueKey())) || []; } catch (err) { return []; }
     }
     function saveQueue(queue) {
       localStorage.setItem(getQueueKey(), JSON.stringify(queue));
@@ -418,7 +407,7 @@
 
       if (navigator.onLine) {
         banner.className = 'connection-banner online';
-        text.textContent = queue.length > 0 ? 'Online — syncing ' + queue.length + ' queued scan(s)...' : 'Online';
+        text.textContent = queue.length > 0 ? ('Online — syncing ' + queue.length + ' queued scan(s)...') : 'Online';
         syncBtn.classList.toggle('hidden', queue.length === 0);
       } else {
         banner.className = 'connection-banner offline';
@@ -426,7 +415,6 @@
         syncBtn.classList.add('hidden');
       }
     }
-
     window.addEventListener('online', () => { updateConnectionBanner(); syncQueue(); refreshCheckpointCache(); });
     window.addEventListener('offline', updateConnectionBanner);
 
@@ -451,9 +439,7 @@
               scanned_at: item.scanned_at
             })
           });
-          if (!res.ok) {
-            remaining.push(item);
-          }
+          if (!res.ok) remaining.push(item);
         } catch (err) {
           remaining.push(item);
           break;
@@ -462,10 +448,11 @@
       saveQueue(remaining);
       updateConnectionBanner();
       loadProgress();
+
       if (remaining.length === 0) {
         const statusEl = document.getElementById('qrScanStatus');
         if (statusEl) {
-          statusEl.textContent = '✓ All queued scans synced successfully.';
+          statusEl.textContent = 'All queued scans synced successfully.';
           statusEl.className = 'status success';
         }
       }
@@ -494,18 +481,17 @@
       }
 
       try {
-        const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, { headers: authHeaders() });
+        const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, {
+          headers: authHeaders()
+        });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to load progress');
 
-        // Merge in any still-queued scans not yet reflected server-side,
-        // so the guard's count doesn't appear to "go backward" right after
+        // Merge in any still-queued scans not yet reflected server-side, so
+        // the guard's count doesn't appear to go backward right after
         // scanning offline and before the sync completes.
         const queuedCheckpointIds = new Set(queuedForSite.map(q => q.checkpoint_id));
-        const remainingAfterQueue = data.remaining.filter(cp => !queuedCheckpointIds.has(cp.checkpoint_id));
-        const effectiveScanned = data.scanned_count + queuedForSite.filter(q =>
-          data.remaining.some(r => r.checkpoint_id === q.checkpoint_id)
-        ).length;
+        const effectiveScanned = data.scanned_count + queuedForSite.filter(q => data.remaining.some(r => r.checkpoint_id === q.checkpoint_id)).length;
 
         document.getElementById('progressCount').textContent = effectiveScanned;
         document.getElementById('progressTarget').textContent = 'out of ' + data.target;
@@ -535,7 +521,9 @@
       }
 
       try {
-        const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, { headers: authHeaders() });
+        const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, {
+          headers: authHeaders()
+        });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to load remaining checkpoints');
 
@@ -557,7 +545,6 @@
         list.innerHTML = '<li class="error">' + err.message + '</li>';
       }
     }
-
     function closeRemaining() {
       document.getElementById('remainingModal').style.display = 'none';
     }
@@ -568,7 +555,6 @@
       const statusDiv = document.getElementById('scannerStatus');
       statusDiv.textContent = 'Requesting camera access...';
       modal.style.display = 'flex';
-
       try {
         scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = scannerStream;
@@ -580,7 +566,6 @@
         statusDiv.textContent = 'Camera access denied or unavailable: ' + err.message;
       }
     }
-
     function closeScanner() {
       scannerActive = false;
       if (scannerStream) {
@@ -589,12 +574,10 @@
       }
       document.getElementById('scannerModal').style.display = 'none';
     }
-
     function scanFrame() {
       if (!scannerActive) return;
       const video = document.getElementById('scannerVideo');
       const canvas = document.getElementById('scannerCanvas');
-
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -602,7 +585,6 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
-
         if (code && code.data) {
           handleScannedCode(code.data);
           return;
@@ -613,8 +595,8 @@
 
     // Core scan handler, now offline-aware:
     // 1. If online, try the live lookup + log exactly as before.
-    // 2. If that fails for network reasons (fetch throws) OR the browser
-    //    reports offline, fall back to the local checkpoint cache to
+    // 2. If that fails for network reasons (fetch throws OR the browser
+    //    reports offline), fall back to the local checkpoint cache to
     //    validate the QR code, then push the scan into the local queue
     //    with an accurate scanned_at timestamp instead of losing it.
     async function handleScannedCode(qrValue) {
@@ -625,71 +607,61 @@
       if (navigator.onLine) {
         statusDiv.textContent = 'Found code: ' + qrValue + ' — looking up checkpoint...';
         try {
-          const lookupRes = await fetch(API_BASE + '/api/checkpoints/lookup?tenant_id=' + tenantId + '&qr_code=' + encodeURIComponent(qrValue), {
-            headers: authHeaders()
-          });
+          const lookupRes = await fetch(API_BASE + '/api/checkpoints/lookup?tenant_id=' + tenantId + '&qr_code=' + encodeURIComponent(qrValue), { headers: authHeaders() });
           const checkpoint = await lookupRes.json();
           if (!lookupRes.ok) throw new Error(checkpoint.error || 'Checkpoint not found');
 
           const isAssigned = assignedSites.some(s => s.id === checkpoint.site_id);
-          if (!isAssigned) {
-            throw new Error('This checkpoint belongs to "' + checkpoint.site_name + '", which is not one of your assigned sites.');
-          }
+          if (!isAssigned) throw new Error('This checkpoint belongs to "' + checkpoint.site_name + '", which is not one of your assigned sites.');
 
-          statusDiv.textContent = 'Logging scan for "' + checkpoint.name + '" (' + checkpoint.site_name + ')...';
-
+          statusDiv.textContent = 'Logging scan for ' + checkpoint.name + ' (' + checkpoint.site_name + ')...';
           const scanRes = await fetch(API_BASE + '/api/patrol-logs', {
             method: 'POST',
             headers: authHeaders(),
-            body: JSON.stringify({
-              tenant_id: Number(tenantId),
-              checkpoint_id: checkpoint.id,
-              user_id: Number(userId)
-            })
+            body: JSON.stringify({ tenant_id: Number(tenantId), checkpoint_id: checkpoint.id, user_id: Number(userId) })
           });
           const scanData = await scanRes.json();
           if (!scanRes.ok) throw new Error(scanData.error || 'Failed to log scan');
 
-          statusDiv.textContent = '✓ Scanned "' + checkpoint.name + '" successfully!';
+          statusDiv.textContent = '✓ Scanned ' + checkpoint.name + ' successfully!';
           finishScanUI(statusDiv, 'success');
           return;
         } catch (err) {
-          // If it's a genuine validation error (checkpoint not found / wrong
+          // If it's a genuine validation error (checkpoint not found, wrong
           // site), don't silently queue it — show the real error. Only fall
           // through to offline queueing for network-level failures.
           if (err.message.includes('not found') || err.message.includes('not one of your assigned')) {
-            statusDiv.textContent = '✗ ' + err.message;
+            statusDiv.textContent = err.message;
             retryFrameAfterDelay(statusDiv);
             return;
           }
           console.warn('Online scan failed, falling back to offline queue:', err.message);
+          queueScanOffline(qrValue, statusDiv);
         }
+      } else {
+        queueScanOffline(qrValue, statusDiv);
       }
-
-      queueScanOffline(qrValue, statusDiv);
     }
 
     function queueScanOffline(qrValue, statusDiv) {
       const { tenantId, userId } = getSession();
       const cache = loadCheckpointCache();
       const cached = cache[qrValue];
-
       if (!cached) {
-        statusDiv.textContent = '✗ Unknown checkpoint (not in offline cache). Connect to the internet at least once at this site before going offline.';
+        statusDiv.textContent = 'Unknown checkpoint (not in offline cache). Connect to the internet at least once at this site before going offline.';
         retryFrameAfterDelay(statusDiv);
         return;
       }
-
       const isAssigned = assignedSites.some(s => s.id === cached.site_id);
       if (!isAssigned) {
-        statusDiv.textContent = '✗ This checkpoint belongs to "' + cached.site_name + '", which is not one of your assigned sites.';
+        statusDiv.textContent = 'This checkpoint belongs to "' + cached.site_name + '", which is not one of your assigned sites.';
         retryFrameAfterDelay(statusDiv);
         return;
       }
 
       const queue = loadQueue();
       queue.push({
-        localId: Date.now() + '-' + Math.random().toString(36).slice(2),
+        local_id: Date.now() + '-' + Math.random().toString(36).slice(2),
         tenant_id: Number(tenantId),
         site_id: cached.site_id,
         checkpoint_id: cached.id,
@@ -702,7 +674,7 @@
       saveQueue(queue);
       updateConnectionBanner();
 
-      statusDiv.textContent = '📥 Queued offline: "' + cached.name + '" — will sync automatically when back online.';
+      statusDiv.textContent = 'Queued offline: ' + cached.name + ' — will sync automatically when back online.';
       finishScanUI(statusDiv, 'queued');
     }
 
@@ -734,13 +706,12 @@
         reader.onload = (e) => { img.src = e.target.result; };
         reader.onerror = reject;
         img.onload = () => {
-          let { width, height } = img;
-          if (width > height && width > maxDimension) {
-            height = Math.round(height * (maxDimension / width));
-            width = maxDimension;
-          } else if (height > maxDimension) {
-            width = Math.round(width * (maxDimension / height));
-            height = maxDimension;
+          let width, height;
+          ({ width, height } = img);
+          if (width > height) {
+            if (width > maxDimension) { height = Math.round(height * maxDimension / width); width = maxDimension; }
+          } else {
+            if (height > maxDimension) { width = Math.round(width * maxDimension / height); height = maxDimension; }
           }
           const canvas = document.createElement('canvas');
           canvas.width = width;
@@ -758,15 +729,8 @@
       const file = event.target.files[0];
       event.target.value = '';
       if (!file) return;
-
-      if (attachedPhotos.length >= MAX_PHOTOS) {
-        alert('You can attach up to ' + MAX_PHOTOS + ' photos per report.');
-        return;
-      }
-      if (!file.type.startsWith('image/')) {
-        alert('Please select an image file.');
-        return;
-      }
+      if (attachedPhotos.length >= MAX_PHOTOS) { alert('You can attach up to ' + MAX_PHOTOS + ' photos per report.'); return; }
+      if (!file.type.startsWith('image/')) { alert('Please select an image file.'); return; }
 
       document.getElementById('photoCompressing').classList.remove('hidden');
       try {
@@ -779,19 +743,15 @@
         document.getElementById('photoCompressing').classList.add('hidden');
       }
     }
-
     function removePhoto(index) {
       attachedPhotos.splice(index, 1);
       renderPhotoPreviews();
     }
-
     function renderPhotoPreviews() {
       const container = document.getElementById('photoPreviews');
       container.innerHTML = attachedPhotos.map((dataUrl, i) =>
-        '<div class="photo-thumb-wrap">' +
-          '<img src="' + dataUrl + '" alt="Evidence photo ' + (i + 1) + '">' +
-          '<button type="button" class="photo-remove-btn" onclick="removePhoto(' + i + ')">✕</button>' +
-        '</div>'
+        '<div class="photo-thumb-wrap"><img src="' + dataUrl + '" alt="Evidence photo ' + (i + 1) + '">' +
+        '<button type="button" class="photo-remove-btn" onclick="removePhoto(' + i + ')">✕</button></div>'
       ).join('');
       document.getElementById('photoCountHint').textContent = attachedPhotos.length + ' of ' + MAX_PHOTOS + ' photos attached';
     }
@@ -825,6 +785,7 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to submit incident');
+
         statusDiv.textContent = 'Incident submitted' + (attachedPhotos.length ? ' with ' + attachedPhotos.length + ' photo(s)' : '') + '. Thank you.';
         statusDiv.className = 'status success';
         document.getElementById('incidentDescription').value = '';
@@ -837,12 +798,8 @@
     }
 
     // --- Emergency contacts (independent call number + WhatsApp number) ---
-    function cleanPhoneForTel(raw) {
-      return raw.replace(/[^0-9+]/g, '');
-    }
-    function cleanPhoneForWhatsapp(raw) {
-      return raw.replace(/[^0-9]/g, '');
-    }
+    function cleanPhoneForTel(raw) { return raw.replace(/[^0-9+]/g, ''); }
+    function cleanPhoneForWhatsapp(raw) { return raw.replace(/[^0-9]/g, ''); }
 
     async function loadEmergencyContacts() {
       if (!navigator.onLine) return;
@@ -851,8 +808,8 @@
         const res = await fetch(API_BASE + '/api/tenants');
         const tenants = await res.json();
         const tenant = tenants.find(t => t.id === Number(tenantId));
-        emergencyPhone = (tenant && tenant.emergency_phone) ? tenant.emergency_phone.trim() : null;
-        emergencyWhatsapp = (tenant && tenant.emergency_whatsapp) ? tenant.emergency_whatsapp.trim() : null;
+        emergencyPhone = tenant && tenant.emergency_phone ? tenant.emergency_phone.trim() : null;
+        emergencyWhatsapp = tenant && tenant.emergency_whatsapp ? tenant.emergency_whatsapp.trim() : null;
         applyEmergencyContactLinks();
       } catch (err) {
         console.error('loadEmergencyContacts failed:', err.message);
@@ -877,8 +834,7 @@
         const { email } = getSession();
         const siteId = document.getElementById('siteSelect').value;
         const siteName = assignedSites.find(s => String(s.id) === String(siteId));
-        const waMessage = 'EMERGENCY: ' + (email || 'A guard') + ' needs help' +
-          (siteName ? ' at ' + siteName.name : '') + '. Please respond immediately.';
+        const waMessage = 'EMERGENCY: ' + email + ' needs help' + (siteName ? ' at ' + siteName.name : '') + '. Please respond immediately.';
         waLink.href = 'https://wa.me/' + cleanPhoneForWhatsapp(emergencyWhatsapp) + '?text=' + encodeURIComponent(waMessage);
       } else {
         waLink.classList.add('hidden');
@@ -891,15 +847,12 @@
       } else if (!emergencyPhone || !emergencyWhatsapp) {
         hint.classList.remove('hidden');
         noContact.classList.remove('hidden');
-        noContact.textContent = !emergencyPhone
-          ? 'No call number set — WhatsApp is available above.'
-          : 'No WhatsApp number set — call is available above.';
+        noContact.textContent = !emergencyPhone ? 'No call number set — WhatsApp is available above.' : 'No WhatsApp number set — call is available above.';
       } else {
         hint.classList.remove('hidden');
         noContact.classList.add('hidden');
       }
     }
-
     document.getElementById('siteSelect').addEventListener('change', applyEmergencyContactLinks);
 
     function triggerSos() {
@@ -914,7 +867,7 @@
         return;
       }
       if (!siteId) {
-        statusDiv.textContent = 'Cannot send SOS: no site assigned to your account.';
+        statusDiv.textContent = 'Cannot send SOS — no site assigned to your account.';
         statusDiv.className = 'status error';
         return;
       }
@@ -929,12 +882,7 @@
         fetch(API_BASE + '/api/sos', {
           method: 'POST',
           headers: authHeaders(),
-          body: JSON.stringify({
-            tenant_id: Number(tenantId),
-            site_id: Number(siteId),
-            latitude: lat,
-            longitude: lng
-          })
+          body: JSON.stringify({ tenant_id: Number(tenantId), site_id: Number(siteId), latitude: lat, longitude: lng })
         })
           .then(res => res.json().then(data => ({ ok: res.ok, data })))
           .then(({ ok, data }) => {
@@ -943,7 +891,7 @@
             document.getElementById('sosActiveBanner').classList.add('show');
             statusDiv.textContent = 'Alert sent successfully. Use Call/WhatsApp below for immediate backup.';
             statusDiv.className = 'status success';
-            btn.textContent = '🆘 SOS ALREADY ACTIVE';
+            btn.textContent = 'SOS ALREADY ACTIVE';
           })
           .catch(err => {
             statusDiv.textContent = err.message;
@@ -993,12 +941,51 @@
         });
     }
 
+    // --- My Shifts summary widget ---
+    // Shows only today's shift(s) inline for a quick glance; the full
+    // upcoming schedule lives on my_shifts.html. Reuses the same
+    // /api/shifts endpoint the dedicated page uses, filtered to today only.
+    async function loadTodayShiftSummary() {
+      const { tenantId, userId } = getSession();
+      const container = document.getElementById('todayShiftSummary');
+      if (!navigator.onLine) {
+        container.innerHTML = '<span class="hint">Offline — connect to view today\'s shift.</span>';
+        return;
+      }
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const res = await fetch(API_BASE + '/api/shifts?tenant_id=' + tenantId + '&user_id=' + userId + '&start_date=' + today + '&end_date=' + today, {
+          headers: authHeaders()
+        });
+        const shifts = await res.json();
+        if (!res.ok) throw new Error(shifts.error || 'Failed to load shifts');
+
+        if (shifts.length === 0) {
+          container.innerHTML = '<span class="hint">No shift scheduled for today.</span>';
+          return;
+        }
+
+        container.innerHTML = shifts.map(s =>
+          '<div class="shift-today-row"><span class="shift-today-site">' + escapeHtmlGuard(s.site_name) + '</span>' +
+          '<span class="shift-badge ' + s.employment_type + '">' + (s.employment_type === 'full_time' ? 'Full-Time' : 'Part-Time') + '</span>' +
+          '<div>🕒 ' + s.start_time + ' – ' + s.end_time + '</div></div>'
+        ).join('');
+      } catch (err) {
+        console.error('loadTodayShiftSummary failed:', err.message);
+        container.innerHTML = '<span class="hint">Failed to load today\'s shift.</span>';
+      }
+    }
+    function escapeHtmlGuard(str) {
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
     // --- Live guard map: periodic location reporting ---
     // Silently reports this guard's GPS position to the backend every 45
     // seconds while logged in with the app open and a site selected. Does
-    // NOT run in the background if the tab/app is closed — browsers don't
+    // NOT run in the background if the tab/app is closed (browsers don't
     // allow that without a paid background-location permission, and that's
-    // a deliberate privacy choice here too. Failures (offline, permission
+    // a deliberate privacy choice here too). Failures (offline, permission
     // denied) are swallowed silently so they never interrupt the guard's
     // actual workflow.
     let locationReportInterval = null;
@@ -1010,7 +997,7 @@
       if (!tenantId) return;
 
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        pos => {
           fetch(API_BASE + '/api/guard-locations', {
             method: 'POST',
             headers: authHeaders(),
@@ -1022,7 +1009,7 @@
             })
           }).catch(err => console.warn('Location report failed (likely offline):', err.message));
         },
-        (err) => console.warn('Geolocation unavailable for live map:', err.message),
+        err => console.warn('Geolocation unavailable for live map:', err.message),
         { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
       );
     }
@@ -1032,7 +1019,6 @@
       reportCurrentLocation();
       locationReportInterval = setInterval(reportCurrentLocation, 45000);
     }
-
     function stopLocationReporting() {
       if (locationReportInterval) {
         clearInterval(locationReportInterval);
@@ -1047,6 +1033,7 @@
       updateConnectionBanner();
       loadAssignedSites();
       loadEmergencyContacts();
+      loadTodayShiftSummary();
       syncQueue();
       startLocationReporting();
     }
@@ -1058,12 +1045,8 @@
       } else {
         showScreen('login');
       }
+      setInterval(() => { if (navigator.onLine) syncQueue(); }, 30000);
     }
-
-    setInterval(() => {
-      if (navigator.onLine) syncQueue();
-    }, 30000);
-
     init();
   </script>
 </body>
