@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Shift Scheduler - PatrolSync</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 950px; margin: 40px auto; padding: 0 20px; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+  input, select, textarea { display: block; width: 100%; padding: 8px; margin: 6px 0 12px; box-sizing: border-box; font-size: 14px; }
+  button { padding: 10px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  button.secondary { background: #64748b; }
+  button.delete-btn { padding: 6px 12px; font-size: 12px; background: #dc2626; }
+  button.edit-btn { padding: 6px 12px; font-size: 12px; background: #7c3aed; margin-right: 6px; }
+  button.series-btn { padding: 6px 12px; font-size: 12px; background: #d97706; }
+  a.back-link { font-size: 13px; color: #2563eb; text-decoration: none; }
+  .msg { margin-top: 10px; font-size: 14px; font-weight: bold; }
+  .msg.error { color: #dc2626; }
+  .msg.success { color: #16a34a; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 160px; }
+  label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: #333; }
+  .hidden { display: none; }
+  .dow-grid { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .dow-chip { padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; font-size: 13px; user-select: none; background: white; }
+  .dow-chip.active { background: #2563eb; color: white; border-color: #2563eb; }
+  .emp-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
+  .emp-chip { flex: 1; text-align: center; padding: 10px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; font-size: 13px; background: white; }
+  .emp-chip.active.full { background: #16a34a; color: white; border-color: #16a34a; }
+  .emp-chip.active.part { background: #d97706; color: white; border-color: #d97706; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  td, th { border-bottom: 1px solid #eee; padding: 8px 6px; text-align: left; font-size: 13px; vertical-align: middle; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white; }
+  .badge.full_time { background: #16a34a; }
+  .badge.part_time { background: #d97706; }
+  .series-tag { font-size: 11px; color: #7c3aed; }
+  .filter-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
+  .filter-row > div { flex: 1; }
+  .filter-row button { width: auto; flex-shrink: 0; }
+  .empty-state { color: #666; font-size: 14px; padding: 12px 0; }
+  #editModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+  #editModalContent { background: white; padding: 24px; border-radius: 8px; max-width: 360px; width: 90%; }
+  #editModalContent button { margin-top: 10px; }
+  .qr-close { background: #64748b; }
+</style>
+</head>
+<body>
+
+<p><a href="dashboard.html" class="back-link">← Back to Dashboard</a></p>
+<h2>📅 Shift Scheduler</h2>
+
+<div class="card">
+  <h3>Create Shift(s)</h3>
+  <div class="row">
+    <div>
+      <label>Guard</label>
+      <select id="shiftGuard"><option value="">Select a guard</option></select>
+    </div>
+    <div>
+      <label>Site</label>
+      <select id="shiftSite"><option value="">Select a site</option></select>
+    </div>
+  </div>
+
+  <label>Employment Type</label>
+  <div class="emp-toggle">
+    <div class="emp-chip active full" id="empFullChip" onclick="setEmploymentType('full_time')">Full-Time</div>
+    <div class="emp-chip part" id="empPartChip" onclick="setEmploymentType('part_time')">Part-Time</div>
+  </div>
+  <input type="hidden" id="employmentTypeInput" value="full_time">
+
+  <div class="row">
+    <div>
+      <label>Start Time</label>
+      <input type="time" id="shiftStartTime" value="08:00">
+    </div>
+    <div>
+      <label>End Time</label>
+      <input type="time" id="shiftEndTime" value="16:00">
+    </div>
+  </div>
+  <p style="font-size:12px; color:#666; margin-top:-6px;">If end time is earlier than start time, it's treated as an overnight shift (e.g. 22:00 → 06:00).</p>
+
+  <label>Recurrence</label>
+  <select id="recurrenceType" onchange="updateRecurrenceFields()">
+    <option value="none">One-time (single date)</option>
+    <option value="weekly">Weekly (recurring)</option>
+    <option value="monthly">Monthly (recurring)</option>
+  </select>
+
+  <div id="singleDateFields">
+    <label>Shift Date</label>
+    <input type="date" id="singleShiftDate">
+  </div>
+
+  <div id="recurringFields" class="hidden">
+    <label>Start Date</label>
+    <input type="date" id="recurStartDate">
+
+    <div id="weeklyDowFields" class="hidden">
+      <label>Days of Week</label>
+      <div class="dow-grid" id="dowGrid"></div>
+    </div>
+
+    <label>Repeat Until</label>
+    <input type="date" id="recurUntilDate">
+  </div>
+
+  <label>Notes (optional)</label>
+  <textarea id="shiftNotes" rows="2" placeholder="e.g. Cover for John, extra patrol requested"></textarea>
+
+  <button onclick="createShift()">Create Shift(s)</button>
+  <div id="createStatus" class="msg"></div>
+</div>
+
+<div class="card">
+  <h3>Upcoming Shifts</h3>
+  <div class="filter-row">
+    <div>
+      <label>Filter by Guard</label>
+      <select id="filterGuard" onchange="loadShifts()"><option value="">All guards</option></select>
+    </div>
+    <div>
+      <label>Filter by Site</label>
+      <select id="filterSite" onchange="loadShifts()"><option value="">All sites</option></select>
+    </div>
+    <button onclick="loadShifts()">Refresh</button>
+  </div>
+  <div id="listMsg" class="msg"></div>
+  <table id="shiftsTable">
+    <thead>
+      <tr><th>Date</th><th>Guard</th><th>Site</th><th>Time</th><th>Type</th><th>Hours</th><th>Actions</th></tr>
+    </thead>
+    <tbody id="shiftsBody"></tbody>
+  </table>
+</div>
+
+<div id="editModal">
+  <div id="editModalContent">
+    <h3>Edit Shift</h3>
+    <label>Date</label>
+    <input type="date" id="editShiftDate">
+    <label>Start Time</label>
+    <input type="time" id="editStartTime">
+    <label>End Time</label>
+    <input type="time" id="editEndTime">
+    <label>Employment Type</label>
+    <select id="editEmploymentType">
+      <option value="full_time">Full-Time</option>
+      <option value="part_time">Part-Time</option>
+    </select>
+    <label>Notes</label>
+    <textarea id="editNotes" rows="2"></textarea>
+    <button onclick="saveEditedShift()">Save Changes</button>
+    <button class="qr-close" onclick="closeEditModal()">Cancel</button>
+    <div id="editModalStatus" class="msg"></div>
+  </div>
+</div>
+
+<script>
+  const API_BASE = 'https://patrolsync-backend.onrender.com';
+  const token = localStorage.getItem('token');
+  const tenantId = localStorage.getItem('tenant_id');
+
+  if (!token || !tenantId) window.location.href = 'signup.html';
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.role !== 'admin') window.location.href = 'guard.html';
+  } catch (err) {
+    window.location.href = 'signup.html';
+  }
+
+  function authHeaders() {
+    return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+  }
+
+  function handleAuthError(message) {
+    if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('tenant_id');
+      localStorage.removeItem('user_email');
+      alert('Your session has expired. Please log in again.');
+      window.location.href = 'login.html';
+      return true;
+    }
+    return false;
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  }
+
+  function todayISO() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  document.getElementById('singleShiftDate').value = todayISO();
+  document.getElementById('recurStartDate').value = todayISO();
+
+  // --- Day-of-week chip picker (0=Sun ... 6=Sat, matching JS Date) ---
+  const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  let selectedDaysOfWeek = new Set();
+
+  function buildDowGrid() {
+    const grid = document.getElementById('dowGrid');
+    grid.innerHTML = '';
+    DOW_LABELS.forEach((label, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'dow-chip';
+      chip.textContent = label;
+      chip.dataset.dow = idx;
+      chip.onclick = () => toggleDow(idx, chip);
+      grid.appendChild(chip);
+    });
+  }
+  function toggleDow(idx, chipEl) {
+    if (selectedDaysOfWeek.has(idx)) {
+      selectedDaysOfWeek.delete(idx);
+      chipEl.classList.remove('active');
+    } else {
+      selectedDaysOfWeek.add(idx);
+      chipEl.classList.add('active');
+    }
+  }
+  buildDowGrid();
+
+  function setEmploymentType(type) {
+    document.getElementById('employmentTypeInput').value = type;
+    document.getElementById('empFullChip').classList.toggle('active', type === 'full_time');
+    document.getElementById('empPartChip').classList.toggle('active', type === 'part_time');
+  }
+
+  function updateRecurrenceFields() {
+    const type = document.getElementById('recurrenceType').value;
+    document.getElementById('singleDateFields').classList.toggle('hidden', type !== 'none');
+    document.getElementById('recurringFields').classList.toggle('hidden', type === 'none');
+    document.getElementById('weeklyDowFields').classList.toggle('hidden', type !== 'weekly');
+  }
+
+  let currentGuards = [];
+  let currentSites = [];
+
+  async function loadGuardsAndSites() {
+    try {
+      const [guardsRes, sitesRes] = await Promise.all([
+        fetch(API_BASE + '/api/users?tenant_id=' + tenantId + '&role=guard', { headers: authHeaders() }),
+        fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() })
+      ]);
+      const guards = await guardsRes.json();
+      const sites = await sitesRes.json();
+      if (!guardsRes.ok) { if (handleAuthError(guards.error)) return; throw new Error(guards.error || 'Failed to load guards'); }
+      if (!sitesRes.ok) { if (handleAuthError(sites.error)) return; throw new Error(sites.error || 'Failed to load sites'); }
+
+      currentGuards = guards;
+      currentSites = sites;
+
+      [document.getElementById('shiftGuard'), document.getElementById('filterGuard')].forEach((sel, i) => {
+        const isFilter = i === 1;
+        sel.innerHTML = isFilter ? '<option value="">All guards</option>' : '<option value="">Select a guard</option>';
+        guards.forEach(g => {
+          const opt = document.createElement('option');
+          opt.value = g.id;
+          opt.textContent = g.email;
+          sel.appendChild(opt);
+        });
+      });
+
+      [document.getElementById('shiftSite'), document.getElementById('filterSite')].forEach((sel, i) => {
+        const isFilter = i === 1;
+        sel.innerHTML = isFilter ? '<option value="">All sites</option>' : '<option value="">Select a site</option>';
+        sites.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.name;
+          sel.appendChild(opt);
+        });
+      });
+    } catch (err) {
+      console.error('loadGuardsAndSites failed:', err.message);
+    }
+  }
+
+  async function createShift() {
+    const statusDiv = document.getElementById('createStatus');
+    const guardId = document.getElementById('shiftGuard').value;
+    const siteId = document.getElementById('shiftSite').value;
+    const employmentType = document.getElementById('employmentTypeInput').value;
+    const startTime = document.getElementById('shiftStartTime').value;
+    const endTime = document.getElementById('shiftEndTime').value;
+    const recurrence = document.getElementById('recurrenceType').value;
+    const notes = document.getElementById('shiftNotes').value.trim();
+
+    if (!guardId || !siteId) { statusDiv.textContent = 'Select both a guard and a site'; statusDiv.className = 'msg error'; return; }
+    if (!startTime || !endTime) { statusDiv.textContent = 'Start and end time are required'; statusDiv.className = 'msg error'; return; }
+
+    const payload = {
+      tenant_id: Number(tenantId),
+      site_id: Number(siteId),
+      user_id: Number(guardId),
+      start_time: startTime,
+      end_time: endTime,
+      employment_type: employmentType,
+      recurrence,
+      notes: notes || null
+    };
+
+    if (recurrence === 'none') {
+      const date = document.getElementById('singleShiftDate').value;
+      if (!date) { statusDiv.textContent = 'Select a shift date'; statusDiv.className = 'msg error'; return; }
+      payload.start_date = date;
+    } else {
+      const startDate = document.getElementById('recurStartDate').value;
+      const untilDate = document.getElementById('recurUntilDate').value;
+      if (!startDate || !untilDate) { statusDiv.textContent = 'Start date and repeat-until date are required'; statusDiv.className = 'msg error'; return; }
+      payload.start_date = startDate;
+      payload.repeat_until = untilDate;
+      if (recurrence === 'weekly') {
+        if (selectedDaysOfWeek.size === 0) { statusDiv.textContent = 'Select at least one day of the week'; statusDiv.className = 'msg error'; return; }
+        payload.days_of_week = Array.from(selectedDaysOfWeek);
+      }
+    }
+
+    try {
+      const res = await fetch(API_BASE + '/api/shifts', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to create shift'); }
+
+      statusDiv.textContent = 'Created ' + data.created_count + ' shift(s) successfully.';
+      statusDiv.className = 'msg success';
+      document.getElementById('shiftNotes').value = '';
+      loadShifts();
+    } catch (err) {
+      statusDiv.textContent = err.message;
+      statusDiv.className = 'msg error';
+    }
+  }
+
+  function formatShiftTime(start, end) {
+    return start + ' – ' + end;
+  }
+
+  async function loadShifts() {
+    const guardFilter = document.getElementById('filterGuard').value;
+    const siteFilter = document.getElementById('filterSite').value;
+    const body = document.getElementById('shiftsBody');
+    const listMsg = document.getElementById('listMsg');
+    listMsg.textContent = '';
+    body.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
+
+    try {
+      let url = API_BASE + '/api/shifts?tenant_id=' + tenantId;
+      if (guardFilter) url += '&user_id=' + guardFilter;
+      if (siteFilter) url += '&site_id=' + siteFilter;
+      const res = await fetch(url, { headers: authHeaders() });
+      const shifts = await res.json();
+      if (!res.ok) { if (handleAuthError(shifts.error)) return; throw new Error(shifts.error || 'Failed to load shifts'); }
+
+      body.innerHTML = '';
+      if (shifts.length === 0) {
+        body.innerHTML = '<tr><td colspan="7"><div class="empty-state">No upcoming shifts scheduled.</div></td></tr>';
+        return;
+      }
+
+      shifts.forEach(s => {
+        const tr = document.createElement('tr');
+        const dateLabel = new Date(s.shift_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+        const seriesTag = s.recurrence_group_id ? '<div class="series-tag">🔁 Recurring series</div>' : '';
+        tr.innerHTML =
+          '<td>' + dateLabel + seriesTag + '</td>' +
+          '<td>' + escapeHtml(s.guard_email) + '</td>' +
+          '<td>' + escapeHtml(s.site_name) + '</td>' +
+          '<td>' + formatShiftTime(s.start_time, s.end_time) + '</td>' +
+          '<td><span class="badge ' + s.employment_type + '">' + (s.employment_type === 'full_time' ? 'Full-Time' : 'Part-Time') + '</span></td>' +
+          '<td>' + s.duration_hours + 'h</td>' +
+          '<td></td>';
+
+        const actionsTd = tr.querySelector('td:last-child');
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.className = 'edit-btn';
+        editBtn.onclick = () => openEditModal(s);
+        actionsTd.appendChild(editBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.onclick = () => deleteShift(s.id, dateLabel);
+        actionsTd.appendChild(deleteBtn);
+
+        if (s.recurrence_group_id) {
+          const seriesBtn = document.createElement('button');
+          seriesBtn.textContent = 'Delete Series';
+          seriesBtn.className = 'series-btn';
+          seriesBtn.style.marginLeft = '6px';
+          seriesBtn.onclick = () => deleteSeries(s.recurrence_group_id);
+          actionsTd.appendChild(seriesBtn);
+        }
+
+        body.appendChild(tr);
+      });
+    } catch (err) {
+      body.innerHTML = '';
+      listMsg.textContent = 'Failed to load shifts: ' + err.message;
+      listMsg.className = 'msg error';
+    }
+  }
+
+  let editingShiftId = null;
+
+  function openEditModal(shift) {
+    editingShiftId = shift.id;
+    document.getElementById('editShiftDate').value = shift.shift_date.slice(0, 10);
+    document.getElementById('editStartTime').value = shift.start_time;
+    document.getElementById('editEndTime').value = shift.end_time;
+    document.getElementById('editEmploymentType').value = shift.employment_type;
+    document.getElementById('editNotes').value = shift.notes || '';
+    document.getElementById('editModalStatus').textContent = '';
+    document.getElementById('editModal').style.display = 'flex';
+  }
+  function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+    editingShiftId = null;
+  }
+
+  async function saveEditedShift() {
+    const statusDiv = document.getElementById('editModalStatus');
+    const shiftDate = document.getElementById('editShiftDate').value;
+    const startTime = document.getElementById('editStartTime').value;
+    const endTime = document.getElementById('editEndTime').value;
+    const employmentType = document.getElementById('editEmploymentType').value;
+    const notes = document.getElementById('editNotes').value.trim();
+
+    try {
+      const res = await fetch(API_BASE + '/api/shifts/' + editingShiftId, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          tenant_id: Number(tenantId),
+          shift_date: shiftDate,
+          start_time: startTime,
+          end_time: endTime,
+          employment_type: employmentType,
+          notes: notes || null
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to save shift'); }
+      statusDiv.textContent = 'Saved.';
+      statusDiv.className = 'msg success';
+      setTimeout(closeEditModal, 700);
+      loadShifts();
+    } catch (err) {
+      statusDiv.textContent = err.message;
+      statusDiv.className = 'msg error';
+    }
+  }
+
+  async function deleteShift(id, dateLabel) {
+    if (!confirm('Delete the shift on ' + dateLabel + '? This cannot be undone.')) return;
+    const listMsg = document.getElementById('listMsg');
+    try {
+      const res = await fetch(API_BASE + '/api/shifts/' + id + '?tenant_id=' + tenantId, {
+        method: 'DELETE',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to delete shift'); }
+      listMsg.textContent = 'Shift deleted.';
+      listMsg.className = 'msg success';
+      loadShifts();
+    } catch (err) {
+      listMsg.textContent = err.message;
+      listMsg.className = 'msg error';
+    }
+  }
+
+  async function deleteSeries(recurrenceGroupId) {
+    if (!confirm('Delete all FUTURE shifts in this recurring series? Past shifts already logged will be kept. This cannot be undone.')) return;
+    const listMsg = document.getElementById('listMsg');
+    try {
+      const res = await fetch(API_BASE + '/api/shifts/series/' + recurrenceGroupId + '?tenant_id=' + tenantId, {
+        method: 'DELETE',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to delete series'); }
+      listMsg.textContent = 'Deleted ' + data.deleted_count + ' upcoming shift(s) in this series.';
+      listMsg.className = 'msg success';
+      loadShifts();
+    } catch (err) {
+      listMsg.textContent = err.message;
+      listMsg.className = 'msg error';
+    }
+  }
+
+  function init() {
+    updateRecurrenceFields();
+    loadGuardsAndSites().then(loadShifts);
+  }
+  init();
+</script>
+
+</body>
+</html>
