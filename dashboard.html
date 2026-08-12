@@ -80,6 +80,10 @@
     .map-section { border-color: #93c5fd; background: #eff6ff; }
     .map-open-btn { background: #2563eb; width: auto; padding: 10px 16px; font-size: 14px; margin-top: 8px; }
 
+    /* --- Shift scheduling section --- */
+    .shift-section { border-color: #c4b5fd; background: #f5f3ff; }
+    .shift-open-btn { background: #7c3aed; width: auto; padding: 10px 16px; font-size: 14px; margin-top: 8px; }
+
     #qrModal, #resetPwModal, #photoViewerModal, #clientResetPwModal, #certModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
     #qrModalContent, #resetPwModalContent { background: white; padding: 24px; border-radius: 8px; text-align: center; max-width: 320px; }
     #qrModalContent canvas { margin: 10px auto; display: block; }
@@ -248,6 +252,12 @@
     </div>
     <div id="assignStatus" class="status"></div>
     <ul id="assignmentList"></ul>
+  </section>
+
+  <section class="shift-section">
+    <h3 style="margin:0;">📅 Shift Scheduling</h3>
+    <p style="font-size:13px; color:#4c1d95; margin-top:6px;">Build weekly or monthly duty rosters for full-time and part-time guards. Guards see their own upcoming shifts in their portal automatically.</p>
+    <button class="shift-open-btn" onclick="window.location.href='shift_scheduler.html'">Open Shift Scheduler →</button>
   </section>
 
   <section class="cert-section">
