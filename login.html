@@ -68,6 +68,14 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
+
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+          // Backend returned HTML or something unexpected
+          const text = await res.text();
+          throw new Error('Backend returned non-JSON response. Check that the PatrolSync backend is running and the URL is correct.');
+        }
+
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Login failed');
 
