@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PatrolSync - My Shifts</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 16px; background: #f7f7f8; }
+    h2 { color: #222; }
+    button.backlink { background: none; color: #2563eb; text-decoration: underline; border: none; padding: 0; margin-bottom: 14px; font-size: 14px; cursor: pointer; }
+    section { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .day-group { margin-bottom: 18px; }
+    .day-heading { font-size: 13px; font-weight: bold; color: #475569; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+    .day-heading.today { color: #2563eb; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { border-bottom: 1px solid #eee; padding: 12px 0; }
+    li:last-child { border-bottom: none; }
+    .shift-top-row { display: flex; justify-content: space-between; align-items: center; }
+    .shift-site { font-weight: bold; font-size: 15px; }
+    .shift-time { font-size: 14px; color: #333; margin-top: 3px; }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white; }
+    .badge.full_time { background: #16a34a; }
+    .badge.part_time { background: #d97706; }
+    .shift-notes { font-size: 12px; color: #666; margin-top: 4px; font-style: italic; }
+    .empty-msg { color: #666; font-size: 14px; }
+    .error { color: red; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <button class="backlink" onclick="window.location.href='guard.html'">← Back to Guard App</button>
+  <h2>📅 My Shifts</h2>
+  <p style="font-size:13px; color:#666;">Your upcoming duty schedule.</p>
+
+  <section>
+    <div id="shiftsContainer"><p class="empty-msg">Loading...</p></div>
+  </section>
+
+  <script>
+    const API_BASE = 'https://patrolsync-backend.onrender.com';
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('tenant_id');
+
+    if (!token || !tenantId) {
+      window.location.href = 'signup.html';
+    }
+
+    let currentUserId = null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      currentUserId = payload.user_id;
+    } catch (err) {
+      window.location.href = 'signup.html';
+    }
+
+    function authHeaders() {
+      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+    }
+
+    function handleAuthError(message) {
+      if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('tenant_id');
+        localStorage.removeItem('user_email');
+        alert('Your session has expired. Please log in again.');
+        window.location.href = 'login.html';
+        return true;
+      }
+      return false;
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    function isSameDate(dateStr, dateObj) {
+      return dateStr === dateObj.toISOString().slice(0, 10);
+    }
+
+    async function loadMyShifts() {
+      const container = document.getElementById('shiftsContainer');
+      try {
+        const res = await fetch(API_BASE + '/api/shifts?tenant_id=' + tenantId + '&user_id=' + currentUserId, {
+          headers: authHeaders()
+        });
+        const shifts = await res.json();
+        if (!res.ok) { if (handleAuthError(shifts.error)) return; throw new Error(shifts.error || 'Failed to load shifts'); }
+
+        if (shifts.length === 0) {
+          container.innerHTML = '<p class="empty-msg">No upcoming shifts scheduled. Check with your admin if you expect one.</p>';
+          return;
+        }
+
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const grouped = {};
+        shifts.forEach(s => {
+          const dateKey = s.shift_date.slice(0, 10);
+          if (!grouped[dateKey]) grouped[dateKey] = [];
+          grouped[dateKey].push(s);
+        });
+
+        container.innerHTML = '';
+        Object.keys(grouped).sort().forEach(dateKey => {
+          const dayGroup = document.createElement('div');
+          dayGroup.className = 'day-group';
+
+          const isToday = dateKey === todayStr;
+          const dateLabel = new Date(dateKey + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+          const heading = document.createElement('div');
+          heading.className = 'day-heading' + (isToday ? ' today' : '');
+          heading.textContent = (isToday ? 'Today — ' : '') + dateLabel;
+          dayGroup.appendChild(heading);
+
+          const ul = document.createElement('ul');
+          grouped[dateKey].forEach(s => {
+            const li = document.createElement('li');
+            li.innerHTML =
+              '<div class="shift-top-row">' +
+                '<span class="shift-site">' + escapeHtml(s.site_name) + '</span>' +
+                '<span class="badge ' + s.employment_type + '">' + (s.employment_type === 'full_time' ? 'Full-Time' : 'Part-Time') + '</span>' +
+              '</div>' +
+              '<div class="shift-time">🕒 ' + s.start_time + ' – ' + s.end_time + ' (' + s.duration_hours + 'h)</div>' +
+              (s.notes ? '<div class="shift-notes">📝 ' + escapeHtml(s.notes) + '</div>' : '');
+            ul.appendChild(li);
+          });
+          dayGroup.appendChild(ul);
+          container.appendChild(dayGroup);
+        });
+      } catch (err) {
+        container.innerHTML = '<p class="error">Failed to load shifts: ' + err.message + '</p>';
+      }
+    }
+
+    loadMyShifts();
+  </script>
+</body>
+</html>
