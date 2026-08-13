@@ -24,6 +24,15 @@
     .error { color: red; }
     #loginScreen, #guardScreen { display: none; }
     .hint { font-size: 13px; color: #666; margin: 4px 0 10px; }
+    .timeclock-card { border:2px solid #bfdbfe; background:#eff6ff; }
+    .clock-state { font-size:18px; font-weight:bold; color:#1e3a8a; margin:6px 0; }
+    .clock-timer { font-size:30px; font-weight:bold; letter-spacing:1px; margin:10px 0; }
+    .clock-meta { font-size:13px; color:#475569; margin-bottom:10px; }
+    .clock-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .clock-actions button { flex:1; min-width:120px; }
+    .clock-in-btn { background:#16a34a; }
+    .break-btn { background:#d97706; }
+    .clock-out-btn { background:#dc2626; }
     .admin-link { display: block; text-align: center; margin-top: 16px; font-size: 13px; }
     .admin-link a { color: #2563eb; }
     .progress-wrap { margin: 10px 0; }
@@ -144,6 +153,19 @@
       <button class="sync-btn hidden" id="syncNowBtn" onclick="syncQueue()">Sync Now</button>
     </div>
 
+    <section class="timeclock-card">
+      <h3>Time Clock</h3>
+      <div id="clockState" class="clock-state">Not clocked in</div>
+      <div id="clockTimer" class="clock-timer">00:00:00</div>
+      <div id="clockMeta" class="clock-meta">Select your assigned site, then clock in.</div>
+      <div class="clock-actions">
+        <button id="clockInBtn" class="clock-in-btn" onclick="clockIn()">Clock In</button>
+        <button id="breakBtn" class="break-btn hidden" onclick="toggleBreak()">Start Break</button>
+        <button id="clockOutBtn" class="clock-out-btn hidden" onclick="clockOut()">Clock Out</button>
+      </div>
+      <div id="clockStatus" class="status"></div>
+    </section>
+
     <section>
       <button id="sosBtn" class="sos-btn" onclick="triggerSos()">🆘 SOS — SEND EMERGENCY ALERT</button>
       <div class="sos-contact-row">
@@ -250,6 +272,105 @@
       return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
     }
 
+    let activeAttendance = null;
+    let attendanceLoadedAt = Date.now();
+    let attendanceTimer = null;
+
+    function formatClockDuration(totalSeconds) {
+      const seconds = Math.max(0, Math.floor(totalSeconds));
+      const hours = String(Math.floor(seconds / 3600)).padStart(2, '0');
+      const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+      return hours + ':' + minutes + ':' + String(seconds % 60).padStart(2, '0');
+    }
+
+    function attendanceWorkedSeconds() {
+      if (!activeAttendance) return 0;
+      const elapsed = (Date.now() - new Date(activeAttendance.clocked_in_at).getTime()) / 1000;
+      let breaks = Number(activeAttendance.break_seconds || 0);
+      if (activeAttendance.active_break_id) breaks += (Date.now() - attendanceLoadedAt) / 1000;
+      return Math.max(0, elapsed - breaks);
+    }
+
+    function renderAttendance() {
+      const state = document.getElementById('clockState');
+      const timer = document.getElementById('clockTimer');
+      const meta = document.getElementById('clockMeta');
+      const inBtn = document.getElementById('clockInBtn');
+      const breakBtn = document.getElementById('breakBtn');
+      const outBtn = document.getElementById('clockOutBtn');
+      if (!activeAttendance) {
+        state.textContent = 'Not clocked in'; timer.textContent = '00:00:00';
+        meta.textContent = 'Select your assigned site, then clock in.';
+        inBtn.classList.remove('hidden'); breakBtn.classList.add('hidden'); outBtn.classList.add('hidden');
+        return;
+      }
+      const onBreak = Boolean(activeAttendance.active_break_id);
+      state.textContent = onBreak ? 'On break' : 'Clocked in';
+      timer.textContent = formatClockDuration(attendanceWorkedSeconds());
+      meta.textContent = activeAttendance.site_name + ' · since ' + new Date(activeAttendance.clocked_in_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+      inBtn.classList.add('hidden'); breakBtn.classList.remove('hidden'); outBtn.classList.remove('hidden');
+      breakBtn.textContent = onBreak ? 'End Break' : 'Start Break';
+    }
+
+    async function loadAttendance() {
+      const { tenantId } = getSession();
+      try {
+        const response = await fetch(API_BASE + '/api/attendance/current?tenant_id=' + tenantId, { headers:authHeaders() });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to load time clock');
+        activeAttendance = data.session || null; attendanceLoadedAt = Date.now(); renderAttendance();
+      } catch (err) {
+        document.getElementById('clockStatus').textContent = err.message;
+        document.getElementById('clockStatus').className = 'status error';
+      }
+      if (!attendanceTimer) attendanceTimer = setInterval(renderAttendance, 1000);
+    }
+
+    function getClockLocation() {
+      return new Promise(resolve => {
+        if (!navigator.geolocation) return resolve({});
+        navigator.geolocation.getCurrentPosition(
+          position => resolve({ latitude:position.coords.latitude, longitude:position.coords.longitude, accuracy:position.coords.accuracy }),
+          () => resolve({}), { enableHighAccuracy:true, timeout:8000, maximumAge:30000 }
+        );
+      });
+    }
+
+    async function attendanceAction(path, extra) {
+      if (!navigator.onLine) throw new Error('An internet connection is required for attendance actions.');
+      const { tenantId } = getSession();
+      const location = await getClockLocation();
+      const response = await fetch(API_BASE + path, {
+        method:'POST', headers:authHeaders(), body:JSON.stringify({ tenant_id:Number(tenantId), ...location, ...(extra || {}) })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Attendance action failed');
+      activeAttendance = data.session || null; attendanceLoadedAt = Date.now(); renderAttendance();
+    }
+
+    async function clockIn() {
+      const siteId = document.getElementById('siteSelect').value;
+      const status = document.getElementById('clockStatus');
+      if (!siteId) { status.textContent='Select an assigned site first.'; status.className='status error'; return; }
+      try { await attendanceAction('/api/attendance/clock-in', { site_id:Number(siteId) }); status.textContent='Clocked in successfully.'; status.className='status success'; }
+      catch (err) { status.textContent=err.message; status.className='status error'; }
+    }
+
+    async function toggleBreak() {
+      const status = document.getElementById('clockStatus');
+      try {
+        await attendanceAction(activeAttendance && activeAttendance.active_break_id ? '/api/attendance/break/end' : '/api/attendance/break/start');
+        status.textContent = activeAttendance.active_break_id ? 'Break started.' : 'Break ended.'; status.className='status success';
+      } catch (err) { status.textContent=err.message; status.className='status error'; }
+    }
+
+    async function clockOut() {
+      if (!confirm('Clock out now?')) return;
+      const status = document.getElementById('clockStatus');
+      try { await attendanceAction('/api/attendance/clock-out'); status.textContent='Clocked out successfully.'; status.className='status success'; }
+      catch (err) { status.textContent=err.message; status.className='status error'; }
+    }
+
     function showScreen(name) {
       document.getElementById('loginScreen').style.display = name === 'login' ? 'block' : 'none';
       document.getElementById('guardScreen').style.display = name === 'guard' ? 'block' : 'none';
@@ -307,6 +428,7 @@
 
     function doLogout() {
       stopLocationReporting();
+      if (attendanceTimer) { clearInterval(attendanceTimer); attendanceTimer = null; }
       clearAllSessions();
       showScreen('login');
     }
@@ -1034,6 +1156,7 @@
       loadAssignedSites();
       loadEmergencyContacts();
       loadTodayShiftSummary();
+      loadAttendance();
       syncQueue();
       startLocationReporting();
     }
