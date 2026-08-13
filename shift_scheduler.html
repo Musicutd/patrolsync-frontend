@@ -173,6 +173,14 @@
     return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
   }
 
+  async function readApiResponse(response) {
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error('The backend route is unavailable. Deploy the updated index.js and try again.');
+    }
+    return response.json();
+  }
+
   function handleAuthError(message) {
     if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
       localStorage.removeItem('token');
@@ -246,8 +254,8 @@
         fetch(API_BASE + '/api/users?tenant_id=' + tenantId + '&role=guard', { headers: authHeaders() }),
         fetch(API_BASE + '/api/sites?tenant_id=' + tenantId, { headers: authHeaders() })
       ]);
-      const guards = await guardsRes.json();
-      const sites = await sitesRes.json();
+      const guards = await readApiResponse(guardsRes);
+      const sites = await readApiResponse(sitesRes);
       if (!guardsRes.ok) { if (handleAuthError(guards.error)) return; throw new Error(guards.error || 'Failed to load guards'); }
       if (!sitesRes.ok) { if (handleAuthError(sites.error)) return; throw new Error(sites.error || 'Failed to load sites'); }
 
@@ -326,7 +334,7 @@
         headers: authHeaders(),
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
+      const data = await readApiResponse(res);
       if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to create shift'); }
 
       statusDiv.textContent = 'Created ' + data.created_count + ' shift(s) successfully.';
@@ -356,7 +364,7 @@
       if (guardFilter) url += '&user_id=' + guardFilter;
       if (siteFilter) url += '&site_id=' + siteFilter;
       const res = await fetch(url, { headers: authHeaders() });
-      const shifts = await res.json();
+      const shifts = await readApiResponse(res);
       if (!res.ok) { if (handleAuthError(shifts.error)) return; throw new Error(shifts.error || 'Failed to load shifts'); }
 
       body.innerHTML = '';
@@ -447,7 +455,7 @@
           notes: notes || null
         })
       });
-      const data = await res.json();
+      const data = await readApiResponse(res);
       if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to save shift'); }
       statusDiv.textContent = 'Saved.';
       statusDiv.className = 'msg success';
@@ -467,7 +475,7 @@
         method: 'DELETE',
         headers: authHeaders()
       });
-      const data = await res.json();
+      const data = await readApiResponse(res);
       if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to delete shift'); }
       listMsg.textContent = 'Shift deleted.';
       listMsg.className = 'msg success';
@@ -486,7 +494,7 @@
         method: 'DELETE',
         headers: authHeaders()
       });
-      const data = await res.json();
+      const data = await readApiResponse(res);
       if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to delete series'); }
       listMsg.textContent = 'Deleted ' + data.deleted_count + ' upcoming shift(s) in this series.';
       listMsg.className = 'msg success';
