@@ -13,7 +13,7 @@
   button.edit-btn { padding: 6px 12px; font-size: 12px; background: #7c3aed; margin-right: 6px; }
   button.series-btn { padding: 6px 12px; font-size: 12px; background: #d97706; }
   a.back-link { font-size: 13px; color: #2563eb; text-decoration: none; }
-  .msg { margin-top: 10px; font-size: 14px; font-weight: bold; }
+  .msg { margin-top: 10px; font-size: 14px; font-weight: bold; white-space: pre-line; }
   .msg.error { color: #dc2626; }
   .msg.success { color: #16a34a; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -593,6 +593,30 @@
     }
 
     try {
+      statusDiv.textContent = 'Checking schedule conflicts and weekly hours...';
+      statusDiv.className = 'msg';
+      const checkRes = await fetch(API_BASE + '/api/shifts', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ ...payload, dry_run: true })
+      });
+      const check = await readApiResponse(checkRes);
+      if (!checkRes.ok) {
+        if (handleAuthError(check.error)) return;
+        if (check.code === 'SHIFT_CONFLICT' && Array.isArray(check.conflicts)) {
+          const details = check.conflicts.slice(0, 5).map(c => c.proposed_date + ' conflicts with ' + c.existing_time + ' at ' + c.site_name).join('\n');
+          throw new Error(check.error + '\n' + details);
+        }
+        throw new Error(check.error || 'Schedule validation failed');
+      }
+      if (check.warnings && check.warnings.length) {
+        const warningText = check.warnings.map(w => w.message).join('\n');
+        if (!confirm('Overtime warning:\n\n' + warningText + '\n\nCreate the shift(s) anyway?')) {
+          statusDiv.textContent = 'Creation cancelled. Adjust the schedule to reduce weekly hours.';
+          statusDiv.className = 'msg error';
+          return;
+        }
+      }
       const res = await fetch(API_BASE + '/api/shifts', {
         method: 'POST',
         headers: authHeaders(),
@@ -723,6 +747,7 @@
       });
       const data = await readApiResponse(res);
       if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to save shift'); }
+      if (data.warnings && data.warnings.length) alert('Overtime warning:\n\n' + data.warnings.map(w => w.message).join('\n'));
       statusDiv.textContent = 'Saved.';
       statusDiv.className = 'msg success';
       setTimeout(closeEditModal, 700);
