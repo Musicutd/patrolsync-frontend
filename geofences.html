@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PatrolSync - Site Geofences</title>
+  <style>
+    body{font-family:Arial,sans-serif;max-width:1000px;margin:30px auto;padding:0 18px;background:#f8fafc;color:#172033}a{color:#2563eb;text-decoration:none}.card{background:#fff;border:1px solid #dbe2ea;border-radius:10px;padding:18px;margin:16px 0}.site-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}.site-card{border:1px solid #e2e8f0;border-radius:8px;padding:14px;border-left:6px solid #94a3b8}.site-card.enabled{border-left-color:#16a34a}.badge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:bold;background:#e2e8f0}.enabled .badge{background:#dcfce7;color:#166534}label{display:block;font-size:12px;font-weight:bold;margin:10px 0 4px}input,select{width:100%;padding:9px;box-sizing:border-box}button{padding:10px 14px;border:0;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;margin-top:10px}.secondary{background:#64748b}.danger{background:#dc2626}.row{display:flex;gap:10px}.row>div{flex:1}.status{font-weight:bold;margin-top:10px}.error{color:#dc2626}.success{color:#16a34a}.hint{font-size:13px;color:#64748b}.modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.65);align-items:center;justify-content:center;padding:15px}.modal-content{background:#fff;border-radius:10px;padding:20px;width:min(520px,100%)}@media(max-width:600px){.row{display:block}}
+  </style>
+</head>
+<body>
+  <p><a href="dashboard.html">← Back to Dashboard</a></p>
+  <h2>Site Geofences</h2>
+  <p class="hint">When enabled, guards must be physically inside the configured radius to clock in. Use your current location while standing at the site, or enter verified coordinates.</p>
+  <button onclick="loadSites()">Refresh Sites</button><div id="pageStatus" class="status"></div><div id="siteGrid" class="site-grid"></div>
+  <div id="geofenceModal" class="modal"><div class="modal-content">
+    <h3 id="modalTitle">Configure Geofence</h3>
+    <label><input type="checkbox" id="enabled" style="width:auto"> Enforce geofence for clock-in</label>
+    <div class="row"><div><label>Latitude</label><input id="latitude" type="number" step="any" placeholder="35.8989"></div><div><label>Longitude</label><input id="longitude" type="number" step="any" placeholder="14.5146"></div></div>
+    <button class="secondary" onclick="useCurrentLocation()">Use My Current Location</button>
+    <label>Allowed Radius (metres)</label><input id="radius" type="number" min="25" max="5000" value="150">
+    <p class="hint">Recommended: 75–150m for a normal site; use a larger radius for campuses or industrial estates.</p>
+    <button onclick="saveGeofence()">Save Geofence</button> <button class="secondary" onclick="closeModal()">Cancel</button>
+    <div id="modalStatus" class="status"></div>
+  </div></div>
+  <script>
+    const API_BASE='https://patrolsync-backend.onrender.com';const token=localStorage.getItem('token');const tenantId=localStorage.getItem('tenant_id');if(!token||!tenantId)location.replace('login.html');
+    const headers=()=>({'Content-Type':'application/json','Authorization':'Bearer '+token});let sites=[],editingSite=null;
+    const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    async function loadSites(){const status=document.getElementById('pageStatus');try{const response=await fetch(API_BASE+'/api/sites?tenant_id='+tenantId,{headers:headers()});const data=await response.json();if(!response.ok)throw new Error(data.error||'Failed to load sites');sites=data;renderSites();status.textContent=''}catch(err){status.textContent=err.message;status.className='status error'}}
+    function renderSites(){const grid=document.getElementById('siteGrid');grid.innerHTML='';if(!sites.length)grid.innerHTML='<p class="hint">No sites found.</p>';sites.forEach(site=>{const card=document.createElement('div');card.className='site-card'+(site.geofence_enabled?' enabled':'');const coordinates=site.latitude!=null&&site.longitude!=null?Number(site.latitude).toFixed(6)+', '+Number(site.longitude).toFixed(6):'Coordinates not set';card.innerHTML='<strong>'+esc(site.name)+'</strong> <span class="badge">'+(site.geofence_enabled?'Enforced':'Not enforced')+'</span><p class="hint">'+esc(site.address||'No address')+'<br>'+coordinates+'<br>Radius: '+Number(site.geofence_radius_m||150)+'m</p><button>Configure</button>'+(site.latitude!=null?'<a target="_blank" href="https://www.google.com/maps?q='+site.latitude+','+site.longitude+'"><button class="secondary">View Map</button></a>':'');card.querySelector('button').onclick=()=>openModal(site.id);grid.appendChild(card)})}
+    function openModal(id){editingSite=sites.find(site=>Number(site.id)===Number(id));modalTitle.textContent='Configure '+editingSite.name;enabled.checked=Boolean(editingSite.geofence_enabled);latitude.value=editingSite.latitude??'';longitude.value=editingSite.longitude??'';radius.value=editingSite.geofence_radius_m||150;modalStatus.textContent='';geofenceModal.style.display='flex'}
+    function closeModal(){geofenceModal.style.display='none';editingSite=null}
+    function useCurrentLocation(){modalStatus.textContent='Getting location…';if(!navigator.geolocation){modalStatus.textContent='Location is not supported by this device.';modalStatus.className='status error';return}navigator.geolocation.getCurrentPosition(position=>{latitude.value=position.coords.latitude.toFixed(7);longitude.value=position.coords.longitude.toFixed(7);modalStatus.textContent='Location captured with approximately '+Math.round(position.coords.accuracy)+'m accuracy.';modalStatus.className='status success'},()=>{modalStatus.textContent='Could not access your location. Check browser permissions.';modalStatus.className='status error'},{enableHighAccuracy:true,timeout:10000,maximumAge:0})}
+    async function saveGeofence(){const payload={tenant_id:Number(tenantId),geofence_enabled:enabled.checked,latitude:latitude.value===''?null:Number(latitude.value),longitude:longitude.value===''?null:Number(longitude.value),geofence_radius_m:Number(radius.value)};try{const response=await fetch(API_BASE+'/api/sites/'+editingSite.id+'/geofence',{method:'PATCH',headers:headers(),body:JSON.stringify(payload)});const data=await response.json();if(!response.ok)throw new Error(data.error||'Failed to save geofence');closeModal();await loadSites()}catch(err){modalStatus.textContent=err.message;modalStatus.className='status error'}}
+    loadSites();
+  </script>
+</body>
+</html>
