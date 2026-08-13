@@ -733,6 +733,10 @@
         deleteBtn.className = 'delete-btn';
         deleteBtn.onclick = () => deleteShift(s.id, dateLabel);
         actionsTd.appendChild(deleteBtn);
+        const openBtn = document.createElement('button');
+        openBtn.textContent = 'Make Open'; openBtn.className = 'series-btn';
+        openBtn.onclick = () => makeShiftOpen(s.id);
+        actionsTd.appendChild(openBtn);
 
         if (s.recurrence_group_id) {
           const seriesBtn = document.createElement('button');
@@ -822,6 +826,12 @@
       listMsg.textContent = err.message;
       listMsg.className = 'msg error';
     }
+  }
+
+  async function makeShiftOpen(id) {
+    if(!confirm('Make this shift available for eligible guards to claim?'))return;
+    try{const res=await fetch(API_BASE+'/api/shifts/'+id+'/make-open',{method:'PATCH',headers:authHeaders(),body:JSON.stringify({tenant_id:Number(tenantId)})});const data=await readApiResponse(res);if(!res.ok)throw new Error(data.error||'Failed to open shift');loadShifts();}
+    catch(err){const msg=document.getElementById('listMsg');msg.textContent=err.message;msg.className='msg error';}
   }
 
   async function deleteSeries(recurrenceGroupId) {
