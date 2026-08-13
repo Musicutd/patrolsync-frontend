@@ -33,10 +33,13 @@
 
   <script>
     const API_BASE = 'https://patrolsync-backend.onrender.com';
+
+    // Support both possible key names
     const token = localStorage.getItem('token');
-    const tenantId = localStorage.getItem('tenant_id');
+    let tenantId = localStorage.getItem('tenant_id') || localStorage.getItem('tenantId');
 
     if (!token || !tenantId) {
+      console.warn('No token or tenantId found, redirecting to signup.');
       window.location.href = 'signup.html';
     }
 
@@ -44,7 +47,9 @@
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       currentUserId = payload.user_id;
+      console.log('Decoded token, user_id:', currentUserId, 'tenant_id:', tenantId);
     } catch (err) {
+      console.error('Failed to decode token:', err);
       window.location.href = 'signup.html';
     }
 
@@ -56,6 +61,7 @@
       if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
         localStorage.removeItem('token');
         localStorage.removeItem('tenant_id');
+        localStorage.removeItem('tenantId');
         localStorage.removeItem('user_email');
         alert('Your session has expired. Please log in again.');
         window.location.href = 'login.html';
@@ -70,35 +76,61 @@
     }
 
     function certStatusLabel(cert) {
-      if (cert.status === 'expired') return '🔴 Expired ' + Math.abs(cert.days_remaining) + ' day(s) ago';
-      if (cert.status === 'expiring_soon') return '🟡 Expires in ' + cert.days_remaining + ' day(s)';
-      return '🟢 Valid (' + cert.days_remaining + ' days remaining)';
+      // Backend returns days_until_expiry and is_expired now
+      if (cert.is_expired) return '🔴 Expired ' + Math.abs(cert.days_until_expiry) + ' day(s) ago';
+      if (cert.days_until_expiry !== null && cert.days_until_expiry <= 30) {
+        return '🟡 Expires in ' + cert.days_until_expiry + ' day(s)';
+      }
+      return '🟢 Valid (' + cert.days_until_expiry + ' days remaining)';
     }
 
     async function loadMyCertifications() {
       const list = document.getElementById('certList');
       try {
-        const res = await fetch(API_BASE + '/api/certifications?tenant_id=' + tenantId + '&user_id=' + currentUserId, {
+        const url = API_BASE + '/api/certifications?tenant_id=' + encodeURIComponent(tenantId) + '&user_id=' + encodeURIComponent(currentUserId);
+        console.log('GET', url);
+
+        const res = await fetch(url, {
           headers: authHeaders()
         });
+
         const certs = await res.json();
-        if (!res.ok) { if (handleAuthError(certs.error)) return; throw new Error(certs.error || 'Failed to load certifications'); }
+        console.log('GET /api/certifications response:', certs);
+
+        if (!res.ok) {
+          if (handleAuthError(certs.error)) return;
+          throw new Error(certs.error || 'Failed to load certifications');
+        }
 
         list.innerHTML = '';
-        if (certs.length === 0) {
+        if (!Array.isArray(certs) || certs.length === 0) {
           list.innerHTML = '<li class="empty-msg">No certifications on file yet. Contact your admin if you believe this is incorrect.</li>';
           return;
         }
 
         certs.forEach(c => {
           const li = document.createElement('li');
-          li.innerHTML = '<div class="cert-name">' + escapeHtml(c.cert_name) + (c.cert_number ? ' (' + escapeHtml(c.cert_number) + ')' : '') + '</div>' +
-            '<div class="cert-meta">Expires: ' + new Date(c.expiry_date).toLocaleDateString() + '</div>' +
-            '<div class="status-line cert-status-' + c.status + '">' + certStatusLabel(c) + '</div>';
+
+          // Backend returns: name, issuer, issue_date, expiry_date, days_until_expiry, is_expired, guard_email
+          const certName = c.name || c.cert_name || 'Certification';
+          const certNumber = c.cert_number || '';
+          const expiryDate = c.expiry_date ? new Date(c.expiry_date).toLocaleDateString() : 'N/A';
+
+          li.innerHTML =
+            '<div class="cert-name">' +
+              escapeHtml(certName) +
+              (certNumber ? ' (' + escapeHtml(certNumber) + ')' : '') +
+            '</div>' +
+            '<div class="cert-meta">Expires: ' + escapeHtml(expiryDate) + '</div>' +
+            '<div class="status-line cert-status-' + (c.is_expired ? 'expired' : (c.days_until_expiry !== null && c.days_until_expiry <= 30 ? 'expiring_soon' : 'valid')) + '">' +
+              certStatusLabel(c) +
+            '</div>';
+
           list.appendChild(li);
         });
       } catch (err) {
-        list.innerHTML = '<li class="error">Failed to load certifications: ' + err.message + '</li>';
+        console.error('loadMyCertifications error:', err);
+        list.innerHTML = '<li class="error">Failed to load certifications: ' + escapeHtml(err.message) + '</li>';
       }
     }
 
