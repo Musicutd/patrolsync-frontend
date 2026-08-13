@@ -612,6 +612,9 @@
           const details = check.conflicts.slice(0, 5).map(c => c.proposed_date + ' conflicts with ' + c.existing_time + ' at ' + c.site_name).join('\n');
           throw new Error(check.error + '\n' + details);
         }
+        if(check.code==='GUARD_UNAVAILABLE'&&Array.isArray(check.availability_conflicts)){
+          throw new Error(check.error+'\n'+check.availability_conflicts.slice(0,8).map(item=>item.message).join('\n'));
+        }
         throw new Error(check.error || 'Schedule validation failed');
       }
       if (check.warnings && check.warnings.length) {
