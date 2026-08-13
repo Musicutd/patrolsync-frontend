@@ -123,6 +123,10 @@
               '</div>' +
               '<div class="shift-time">🕒 ' + s.start_time + ' – ' + s.end_time + ' (' + s.duration_hours + 'h)</div>' +
               (s.notes ? '<div class="shift-notes">📝 ' + escapeHtml(s.notes) + '</div>' : '');
+            const controls=document.createElement('div');controls.style.marginTop='8px';
+            if(s.confirmation_status==='pending'){const yes=document.createElement('button');yes.textContent='Confirm';yes.onclick=()=>confirmShift(s.id,'confirmed');const no=document.createElement('button');no.textContent='Decline';no.style.background='#dc2626';no.onclick=()=>confirmShift(s.id,'declined');controls.append(yes,no);}
+            else controls.innerHTML='<span class="badge '+s.employment_type+'">'+escapeHtml(s.confirmation_status||'pending')+'</span>';
+            li.appendChild(controls);
             ul.appendChild(li);
           });
           dayGroup.appendChild(ul);
@@ -132,6 +136,8 @@
         container.innerHTML = '<p class="error">Failed to load shifts: ' + err.message + '</p>';
       }
     }
+
+    async function confirmShift(id,status){try{const res=await fetch(API_BASE+'/api/shifts/'+id+'/confirmation',{method:'PATCH',headers:authHeaders(),body:JSON.stringify({tenant_id:Number(tenantId),status})});const data=await readApiResponse(res);if(!res.ok)throw new Error(data.error||'Failed');loadMyShifts();}catch(err){alert(err.message)}}
 
     loadMyShifts();
   </script>
