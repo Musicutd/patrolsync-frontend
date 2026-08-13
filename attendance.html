@@ -24,7 +24,7 @@
   </div>
   <div class="card">
     <div id="status"></div>
-    <table><thead><tr><th>Guard</th><th>Site</th><th>Clock In</th><th>Clock Out</th><th>Break</th><th>Worked</th><th>Status</th></tr></thead><tbody id="attendanceBody"></tbody></table>
+    <table><thead><tr><th>Guard</th><th>Site</th><th>Clock In</th><th>Clock Out</th><th>Break</th><th>Worked</th><th>Location</th><th>Status</th></tr></thead><tbody id="attendanceBody"></tbody></table>
   </div>
   <script>
     const API_BASE='https://patrolsync-backend.onrender.com';
@@ -39,13 +39,14 @@
       guards.forEach(g=>guardFilter.add(new Option(g.email,g.id))); sites.forEach(s=>siteFilter.add(new Option(s.name,s.id)));
     }
     async function loadAttendance(){
-      const status=document.getElementById('status'),body=document.getElementById('attendanceBody');status.textContent='';body.innerHTML='<tr><td colspan="7">Loading...</td></tr>';
+      const status=document.getElementById('status'),body=document.getElementById('attendanceBody');status.textContent='';body.innerHTML='<tr><td colspan="8">Loading...</td></tr>';
       let url=API_BASE+'/api/attendance?tenant_id='+tenantId;if(dateFilter.value)url+='&date='+dateFilter.value;if(guardFilter.value)url+='&user_id='+guardFilter.value;if(siteFilter.value)url+='&site_id='+siteFilter.value;
       try{const response=await fetch(url,{headers:headers()});const rows=await response.json();if(!response.ok)throw new Error(rows.error||'Failed to load attendance');
         body.innerHTML='';let active=0,onBreak=0,total=0;rows.forEach(row=>{if(!row.clocked_out_at)active++;if(row.on_break)onBreak++;total+=Number(row.worked_seconds||0);
           const isActive=!row.clocked_out_at;const tr=document.createElement('tr');const badge=row.on_break?'<span class="badge break">On Break</span>':(isActive?'<span class="badge live">Clocked In</span>':'<span class="badge done">Completed</span>');
-          tr.innerHTML='<td>'+esc(row.guard_email)+'</td><td>'+esc(row.site_name)+'</td><td>'+new Date(row.clocked_in_at).toLocaleString()+'</td><td>'+(row.clocked_out_at?new Date(row.clocked_out_at).toLocaleString():'—')+'</td><td>'+duration(row.break_seconds)+'</td><td>'+duration(row.worked_seconds)+'</td><td>'+badge+'</td>';body.appendChild(tr)});
-        if(!rows.length)body.innerHTML='<tr><td colspan="7" class="empty">No attendance records found.</td></tr>';activeCount.textContent=active;breakCount.textContent=onBreak;workedTotal.textContent=(total/3600).toFixed(2);
+          const locationProof=row.clock_in_geofence_verified===true?'<span class="badge live">Verified · '+Math.round(Number(row.clock_in_distance_m||0))+'m</span>':(row.clock_in_latitude!=null?'GPS recorded':'Not required');
+          tr.innerHTML='<td>'+esc(row.guard_email)+'</td><td>'+esc(row.site_name)+'</td><td>'+new Date(row.clocked_in_at).toLocaleString()+'</td><td>'+(row.clocked_out_at?new Date(row.clocked_out_at).toLocaleString():'—')+'</td><td>'+duration(row.break_seconds)+'</td><td>'+duration(row.worked_seconds)+'</td><td>'+locationProof+'</td><td>'+badge+'</td>';body.appendChild(tr)});
+        if(!rows.length)body.innerHTML='<tr><td colspan="8" class="empty">No attendance records found.</td></tr>';activeCount.textContent=active;breakCount.textContent=onBreak;workedTotal.textContent=(total/3600).toFixed(2);
       }catch(err){body.innerHTML='';status.textContent=err.message;status.className='error'}
     }
     dateFilter.value=new Date().toISOString().slice(0,10);loadFilters().then(loadAttendance);setInterval(loadAttendance,30000);
