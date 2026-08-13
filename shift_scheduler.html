@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Shift Scheduler - PatrolSync</title>
 <style>
-  body { font-family: Arial, sans-serif; max-width: 950px; margin: 40px auto; padding: 0 20px; }
+  body { font-family: Arial, sans-serif; max-width: 1180px; margin: 32px auto; padding: 0 20px; background: #f8fafc; color: #172033; }
   .card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
   input, select, textarea { display: block; width: 100%; padding: 8px; margin: 6px 0 12px; box-sizing: border-box; font-size: 14px; }
   button { padding: 10px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
@@ -41,15 +41,53 @@
   #editModalContent { background: white; padding: 24px; border-radius: 8px; max-width: 360px; width: 90%; }
   #editModalContent button { margin-top: 10px; }
   .qr-close { background: #64748b; }
+  .page-head { display:flex; justify-content:space-between; gap:16px; align-items:center; margin-bottom:18px; }
+  .page-head h2 { margin:0; }
+  .template-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .template-toolbar input { flex:1; min-width:220px; margin:0; }
+  .template-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; margin-top:16px; }
+  .template-card { border:1px solid #e2e8f0; border-left:7px solid var(--template-color); border-radius:8px; padding:14px; background:#fff; }
+  .template-name { font-weight:700; margin-bottom:8px; }
+  .template-meta { color:#64748b; font-size:12px; line-height:1.65; }
+  .template-actions { display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; }
+  .template-actions button { padding:7px 10px; font-size:12px; }
+  .template-actions .apply { background:#16a34a; }
+  .template-actions .edit { background:#64748b; }
+  .template-actions .remove { background:#dc2626; }
+  .template-picker { display:flex; gap:8px; align-items:flex-end; margin-bottom:14px; padding:12px; background:#eff6ff; border-radius:8px; }
+  .template-picker > div { flex:1; }
+  .template-picker select { margin-bottom:0; }
+  #templateModal { display:none; position:fixed; inset:0; background:rgba(15,23,42,.65); z-index:1100; align-items:center; justify-content:center; padding:16px; }
+  #templateModalContent { background:white; padding:22px; border-radius:10px; width:min(520px,100%); max-height:90vh; overflow:auto; }
+  .color-row { display:flex; gap:10px; align-items:center; }
+  .color-row input[type=color] { width:64px; height:42px; padding:2px; }
+  @media (max-width:700px) { .filter-row,.template-picker,.page-head { display:block; } .filter-row button,.page-head button { width:100%; } table { display:block; overflow-x:auto; } }
 </style>
 </head>
 <body>
 
 <p><a href="dashboard.html" class="back-link">← Back to Dashboard</a></p>
-<h2>📅 Shift Scheduler</h2>
+<div class="page-head">
+  <div><h2 style="margin:0;">Shift Scheduler</h2><div class="empty-state">Build schedules faster with reusable shift templates.</div></div>
+  <button onclick="openTemplateModal()">+ Add Shift Template</button>
+</div>
 
 <div class="card">
+  <h3>Shift Templates</h3>
+  <div class="template-toolbar">
+    <input id="templateSearch" type="search" placeholder="Search templates or locations..." oninput="renderTemplates()">
+    <button class="secondary" onclick="loadTemplates()">Refresh</button>
+  </div>
+  <div id="templateStatus" class="msg"></div>
+  <div id="templateGrid" class="template-grid"></div>
+</div>
+
+<div class="card" id="createShiftCard">
   <h3>Create Shift(s)</h3>
+  <div class="template-picker">
+    <div><label>Start from a template</label><select id="templatePicker"><option value="">Choose a template...</option></select></div>
+    <button type="button" onclick="applySelectedTemplate()">Apply Template</button>
+  </div>
   <div class="row">
     <div>
       <label>Guard</label>
@@ -79,6 +117,8 @@
     </div>
   </div>
   <p style="font-size:12px; color:#666; margin-top:-6px;">If end time is earlier than start time, it's treated as an overnight shift (e.g. 22:00 → 06:00).</p>
+  <label>Unpaid Break (minutes)</label>
+  <input type="number" id="shiftBreakMinutes" value="0" min="0" max="720">
 
   <label>Recurrence</label>
   <select id="recurrenceType" onchange="updateRecurrenceFields()">
@@ -134,6 +174,23 @@
   </table>
 </div>
 
+<div id="templateModal">
+  <div id="templateModalContent">
+    <h3 id="templateModalTitle">Add Shift Template</h3>
+    <label>Template Name</label><input id="templateName" maxlength="80" placeholder="e.g. Security Day Shift">
+    <div class="row"><div><label>Work Location (optional)</label><select id="templateSite"><option value="">Any site</option></select></div>
+      <div><label>Color</label><div class="color-row"><input type="color" id="templateColor" value="#2563eb"></div></div></div>
+    <div class="row"><div><label>Start Time</label><input type="time" id="templateStart" value="08:00"></div>
+      <div><label>End Time</label><input type="time" id="templateEnd" value="16:00"></div></div>
+    <div class="row"><div><label>Unpaid Break (minutes)</label><input type="number" id="templateBreak" value="0" min="0" max="720"></div>
+      <div><label>Employment Type</label><select id="templateEmployment"><option value="full_time">Full-Time</option><option value="part_time">Part-Time</option></select></div></div>
+    <label>Default Notes (optional)</label><textarea id="templateNotes" rows="2"></textarea>
+    <button onclick="saveTemplate()">Save Template</button>
+    <button class="qr-close" onclick="closeTemplateModal()">Cancel</button>
+    <div id="templateModalStatus" class="msg"></div>
+  </div>
+</div>
+
 <div id="editModal">
   <div id="editModalContent">
     <h3>Edit Shift</h3>
@@ -143,6 +200,8 @@
     <input type="time" id="editStartTime">
     <label>End Time</label>
     <input type="time" id="editEndTime">
+    <label>Unpaid Break (minutes)</label>
+    <input type="number" id="editBreakMinutes" value="0" min="0" max="720">
     <label>Employment Type</label>
     <select id="editEmploymentType">
       <option value="full_time">Full-Time</option>
@@ -179,6 +238,119 @@
       throw new Error('The backend route is unavailable. Deploy the updated index.js and try again.');
     }
     return response.json();
+  }
+
+  let shiftTemplates = [];
+  let editingTemplateId = null;
+
+  function templateHours(template) {
+    const [sh, sm] = template.start_time.split(':').map(Number);
+    const [eh, em] = template.end_time.split(':').map(Number);
+    let minutes = (eh * 60 + em) - (sh * 60 + sm);
+    if (minutes <= 0) minutes += 1440;
+    return Math.max(0, Math.round(((minutes - Number(template.break_minutes || 0)) / 60) * 100) / 100);
+  }
+
+  async function loadTemplates() {
+    const status = document.getElementById('templateStatus');
+    try {
+      const response = await fetch(API_BASE + '/api/shift-templates?tenant_id=' + tenantId, { headers: authHeaders() });
+      const data = await readApiResponse(response);
+      if (!response.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to load templates'); }
+      shiftTemplates = data;
+      status.textContent = '';
+      renderTemplates();
+    } catch (err) {
+      status.textContent = err.message;
+      status.className = 'msg error';
+    }
+  }
+
+  function renderTemplates() {
+    const grid = document.getElementById('templateGrid');
+    const picker = document.getElementById('templatePicker');
+    const term = document.getElementById('templateSearch').value.trim().toLowerCase();
+    const visible = shiftTemplates.filter(t => !term || t.name.toLowerCase().includes(term) || (t.site_name || '').toLowerCase().includes(term));
+    grid.innerHTML = '';
+    if (visible.length === 0) grid.innerHTML = '<div class="empty-state">No templates found. Add one to speed up scheduling.</div>';
+    visible.forEach(template => {
+      const card = document.createElement('div');
+      card.className = 'template-card';
+      card.style.setProperty('--template-color', template.color);
+      card.innerHTML = '<div class="template-name">' + escapeHtml(template.name) + '</div>' +
+        '<div class="template-meta">' + escapeHtml(template.site_name || 'Any work location') + '<br>' +
+        template.start_time + ' – ' + template.end_time + ' · ' + templateHours(template) + ' paid hours<br>' +
+        Number(template.break_minutes || 0) + ' min break · ' + (template.employment_type === 'part_time' ? 'Part-Time' : 'Full-Time') + '</div>' +
+        '<div class="template-actions"><button class="apply">Use Template</button><button class="edit">Edit</button><button class="remove">Delete</button></div>';
+      const buttons = card.querySelectorAll('button');
+      buttons[0].onclick = () => applyTemplate(template.id);
+      buttons[1].onclick = () => openTemplateModal(template.id);
+      buttons[2].onclick = () => deleteTemplate(template.id, template.name);
+      grid.appendChild(card);
+    });
+    const selected = picker.value;
+    picker.innerHTML = '<option value="">Choose a template...</option>';
+    shiftTemplates.forEach(template => {
+      const option = document.createElement('option'); option.value = template.id; option.textContent = template.name; picker.appendChild(option);
+    });
+    picker.value = selected;
+  }
+
+  function openTemplateModal(id) {
+    const template = shiftTemplates.find(t => Number(t.id) === Number(id));
+    editingTemplateId = template ? template.id : null;
+    document.getElementById('templateModalTitle').textContent = template ? 'Edit Shift Template' : 'Add Shift Template';
+    document.getElementById('templateName').value = template ? template.name : '';
+    document.getElementById('templateSite').value = template && template.site_id ? template.site_id : '';
+    document.getElementById('templateColor').value = template ? template.color : '#2563eb';
+    document.getElementById('templateStart').value = template ? template.start_time : '08:00';
+    document.getElementById('templateEnd').value = template ? template.end_time : '16:00';
+    document.getElementById('templateBreak').value = template ? template.break_minutes : 0;
+    document.getElementById('templateEmployment').value = template ? template.employment_type : 'full_time';
+    document.getElementById('templateNotes').value = template ? (template.notes || '') : '';
+    document.getElementById('templateModalStatus').textContent = '';
+    document.getElementById('templateModal').style.display = 'flex';
+  }
+
+  function closeTemplateModal() { document.getElementById('templateModal').style.display = 'none'; editingTemplateId = null; }
+
+  async function saveTemplate() {
+    const status = document.getElementById('templateModalStatus');
+    const payload = { tenant_id:Number(tenantId), site_id:document.getElementById('templateSite').value ? Number(document.getElementById('templateSite').value) : null,
+      name:document.getElementById('templateName').value.trim(), color:document.getElementById('templateColor').value,
+      start_time:document.getElementById('templateStart').value, end_time:document.getElementById('templateEnd').value,
+      break_minutes:Number(document.getElementById('templateBreak').value || 0), employment_type:document.getElementById('templateEmployment').value,
+      notes:document.getElementById('templateNotes').value.trim() || null };
+    if (!payload.name || !payload.start_time || !payload.end_time) { status.textContent = 'Name, start time, and end time are required'; status.className = 'msg error'; return; }
+    try {
+      const response = await fetch(API_BASE + '/api/shift-templates' + (editingTemplateId ? '/' + editingTemplateId : ''), {
+        method: editingTemplateId ? 'PATCH' : 'POST', headers: authHeaders(), body: JSON.stringify(payload)
+      });
+      const data = await readApiResponse(response);
+      if (!response.ok) throw new Error(data.error || 'Failed to save template');
+      closeTemplateModal(); await loadTemplates();
+    } catch (err) { status.textContent = err.message; status.className = 'msg error'; }
+  }
+
+  async function deleteTemplate(id, name) {
+    if (!confirm('Delete shift template "' + name + '"?')) return;
+    try {
+      const response = await fetch(API_BASE + '/api/shift-templates/' + id + '?tenant_id=' + tenantId, { method:'DELETE', headers:authHeaders() });
+      const data = await readApiResponse(response); if (!response.ok) throw new Error(data.error || 'Failed to delete template'); await loadTemplates();
+    } catch (err) { const status=document.getElementById('templateStatus'); status.textContent=err.message; status.className='msg error'; }
+  }
+
+  function applySelectedTemplate() { const id=document.getElementById('templatePicker').value; if (id) applyTemplate(id); }
+  function applyTemplate(id) {
+    const template = shiftTemplates.find(t => Number(t.id) === Number(id)); if (!template) return;
+    if (template.site_id) document.getElementById('shiftSite').value = template.site_id;
+    document.getElementById('shiftStartTime').value = template.start_time;
+    document.getElementById('shiftEndTime').value = template.end_time;
+    document.getElementById('shiftBreakMinutes').value = template.break_minutes || 0;
+    document.getElementById('shiftNotes').value = template.notes || '';
+    setEmploymentType(template.employment_type);
+    document.getElementById('templatePicker').value = template.id;
+    document.getElementById('createShiftCard').scrollIntoView({ behavior:'smooth', block:'start' });
   }
 
   function handleAuthError(message) {
@@ -283,6 +455,11 @@
           sel.appendChild(opt);
         });
       });
+      const templateSite = document.getElementById('templateSite');
+      templateSite.innerHTML = '<option value="">Any site</option>';
+      sites.forEach(site => {
+        const option = document.createElement('option'); option.value = site.id; option.textContent = site.name; templateSite.appendChild(option);
+      });
     } catch (err) {
       console.error('loadGuardsAndSites failed:', err.message);
     }
@@ -307,6 +484,7 @@
       user_id: Number(guardId),
       start_time: startTime,
       end_time: endTime,
+      break_minutes: Number(document.getElementById('shiftBreakMinutes').value || 0),
       employment_type: employmentType,
       recurrence,
       notes: notes || null
@@ -424,6 +602,7 @@
     document.getElementById('editShiftDate').value = shift.shift_date.slice(0, 10);
     document.getElementById('editStartTime').value = shift.start_time;
     document.getElementById('editEndTime').value = shift.end_time;
+    document.getElementById('editBreakMinutes').value = shift.break_minutes || 0;
     document.getElementById('editEmploymentType').value = shift.employment_type;
     document.getElementById('editNotes').value = shift.notes || '';
     document.getElementById('editModalStatus').textContent = '';
@@ -451,6 +630,7 @@
           shift_date: shiftDate,
           start_time: startTime,
           end_time: endTime,
+          break_minutes: Number(document.getElementById('editBreakMinutes').value || 0),
           employment_type: employmentType,
           notes: notes || null
         })
@@ -507,7 +687,7 @@
 
   function init() {
     updateRecurrenceFields();
-    loadGuardsAndSites().then(loadShifts);
+    loadGuardsAndSites().then(() => Promise.all([loadShifts(), loadTemplates()]));
   }
   init();
 </script>
