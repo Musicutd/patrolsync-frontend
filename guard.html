@@ -440,7 +440,7 @@
           headers: authHeaders()
         });
         const assignments = await res.json();
-        assignedSites = assignments.map(a => ({ id: a.site_id, name: a.site_name, round_size: a.round_size }));
+        assignedSites = assignments.map(a => ({ id: a.site_id, name: a.site_name, round_size: a.round_size, geofence_enabled:a.geofence_enabled, geofence_radius_m:a.geofence_radius_m }));
 
         const select = document.getElementById('siteSelect');
         select.innerHTML = '';
@@ -452,7 +452,7 @@
         assignedSites.forEach(s => {
           const opt = document.createElement('option');
           opt.value = s.id;
-          opt.textContent = s.name;
+          opt.textContent = s.name + (s.geofence_enabled ? ' · GPS required' : '');
           select.appendChild(opt);
         });
         select.value = assignedSites[0].id;
