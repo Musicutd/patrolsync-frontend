@@ -26,6 +26,7 @@
   .month-day-grid { display:grid; grid-template-columns:repeat(7, minmax(38px, 1fr)); gap:6px; margin:6px 0 14px; max-width:560px; }
   .month-day-chip { padding:9px 4px; border:1px solid #cbd5e1; border-radius:18px; cursor:pointer; text-align:center; font-size:13px; background:white; user-select:none; }
   .month-day-chip.active { background:#f72578; color:white; border-color:#f72578; font-weight:bold; }
+  .month-day-chip.disabled { background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0; cursor:not-allowed; text-decoration:line-through; }
   .emp-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
   .emp-chip { flex: 1; text-align: center; padding: 10px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; font-size: 13px; background: white; }
   .emp-chip.active.full { background: #16a34a; color: white; border-color: #16a34a; }
@@ -421,7 +422,9 @@
       const chip = document.createElement('div');
       chip.className = 'month-day-chip';
       chip.textContent = String(day).padStart(2, '0');
+      chip.dataset.day = day;
       chip.onclick = () => {
+        if (chip.classList.contains('disabled')) return;
         if (selectedDaysOfMonth.has(day)) {
           selectedDaysOfMonth.delete(day);
           chip.classList.remove('active');
@@ -432,8 +435,39 @@
       };
       grid.appendChild(chip);
     }
+    updateMonthDayAvailability();
   }
   buildMonthDayGrid();
+
+  function updateMonthDayAvailability() {
+    const input = document.getElementById('recurStartDate');
+    const dateValue = input.value;
+    let daysInSelectedMonth = 31;
+    if (input.valueAsDate && !Number.isNaN(input.valueAsDate.getTime())) {
+      daysInSelectedMonth = new Date(input.valueAsDate.getUTCFullYear(), input.valueAsDate.getUTCMonth() + 1, 0).getDate();
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      const [year, month] = dateValue.split('-').map(Number);
+      daysInSelectedMonth = new Date(year, month, 0).getDate();
+    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
+      const [, month, year] = dateValue.split('/').map(Number);
+      daysInSelectedMonth = new Date(year, month, 0).getDate();
+    }
+    document.querySelectorAll('.month-day-chip').forEach(chip => {
+      const day = Number(chip.dataset.day);
+      const unavailable = day > daysInSelectedMonth;
+      chip.classList.toggle('disabled', unavailable);
+      chip.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
+      if (unavailable) {
+        selectedDaysOfMonth.delete(day);
+        chip.classList.remove('active');
+      }
+    });
+  }
+
+  const recurrenceStartInput = document.getElementById('recurStartDate');
+  recurrenceStartInput.addEventListener('input', updateMonthDayAvailability);
+  recurrenceStartInput.addEventListener('change', updateMonthDayAvailability);
+  recurrenceStartInput.addEventListener('blur', updateMonthDayAvailability);
 
   function setEmploymentType(type) {
     document.getElementById('employmentTypeInput').value = type;
@@ -449,6 +483,7 @@
     const monthlyFields = document.getElementById('monthlyDayFields');
     monthlyFields.style.display = type === 'monthly' ? 'block' : 'none';
     if (type === 'monthly' && document.getElementById('monthDayGrid').children.length === 0) buildMonthDayGrid();
+    if (type === 'monthly') updateMonthDayAvailability();
   }
 
   let currentGuards = [];
