@@ -37,32 +37,34 @@
 
   <script>
     const API_BASE = 'https://patrolsync-backend.onrender.com';
-    const token = localStorage.getItem('token');
-    const tenantId = localStorage.getItem('tenant_id');
+    const token = localStorage.getItem('guard_token');
+    const tenantId = localStorage.getItem('guard_tenant_id');
+    const currentUserId = localStorage.getItem('guard_user_id');
 
-    if (!token || !tenantId) {
-      window.location.href = 'signup.html';
-    }
-
-    let currentUserId = null;
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      currentUserId = payload.user_id;
-    } catch (err) {
-      window.location.href = 'signup.html';
+    if (!token || !tenantId || !currentUserId) {
+      window.location.replace('guard.html');
     }
 
     function authHeaders() {
       return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
     }
 
+    async function readApiResponse(response) {
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('The shift service is temporarily unavailable. Please try again shortly.');
+      }
+      return response.json();
+    }
+
     function handleAuthError(message) {
       if (message && (message.toLowerCase().includes('invalid or expired token') || message.toLowerCase().includes('no token provided'))) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('tenant_id');
-        localStorage.removeItem('user_email');
+        localStorage.removeItem('guard_token');
+        localStorage.removeItem('guard_tenant_id');
+        localStorage.removeItem('guard_user_id');
+        localStorage.removeItem('guard_email');
         alert('Your session has expired. Please log in again.');
-        window.location.href = 'login.html';
+        window.location.replace('guard.html');
         return true;
       }
       return false;
@@ -83,7 +85,7 @@
         const res = await fetch(API_BASE + '/api/shifts?tenant_id=' + tenantId + '&user_id=' + currentUserId, {
           headers: authHeaders()
         });
-        const shifts = await res.json();
+        const shifts = await readApiResponse(res);
         if (!res.ok) { if (handleAuthError(shifts.error)) return; throw new Error(shifts.error || 'Failed to load shifts'); }
 
         if (shifts.length === 0) {
