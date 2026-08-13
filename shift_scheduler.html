@@ -151,8 +151,10 @@
       <div class="month-day-grid" id="monthDayGrid"></div>
     </div>
 
-    <label>Repeat Until</label>
-    <input type="date" id="recurUntilDate">
+    <div id="repeatUntilFields">
+      <label>Repeat Until</label>
+      <input type="date" id="recurUntilDate">
+    </div>
   </div>
 
   <label>Notes (optional)</label>
@@ -480,10 +482,20 @@
     document.getElementById('singleDateFields').classList.toggle('hidden', type !== 'none');
     document.getElementById('recurringFields').classList.toggle('hidden', type === 'none');
     document.getElementById('weeklyDowFields').classList.toggle('hidden', type !== 'weekly');
+    document.getElementById('repeatUntilFields').style.display = type === 'monthly' ? 'none' : 'block';
     const monthlyFields = document.getElementById('monthlyDayFields');
     monthlyFields.style.display = type === 'monthly' ? 'block' : 'none';
     if (type === 'monthly' && document.getElementById('monthDayGrid').children.length === 0) buildMonthDayGrid();
     if (type === 'monthly') updateMonthDayAvailability();
+  }
+
+  function endOfSelectedMonthISO(startDate) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startDate);
+    if (!match) return '';
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const finalDay = new Date(year, month, 0).getDate();
+    return match[1] + '-' + match[2] + '-' + String(finalDay).padStart(2, '0');
   }
 
   let currentGuards = [];
@@ -565,8 +577,9 @@
       payload.start_date = date;
     } else {
       const startDate = document.getElementById('recurStartDate').value;
-      const untilDate = document.getElementById('recurUntilDate').value;
-      if (!startDate || !untilDate) { statusDiv.textContent = 'Start date and repeat-until date are required'; statusDiv.className = 'msg error'; return; }
+      const untilDate = recurrence === 'monthly' ? endOfSelectedMonthISO(startDate) : document.getElementById('recurUntilDate').value;
+      if (!startDate) { statusDiv.textContent = 'Start date is required'; statusDiv.className = 'msg error'; return; }
+      if (recurrence === 'weekly' && !untilDate) { statusDiv.textContent = 'Repeat-until date is required for weekly recurrence'; statusDiv.className = 'msg error'; return; }
       payload.start_date = startDate;
       payload.repeat_until = untilDate;
       if (recurrence === 'weekly') {
