@@ -23,6 +23,9 @@
   .dow-grid { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
   .dow-chip { padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; font-size: 13px; user-select: none; background: white; }
   .dow-chip.active { background: #2563eb; color: white; border-color: #2563eb; }
+  .month-day-grid { display:grid; grid-template-columns:repeat(7, minmax(38px, 1fr)); gap:6px; margin:6px 0 14px; max-width:560px; }
+  .month-day-chip { padding:9px 4px; border:1px solid #cbd5e1; border-radius:18px; cursor:pointer; text-align:center; font-size:13px; background:white; user-select:none; }
+  .month-day-chip.active { background:#f72578; color:white; border-color:#f72578; font-weight:bold; }
   .emp-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
   .emp-chip { flex: 1; text-align: center; padding: 10px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; font-size: 13px; background: white; }
   .emp-chip.active.full { background: #16a34a; color: white; border-color: #16a34a; }
@@ -139,6 +142,12 @@
     <div id="weeklyDowFields" class="hidden">
       <label>Days of Week</label>
       <div class="dow-grid" id="dowGrid"></div>
+    </div>
+
+    <div id="monthlyDayFields" style="display:none;">
+      <label>Days of Month</label>
+      <p class="empty-state" style="padding:0; margin:0 0 6px;">Choose one or more dates. Dates unavailable in shorter months are skipped.</p>
+      <div class="month-day-grid" id="monthDayGrid"></div>
     </div>
 
     <label>Repeat Until</label>
@@ -380,6 +389,7 @@
   // --- Day-of-week chip picker (0=Sun ... 6=Sat, matching JS Date) ---
   const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   let selectedDaysOfWeek = new Set();
+  let selectedDaysOfMonth = new Set();
 
   function buildDowGrid() {
     const grid = document.getElementById('dowGrid');
@@ -404,6 +414,27 @@
   }
   buildDowGrid();
 
+  function buildMonthDayGrid() {
+    const grid = document.getElementById('monthDayGrid');
+    grid.innerHTML = '';
+    for (let day = 1; day <= 31; day++) {
+      const chip = document.createElement('div');
+      chip.className = 'month-day-chip';
+      chip.textContent = String(day).padStart(2, '0');
+      chip.onclick = () => {
+        if (selectedDaysOfMonth.has(day)) {
+          selectedDaysOfMonth.delete(day);
+          chip.classList.remove('active');
+        } else {
+          selectedDaysOfMonth.add(day);
+          chip.classList.add('active');
+        }
+      };
+      grid.appendChild(chip);
+    }
+  }
+  buildMonthDayGrid();
+
   function setEmploymentType(type) {
     document.getElementById('employmentTypeInput').value = type;
     document.getElementById('empFullChip').classList.toggle('active', type === 'full_time');
@@ -415,6 +446,9 @@
     document.getElementById('singleDateFields').classList.toggle('hidden', type !== 'none');
     document.getElementById('recurringFields').classList.toggle('hidden', type === 'none');
     document.getElementById('weeklyDowFields').classList.toggle('hidden', type !== 'weekly');
+    const monthlyFields = document.getElementById('monthlyDayFields');
+    monthlyFields.style.display = type === 'monthly' ? 'block' : 'none';
+    if (type === 'monthly' && document.getElementById('monthDayGrid').children.length === 0) buildMonthDayGrid();
   }
 
   let currentGuards = [];
@@ -503,6 +537,10 @@
       if (recurrence === 'weekly') {
         if (selectedDaysOfWeek.size === 0) { statusDiv.textContent = 'Select at least one day of the week'; statusDiv.className = 'msg error'; return; }
         payload.days_of_week = Array.from(selectedDaysOfWeek);
+      }
+      if (recurrence === 'monthly') {
+        if (selectedDaysOfMonth.size === 0) { statusDiv.textContent = 'Select at least one day of the month'; statusDiv.className = 'msg error'; return; }
+        payload.days_of_month = Array.from(selectedDaysOfMonth).sort((a, b) => a - b);
       }
     }
 
