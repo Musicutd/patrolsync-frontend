@@ -186,6 +186,14 @@
       <p class="hint">Point your camera at any checkpoint's QR label. Works even with no signal — scans are queued and synced automatically.</p>
       <button class="scanqr" onclick="openScanner()">📷 Open Camera Scanner</button>
       <div id="activePatrolHint" class="hint"></div>
+      <div id="activeCheckpointRequirements" class="hidden" style="margin-top:12px;padding:12px;border:1px solid #bfdbfe;border-radius:7px;background:#eff6ff;">
+        <b id="activeCheckpointName"></b>
+        <p id="activeCheckpointInstructions" class="hint"></p>
+        <label id="activeConfirmWrap" class="hidden"><input id="activeInstructionConfirmed" type="checkbox" style="width:auto;"> I have read and understood the instructions</label>
+        <textarea id="activeCheckpointNote" class="hidden" rows="3" placeholder="Enter your required checkpoint observation"></textarea>
+        <button type="button" onclick="saveActiveCheckpointResponse()" style="margin-top:7px;background:#16a34a;">Save Checkpoint Response</button>
+        <div id="activeCheckpointStatus" class="status"></div>
+      </div>
       <div id="qrScanStatus" class="status"></div>
     </section>
 
@@ -258,6 +266,16 @@
     let scannerActive = false;
     const activePatrolRunId = localStorage.getItem('active_patrol_run_id');
     document.getElementById('activePatrolHint').textContent = activePatrolRunId ? 'Scheduled patrol #' + activePatrolRunId + ' is active. Route order will be enforced.' : 'No scheduled patrol currently active.';
+    let activePatrolCheckpoint = null;
+
+    async function loadActiveCheckpointRequirements() {
+      const runId=localStorage.getItem('active_patrol_run_id'),box=document.getElementById('activeCheckpointRequirements');
+      if(!runId){activePatrolCheckpoint=null;box.classList.add('hidden');document.getElementById('activePatrolHint').textContent='No scheduled patrol currently active.';return;}
+      const {tenantId}=getSession();
+      try{const response=await fetch(API_BASE+'/api/patrol-runs?tenant_id='+tenantId,{headers:authHeaders()}),rows=await response.json();if(!response.ok)throw new Error(rows.error||'Failed to load active patrol');const run=rows.find(x=>String(x.id)===String(runId)&&x.status==='in_progress');if(!run){localStorage.removeItem('active_patrol_run_id');activePatrolCheckpoint=null;box.classList.add('hidden');return;}const next=run.checkpoints.find(x=>!x.scanned_at);if(!next){box.classList.add('hidden');return;}activePatrolCheckpoint={...next,run_id:run.id};document.getElementById('activePatrolHint').textContent='Active: '+run.route_name+' — '+run.scanned_count+'/'+run.checkpoint_count+' completed';document.getElementById('activeCheckpointName').textContent='Next checkpoint: '+next.name;document.getElementById('activeCheckpointInstructions').textContent=next.instructions||'No special instructions for this checkpoint.';document.getElementById('activeConfirmWrap').classList.toggle('hidden',!next.requires_confirmation);document.getElementById('activeCheckpointNote').classList.toggle('hidden',!next.requires_note);let saved={};try{saved=JSON.parse(localStorage.getItem('patrol_checkpoint_response_'+run.id+'_'+next.checkpoint_id)||'{}')}catch(e){}document.getElementById('activeInstructionConfirmed').checked=Boolean(saved.instruction_confirmed);document.getElementById('activeCheckpointNote').value=saved.checkpoint_note||'';document.getElementById('activeCheckpointStatus').textContent=saved.instruction_confirmed||saved.checkpoint_note?'Response saved — scan this checkpoint next.':'';box.classList.remove('hidden');}catch(err){document.getElementById('activePatrolHint').textContent=err.message;}
+    }
+
+    function saveActiveCheckpointResponse(){if(!activePatrolCheckpoint)return;const confirmed=document.getElementById('activeInstructionConfirmed').checked,note=document.getElementById('activeCheckpointNote').value.trim();if(activePatrolCheckpoint.requires_confirmation&&!confirmed)return alert('Please acknowledge the checkpoint instructions.');if(activePatrolCheckpoint.requires_note&&!note)return alert('Please enter the required written observation.');localStorage.setItem('patrol_checkpoint_response_'+activePatrolCheckpoint.run_id+'_'+activePatrolCheckpoint.checkpoint_id,JSON.stringify({instruction_confirmed:confirmed,checkpoint_note:note||null}));document.getElementById('activeCheckpointStatus').textContent='Response saved — you can now scan this checkpoint.';document.getElementById('activeCheckpointStatus').className='status success';}
     let assignedSites = [];
     let activeSosId = null;
     let emergencyPhone = null;
@@ -689,6 +707,7 @@
     }
 
     async function openScanner() {
+      if(activePatrolCheckpoint){let saved={};try{saved=JSON.parse(localStorage.getItem('patrol_checkpoint_response_'+activePatrolCheckpoint.run_id+'_'+activePatrolCheckpoint.checkpoint_id)||'{}')}catch(e){}if(activePatrolCheckpoint.requires_confirmation&&!saved.instruction_confirmed)return alert('Acknowledge and save the checkpoint instructions before scanning.');if(activePatrolCheckpoint.requires_note&&!String(saved.checkpoint_note||'').trim())return alert('Enter and save the required written observation before scanning.');}
       const modal = document.getElementById('scannerModal');
       const video = document.getElementById('scannerVideo');
       const statusDiv = document.getElementById('scannerStatus');
@@ -842,6 +861,7 @@
         qrScanStatus.textContent = statusDiv.textContent;
         qrScanStatus.className = 'status ' + (kind === 'queued' ? 'queued-tag' : 'success');
         loadProgress();
+        loadActiveCheckpointRequirements();
       }, 1400);
     }
 
@@ -1192,6 +1212,7 @@
       loadEmergencyContacts();
       loadTodayShiftSummary();
       loadAttendance();
+      loadActiveCheckpointRequirements();
       syncQueue();
       startLocationReporting();
     }
