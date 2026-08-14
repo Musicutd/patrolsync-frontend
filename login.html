@@ -14,8 +14,9 @@
     .error { color: red; }
     .links-row { text-align: center; margin-top: 20px; font-size: 14px; display: flex; justify-content: center; gap: 16px; }
     .links-row a { color: #2563eb; }
-    .guard-link { display: block; text-align: center; margin-top: 10px; }
-    .guard-link a { color: #7c3aed; font-weight: bold; font-size: 14px; }
+    .role-link { display: block; text-align: center; margin-top: 10px; }
+    .role-link a { color: #7c3aed; font-weight: bold; font-size: 14px; }
+    .client-link a { color: #047857; }
   </style>
 </head>
 <body>
@@ -31,8 +32,12 @@
     <a href="signup.html">Create a company account</a>
   </div>
 
-  <div class="guard-link">
+  <div class="role-link">
     <a href="guard.html">Are you a guard? Log in here →</a>
+  </div>
+
+  <div class="role-link client-link">
+    <a href="client_portal.html">Are you a client? Log in here →</a>
   </div>
 
   <script>
@@ -46,6 +51,11 @@
       localStorage.removeItem('guard_tenant_id');
       localStorage.removeItem('guard_user_id');
       localStorage.removeItem('guard_email');
+      localStorage.removeItem('client_token');
+      localStorage.removeItem('clientToken');
+      localStorage.removeItem('client_tenant_id');
+      localStorage.removeItem('client_site_id');
+      localStorage.removeItem('client_site_name');
     }
 
     async function doLogin() {
@@ -71,8 +81,7 @@
 
         const ct = res.headers.get('content-type') || '';
         if (!ct.includes('application/json')) {
-          // Backend returned HTML or something unexpected
-          const text = await res.text();
+          await res.text();
           throw new Error('Backend returned non-JSON response. Check that the PatrolSync backend is running and the URL is correct.');
         }
 
@@ -98,6 +107,10 @@
         statusDiv.className = 'status error';
       }
     }
+
+    document.getElementById('loginPassword').addEventListener('keydown', event => {
+      if (event.key === 'Enter') doLogin();
+    });
   </script>
 </body>
 </html>
