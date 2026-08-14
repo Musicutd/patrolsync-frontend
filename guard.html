@@ -568,12 +568,17 @@
               accuracy: item.accuracy,
               scanned_at: item.scanned_at,
               device_scanned_at: item.device_scanned_at || item.scanned_at,
-              patrol_run_id: item.patrol_run_id || null
+              patrol_run_id: item.patrol_run_id || null,
+              checkpoint_note: item.checkpoint_note || null,
+              instruction_confirmed: Boolean(item.instruction_confirmed)
             })
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) remaining.push(item);
-          else if (data.patrol_complete) localStorage.removeItem('active_patrol_run_id');
+          else {
+            if(item.patrol_run_id)localStorage.removeItem('patrol_checkpoint_response_'+item.patrol_run_id+'_'+item.checkpoint_id);
+            if (data.patrol_complete) localStorage.removeItem('active_patrol_run_id');
+          }
         } catch (err) {
           remaining.push(item);
           break;
@@ -752,10 +757,13 @@
           if (!isAssigned) throw new Error('This checkpoint belongs to "' + checkpoint.site_name + '", which is not one of your assigned sites.');
 
           statusDiv.textContent = 'Logging scan for ' + checkpoint.name + ' (' + checkpoint.site_name + ')...';
+          const activeRunId=localStorage.getItem('active_patrol_run_id');
+          let checkpointResponse={};
+          try{checkpointResponse=JSON.parse(localStorage.getItem('patrol_checkpoint_response_'+activeRunId+'_'+checkpoint.id)||'{}')}catch(e){}
           const scanRes = await fetch(API_BASE + '/api/patrol-logs', {
             method: 'POST',
             headers: authHeaders(),
-            body: JSON.stringify({ tenant_id: Number(tenantId), checkpoint_id: checkpoint.id, user_id: Number(userId), latitude:scanLocation.latitude, longitude:scanLocation.longitude, accuracy:scanLocation.accuracy, device_scanned_at:deviceScannedAt, patrol_run_id: localStorage.getItem('active_patrol_run_id') || null })
+            body: JSON.stringify({ tenant_id: Number(tenantId), checkpoint_id: checkpoint.id, user_id: Number(userId), latitude:scanLocation.latitude, longitude:scanLocation.longitude, accuracy:scanLocation.accuracy, device_scanned_at:deviceScannedAt, patrol_run_id:activeRunId||null, checkpoint_note:checkpointResponse.checkpoint_note||null, instruction_confirmed:Boolean(checkpointResponse.instruction_confirmed) })
           });
           const scanData = await scanRes.json();
           if (!scanRes.ok) throw new Error(scanData.error || 'Failed to log scan');
@@ -766,6 +774,7 @@
           } else {
             statusDiv.textContent = '✓ Scanned ' + checkpoint.name + ' successfully!' + (scanData.checkpoint_count ? ' (' + scanData.scanned_count + '/' + scanData.checkpoint_count + ')' : '');
           }
+          if(activeRunId)localStorage.removeItem('patrol_checkpoint_response_'+activeRunId+'_'+checkpoint.id);
           finishScanUI(statusDiv, 'success');
           return;
         } catch (err) {
@@ -802,6 +811,7 @@
       }
 
       const queue = loadQueue();
+      const activeRunId=localStorage.getItem('active_patrol_run_id');let checkpointResponse={};try{checkpointResponse=JSON.parse(localStorage.getItem('patrol_checkpoint_response_'+activeRunId+'_'+cached.id)||'{}')}catch(e){}
       queue.push({
         local_id: Date.now() + '-' + Math.random().toString(36).slice(2),
         tenant_id: Number(tenantId),
@@ -815,6 +825,8 @@
         scanned_at: deviceScannedAt,
         device_scanned_at: deviceScannedAt,
         patrol_run_id: localStorage.getItem('active_patrol_run_id') || null
+        ,checkpoint_note: checkpointResponse.checkpoint_note || null
+        ,instruction_confirmed: Boolean(checkpointResponse.instruction_confirmed)
       });
       saveQueue(queue);
       updateConnectionBanner();
