@@ -185,6 +185,7 @@
       <h3>Scan a Checkpoint</h3>
       <p class="hint">Point your camera at any checkpoint's QR label. Works even with no signal — scans are queued and synced automatically.</p>
       <button class="scanqr" onclick="openScanner()">📷 Open Camera Scanner</button>
+      <div id="activePatrolHint" class="hint"></div>
       <div id="qrScanStatus" class="status"></div>
     </section>
 
@@ -208,6 +209,7 @@
       <button class="shift-open-btn" onclick="window.location.href='my_timesheets.html'">Review My Timesheets →</button>
       <button class="shift-open-btn" onclick="window.location.href='availability.html'">Availability & Leave →</button>
       <button class="shift-open-btn" onclick="window.location.href='shift_marketplace.html'">Open Shifts & Swaps →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_patrols.html'">My Scheduled Patrols →</button>
     </section>
 
     <section id="siteSection">
@@ -254,6 +256,8 @@
     const API_BASE = 'https://patrolsync-backend.onrender.com';
     let scannerStream = null;
     let scannerActive = false;
+    const activePatrolRunId = localStorage.getItem('active_patrol_run_id');
+    document.getElementById('activePatrolHint').textContent = activePatrolRunId ? 'Scheduled patrol #' + activePatrolRunId + ' is active. Route order will be enforced.' : 'No scheduled patrol currently active.';
     let assignedSites = [];
     let activeSosId = null;
     let emergencyPhone = null;
@@ -561,10 +565,13 @@
               user_id: item.user_id,
               latitude: item.latitude,
               longitude: item.longitude,
-              scanned_at: item.scanned_at
+              scanned_at: item.scanned_at,
+              patrol_run_id: item.patrol_run_id || null
             })
           });
+          const data = await res.json().catch(() => ({}));
           if (!res.ok) remaining.push(item);
+          else if (data.patrol_complete) localStorage.removeItem('active_patrol_run_id');
         } catch (err) {
           remaining.push(item);
           break;
@@ -743,19 +750,24 @@
           const scanRes = await fetch(API_BASE + '/api/patrol-logs', {
             method: 'POST',
             headers: authHeaders(),
-            body: JSON.stringify({ tenant_id: Number(tenantId), checkpoint_id: checkpoint.id, user_id: Number(userId) })
+            body: JSON.stringify({ tenant_id: Number(tenantId), checkpoint_id: checkpoint.id, user_id: Number(userId), patrol_run_id: localStorage.getItem('active_patrol_run_id') || null })
           });
           const scanData = await scanRes.json();
           if (!scanRes.ok) throw new Error(scanData.error || 'Failed to log scan');
 
-          statusDiv.textContent = '✓ Scanned ' + checkpoint.name + ' successfully!';
+          if (scanData.patrol_complete) {
+            localStorage.removeItem('active_patrol_run_id');
+            statusDiv.textContent = '✓ Patrol completed! Final checkpoint: ' + checkpoint.name;
+          } else {
+            statusDiv.textContent = '✓ Scanned ' + checkpoint.name + ' successfully!' + (scanData.checkpoint_count ? ' (' + scanData.scanned_count + '/' + scanData.checkpoint_count + ')' : '');
+          }
           finishScanUI(statusDiv, 'success');
           return;
         } catch (err) {
           // If it's a genuine validation error (checkpoint not found, wrong
           // site), don't silently queue it — show the real error. Only fall
           // through to offline queueing for network-level failures.
-          if (err.message.includes('not found') || err.message.includes('not one of your assigned')) {
+          if (localStorage.getItem('active_patrol_run_id') || err.message.includes('not found') || err.message.includes('not one of your assigned')) {
             statusDiv.textContent = err.message;
             retryFrameAfterDelay(statusDiv);
             return;
@@ -794,7 +806,8 @@
         user_id: Number(userId),
         latitude: null,
         longitude: null,
-        scanned_at: new Date().toISOString()
+        scanned_at: new Date().toISOString(),
+        patrol_run_id: localStorage.getItem('active_patrol_run_id') || null
       });
       saveQueue(queue);
       updateConnectionBanner();
