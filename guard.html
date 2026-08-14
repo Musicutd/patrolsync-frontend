@@ -228,6 +228,7 @@
     <section>
       <h3>Report an Incident</h3>
       <textarea id="incidentDescription" placeholder="Describe what happened" rows="3"></textarea>
+      <select id="incidentCategory"><option value="security">Security</option><option value="safety">Safety hazard</option><option value="medical">Medical</option><option value="fire">Fire</option><option value="property">Property damage</option><option value="access">Access control</option><option value="conduct">Conduct</option><option value="general">General</option></select>
       <select id="incidentSeverity">
         <option value="low">Low</option>
         <option value="medium">Medium</option>
@@ -938,6 +939,7 @@
       const siteId = document.getElementById('siteSelect').value;
       const description = document.getElementById('incidentDescription').value;
       const severity = document.getElementById('incidentSeverity').value;
+      const category = document.getElementById('incidentCategory').value;
       const statusDiv = document.getElementById('incidentStatus');
 
       if (!navigator.onLine) {
@@ -957,6 +959,7 @@
             site_id: Number(siteId),
             description,
             severity,
+            category,
             photos: attachedPhotos
           })
         });
