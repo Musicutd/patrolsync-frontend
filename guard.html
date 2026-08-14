@@ -565,7 +565,9 @@
               user_id: item.user_id,
               latitude: item.latitude,
               longitude: item.longitude,
+              accuracy: item.accuracy,
               scanned_at: item.scanned_at,
+              device_scanned_at: item.device_scanned_at || item.scanned_at,
               patrol_run_id: item.patrol_run_id || null
             })
           });
@@ -735,6 +737,9 @@
       scannerActive = false;
       const statusDiv = document.getElementById('scannerStatus');
       const { tenantId, userId } = getSession();
+      statusDiv.textContent = 'Capturing GPS evidence...';
+      const scanLocation = await getClockLocation();
+      const deviceScannedAt = new Date().toISOString();
 
       if (navigator.onLine) {
         statusDiv.textContent = 'Found code: ' + qrValue + ' — looking up checkpoint...';
@@ -750,7 +755,7 @@
           const scanRes = await fetch(API_BASE + '/api/patrol-logs', {
             method: 'POST',
             headers: authHeaders(),
-            body: JSON.stringify({ tenant_id: Number(tenantId), checkpoint_id: checkpoint.id, user_id: Number(userId), patrol_run_id: localStorage.getItem('active_patrol_run_id') || null })
+            body: JSON.stringify({ tenant_id: Number(tenantId), checkpoint_id: checkpoint.id, user_id: Number(userId), latitude:scanLocation.latitude, longitude:scanLocation.longitude, accuracy:scanLocation.accuracy, device_scanned_at:deviceScannedAt, patrol_run_id: localStorage.getItem('active_patrol_run_id') || null })
           });
           const scanData = await scanRes.json();
           if (!scanRes.ok) throw new Error(scanData.error || 'Failed to log scan');
@@ -773,14 +778,14 @@
             return;
           }
           console.warn('Online scan failed, falling back to offline queue:', err.message);
-          queueScanOffline(qrValue, statusDiv);
+          queueScanOffline(qrValue, statusDiv, scanLocation, deviceScannedAt);
         }
       } else {
-        queueScanOffline(qrValue, statusDiv);
+        queueScanOffline(qrValue, statusDiv, scanLocation, deviceScannedAt);
       }
     }
 
-    function queueScanOffline(qrValue, statusDiv) {
+    function queueScanOffline(qrValue, statusDiv, scanLocation, deviceScannedAt) {
       const { tenantId, userId } = getSession();
       const cache = loadCheckpointCache();
       const cached = cache[qrValue];
@@ -804,9 +809,11 @@
         checkpoint_id: cached.id,
         checkpoint_name: cached.name,
         user_id: Number(userId),
-        latitude: null,
-        longitude: null,
-        scanned_at: new Date().toISOString(),
+        latitude: scanLocation.latitude || null,
+        longitude: scanLocation.longitude || null,
+        accuracy: scanLocation.accuracy || null,
+        scanned_at: deviceScannedAt,
+        device_scanned_at: deviceScannedAt,
         patrol_run_id: localStorage.getItem('active_patrol_run_id') || null
       });
       saveQueue(queue);
