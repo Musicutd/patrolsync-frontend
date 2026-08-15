@@ -1,0 +1,14 @@
+{
+  "name": "PatrolSync Guard",
+  "short_name": "PatrolSync",
+  "description": "Guard time clock, patrol, safety, dispatch and reporting portal.",
+  "start_url": "./guard.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "patrolsync-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
