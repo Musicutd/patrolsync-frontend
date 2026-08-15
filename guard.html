@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="patrolsync-icon.svg" type="image/svg+xml">
   <title>PatrolSync - Guard</title>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
@@ -127,6 +132,7 @@
     .shift-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white; margin-left: 6px; }
     .shift-badge.full_time { background: #16a34a; }
     .shift-badge.part_time { background: #d97706; }
+    .install-btn { background:#0f766e; width:auto; padding:7px 12px; margin-left:auto; margin-right:8px; }
   </style>
 </head>
 <body>
@@ -146,6 +152,7 @@
   <div id="guardScreen">
     <div id="header">
       <h2 id="guardName">Guard</h2>
+      <button id="installAppBtn" class="install-btn hidden">Install App</button>
       <button class="logout" onclick="doLogout()">Log Out</button>
     </div>
 
@@ -268,6 +275,23 @@
   </div>
 
   <script>
+    let installPromptEvent = null;
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js')
+        .catch(err => console.warn('Service worker registration failed:', err.message)));
+    }
+    window.addEventListener('beforeinstallprompt', event => {
+      event.preventDefault(); installPromptEvent = event;
+      document.getElementById('installAppBtn').classList.remove('hidden');
+    });
+    window.addEventListener('appinstalled', () => {
+      installPromptEvent = null; document.getElementById('installAppBtn').classList.add('hidden');
+    });
+    document.getElementById('installAppBtn').addEventListener('click', async () => {
+      if (!installPromptEvent) return;
+      installPromptEvent.prompt(); await installPromptEvent.userChoice;
+      installPromptEvent = null; document.getElementById('installAppBtn').classList.add('hidden');
+    });
     const API_BASE = 'https://patrolsync-backend.onrender.com';
     let scannerStream = null;
     let scannerActive = false;
