@@ -374,7 +374,9 @@
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Attendance action failed');
-      activeAttendance = data.session || null; attendanceLoadedAt = Date.now(); renderAttendance();
+      activeAttendance = data.active === false ? null : (data.session || null);
+      attendanceLoadedAt = Date.now();
+      renderAttendance();
     }
 
     async function clockIn() {
