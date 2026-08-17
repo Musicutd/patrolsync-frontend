@@ -26,6 +26,12 @@
   <input type="password" id="loginPassword" placeholder="Password">
 
   <button onclick="doLogin()">Log In</button>
+  <div id="mfaStep" style="display:none;border:1px solid #dbe3ee;border-radius:8px;padding:12px;margin-top:12px">
+    <p id="mfaMessage">Enter the six-digit code sent to your email.</p>
+    <input type="text" id="mfaCode" inputmode="numeric" maxlength="6" placeholder="6-digit verification code">
+    <button onclick="verifyMfa()">Verify & Log In</button>
+    <button onclick="cancelMfa()" style="background:#64748b">Cancel</button>
+  </div>
   <div id="loginStatus" class="status"></div>
 
   <div class="links-row">
@@ -43,6 +49,7 @@
 
   <script>
     const API_BASE = 'https://patrolsync-backend.onrender.com';
+    let mfaChallenge = null;
 
     function clearAllSessions() {
       localStorage.removeItem('token');
@@ -89,6 +96,16 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Login failed');
 
+        if (data.mfa_required) {
+          mfaChallenge = data.challenge_token;
+          document.getElementById('mfaStep').style.display = 'block';
+          document.getElementById('mfaMessage').textContent = 'Enter the six-digit code sent to ' + data.masked_email + '.';
+          document.getElementById('mfaCode').focus();
+          statusDiv.textContent = 'Verification code sent.';
+          statusDiv.className = 'status success';
+          return;
+        }
+
         if (!['admin', 'staff'].includes(data.user.role)) {
           statusDiv.textContent = 'This account must use the guard or client login page.';
           statusDiv.className = 'status error';
@@ -110,9 +127,22 @@
       }
     }
 
+    async function verifyMfa() {
+      const code = document.getElementById('mfaCode').value.trim(), statusDiv = document.getElementById('loginStatus');
+      if (!mfaChallenge || !/^\d{6}$/.test(code)) { statusDiv.textContent='Enter the six-digit code'; statusDiv.className='status error'; return; }
+      try {
+        const res=await fetch(API_BASE+'/api/auth/mfa/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({challenge_token:mfaChallenge,code})});
+        const data=await res.json(); if(!res.ok)throw Error(data.error||'Verification failed');
+        clearAllSessions();localStorage.setItem('token',data.token);localStorage.setItem('tenant_id',data.tenant_id);localStorage.setItem('user_email',data.user.email);localStorage.setItem('user_role',data.user.role);
+        statusDiv.textContent='Verified! Redirecting...';statusDiv.className='status success';setTimeout(()=>{location.href=data.user.role==='staff'?'staff_dashboard.html':'dashboard.html'},500);
+      } catch(e) { statusDiv.textContent=e.message;statusDiv.className='status error'; }
+    }
+    function cancelMfa(){mfaChallenge=null;document.getElementById('mfaStep').style.display='none';document.getElementById('mfaCode').value='';}
+
     document.getElementById('loginPassword').addEventListener('keydown', event => {
       if (event.key === 'Enter') doLogin();
     });
+    document.getElementById('mfaCode').addEventListener('keydown', event => { if(event.key==='Enter')verifyMfa(); });
   </script>
 </body>
 </html>
