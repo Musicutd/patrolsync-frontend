@@ -1,1 +1,1280 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Forgot Password</title><style>body{font-family:Arial;max-width:440px;margin:70px auto;padding:20px}input,select,button{width:100%;padding:12px;margin:8px 0;box-sizing:border-box;font-size:15px}button{background:#2563eb;color:white;border:0;border-radius:6px}.status{margin-top:12px}.error{color:red}.success{color:green}.hint{font-size:13px;color:#64748b}</style></head><body><p><a id="back" href="login.html">← Login</a></p><h2>Reset your password</h2><p>Enter the Company ID shown on the administrator dashboard, then select the correct account type.</p><input id="companyId" type="number" min="1" inputmode="numeric" placeholder="Company ID"><select id="accountType"><option value="admin">Administrator or office staff</option><option value="guard">Security guard</option></select><input id="email" type="email" placeholder="Email address"><button onclick="send()">Send Reset Link</button><div id="status" class="status"></div><p class="hint">The Company ID prevents an account with the same email in another company from being changed.</p><script>const API='https://patrolsync-backend.onrender.com',requestedRole=new URLSearchParams(location.search).get('role'),remembered=localStorage.getItem('guard_company_id');if(requestedRole==='guard'){document.getElementById('accountType').value='guard';document.getElementById('back').href='guard.html'}if(remembered)document.getElementById('companyId').value=remembered;async function send(){const s=document.getElementById('status'),companyId=Number(document.getElementById('companyId').value);if(!Number.isInteger(companyId)||companyId<1){s.textContent='Company ID is required.';s.className='status error';return}s.textContent='Sending…';s.className='status';try{const r=await fetch(API+'/api/auth/scoped-forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({company_id:companyId,email:document.getElementById('email').value.trim(),account_type:document.getElementById('accountType').value})}),d=await r.json();if(!r.ok)throw Error(d.error||'Request failed');localStorage.setItem('guard_company_id',String(companyId));s.textContent=d.message;s.className='status success'}catch(e){s.textContent=e.message;s.className='status error'}}</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="patrolsync-icon.svg" type="image/svg+xml">
+  <title>PatrolSync - Guard</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 16px; background: #f7f7f8; }
+    h2, h3 { color: #222; }
+    input, select, button, textarea { width: 100%; padding: 14px; margin: 6px 0; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; }
+    button { background: #2563eb; color: white; border: none; font-weight: bold; cursor: pointer; }
+    button.logout { background: #dc2626; width: auto; padding: 10px 16px; font-size: 14px; }
+    button.scanqr { background: #7c3aed; margin-top: 10px; }
+    button.remaining { background: #d97706; margin-top: 6px; }
+    button.qr-close { background: #64748b; }
+    section { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    #header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { border-bottom: 1px solid #eee; padding: 12px 0; }
+    .status { font-weight: bold; margin-top: 8px; font-size: 14px; }
+    .success { color: green; }
+    .error { color: red; }
+    #loginScreen, #guardScreen { display: none; }
+    .hint { font-size: 13px; color: #666; margin: 4px 0 10px; }
+    .timeclock-card { border:2px solid #bfdbfe; background:#eff6ff; }
+    .clock-state { font-size:18px; font-weight:bold; color:#1e3a8a; margin:6px 0; }
+    .clock-timer { font-size:30px; font-weight:bold; letter-spacing:1px; margin:10px 0; }
+    .clock-meta { font-size:13px; color:#475569; margin-bottom:10px; }
+    .clock-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .clock-actions button { flex:1; min-width:120px; }
+    .clock-in-btn { background:#16a34a; }
+    .break-btn { background:#d97706; }
+    .clock-out-btn { background:#dc2626; }
+    .admin-link { display: block; text-align: center; margin-top: 16px; font-size: 13px; }
+    .admin-link a { color: #2563eb; }
+    .progress-wrap { margin: 10px 0; }
+    .progress-count { font-size: 22px; font-weight: bold; color: #222; }
+    .progress-target { font-size: 14px; color: #666; }
+    .progress-bar-bg { width: 100%; height: 14px; background: #eee; border-radius: 7px; overflow: hidden; margin-top: 8px; }
+    .progress-bar-fill { height: 100%; background: #16a34a; border-radius: 7px; transition: width 0.3s; }
+    .progress-complete { color: #166534; font-weight: bold; margin-top: 6px; }
+    #remainingModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+    #remainingModalContent { background: white; padding: 20px; border-radius: 8px; max-width: 400px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    #remainingModalContent li { padding: 10px 0; font-size: 14px; }
+    #scannerModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; }
+    #scannerModal video { width: 90%; max-width: 400px; border-radius: 8px; }
+    #scannerModal canvas { display: none; }
+    #scannerStatus { color: white; margin-top: 12px; text-align: center; font-size: 14px; }
+    #scannerModal button { width: 80%; max-width: 300px; margin-top: 16px; }
+
+    /* --- SOS widget --- */
+    .sos-btn {
+      background: #dc2626;
+      padding: 18px;
+      font-size: 18px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 8px rgba(220,38,38,0.4);
+    }
+    .sos-btn:active { transform: scale(0.98); }
+    .sos-btn.sending { opacity: 0.6; cursor: wait; }
+    .sos-active-banner {
+      margin-top: 10px;
+      padding: 12px;
+      background: #fef2f2;
+      border: 1px solid #dc2626;
+      border-radius: 8px;
+      color: #991b1b;
+      font-size: 14px;
+      font-weight: bold;
+      text-align: center;
+      display: none;
+    }
+    .sos-active-banner.show { display: block; }
+    .sos-safe-btn { background: #16a34a; padding: 10px; margin-top: 10px; }
+    .sos-contact-row { display: flex; gap: 8px; margin-top: 10px; }
+    .sos-contact-row a { flex: 1; text-decoration: none; }
+    .sos-call-btn, .sos-wa-btn {
+      display: block;
+      text-align: center;
+      padding: 14px 10px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 14px;
+      color: white;
+    }
+    .sos-call-btn { background: #16a34a; }
+    .sos-wa-btn { background: #22c55e; }
+    .sos-contact-hint { font-size: 12px; color: #666; margin-top: 6px; text-align: center; }
+    .sos-no-contact { font-size: 12px; color: #d97706; margin-top: 8px; text-align: center; }
+    .hidden { display: none; }
+
+    /* --- Incident photo attachments --- */
+    .photo-attach-btn { background: #0891b2; margin-top: 4px; }
+    .photo-previews { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .photo-thumb-wrap { position: relative; width: 72px; height: 72px; }
+    .photo-thumb-wrap img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc; }
+    .photo-remove-btn {
+      position: absolute; top: -6px; right: -6px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #dc2626; color: white; border: none;
+      font-size: 12px; font-weight: bold; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    .photo-count-hint { font-size: 12px; color: #666; margin-top: 4px; }
+    .photo-compressing { font-size: 12px; color: #0891b2; margin-top: 4px; }
+
+    /* --- Offline mode --- */
+    .connection-banner { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; font-weight: bold; }
+    .connection-banner.online { background: #dcfce7; color: #166534; }
+    .connection-banner.offline { background: #fef3c7; color: #92400e; }
+    .connection-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .connection-banner.online .connection-dot { background: #16a34a; }
+    .connection-banner.offline .connection-dot { background: #d97706; animation: sosPulse 1.5s infinite; }
+    @keyframes sosPulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    .sync-btn { background: #0891b2; width: auto; padding: 6px 12px; font-size: 12px; margin: 0; }
+    .queued-tag { color: #d97706; font-weight: bold; }
+    .synced-tag { color: #16a34a; font-weight: bold; }
+
+    /* --- My Shifts widget --- */
+    .shift-open-btn { background: #7c3aed; margin-top: 8px; }
+    .shift-today-row { border-bottom: 1px solid #f3f3f3; padding: 8px 0; font-size: 14px; }
+    .shift-today-row:last-child { border-bottom: none; }
+    .shift-today-site { font-weight: bold; }
+    .shift-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; color: white; margin-left: 6px; }
+    .shift-badge.full_time { background: #16a34a; }
+    .shift-badge.part_time { background: #d97706; }
+    .install-btn { background:#0f766e; width:auto; padding:7px 12px; margin-left:auto; margin-right:8px; }
+  </style>
+</head>
+<body>
+  <div id="loginScreen">
+    <h2>PatrolSync Guard Login</h2>
+    <section>
+      <input type="number" id="loginCompanyId" placeholder="Company ID" min="1" inputmode="numeric">
+      <input type="email" id="loginEmail" placeholder="Your email">
+      <input type="password" id="loginPassword" placeholder="Password">
+      <button onclick="doLogin()">Log In</button>
+      <div id="loginStatus" class="status"></div>
+      <p class="hint">Ask your site admin if you don't have login credentials yet.</p>
+    </section>
+    <div class="admin-link"><a href="forgot_password.html?role=guard">Forgot your guard password?</a></div>
+    <div class="admin-link"><a href="login.html">Are you an admin? Log in here →</a></div>
+    <div class="admin-link"><a href="client_portal.html">Are you a client? Log in here →</a></div>
+  </div>
+
+  <div id="guardScreen">
+    <div id="header">
+      <h2 id="guardName">Guard</h2>
+      <button id="installAppBtn" class="install-btn hidden">Install App</button>
+      <button class="logout" onclick="doLogout()">Log Out</button>
+    </div>
+
+    <div id="connectionBanner" class="connection-banner online">
+      <span><span class="connection-dot"></span><span id="connectionText">Online</span></span>
+      <button class="sync-btn hidden" id="syncNowBtn" onclick="syncQueue()">Sync Now</button>
+    </div>
+
+    <section class="timeclock-card">
+      <h3>Time Clock</h3>
+      <div id="clockState" class="clock-state">Not clocked in</div>
+      <div id="clockTimer" class="clock-timer">00:00:00</div>
+      <div id="clockMeta" class="clock-meta">Select your assigned site, then clock in.</div>
+      <label for="siteSelect" style="display:block;margin-top:12px;font-weight:bold;">Assigned Site</label>
+      <select id="siteSelect"><option value="">Loading assigned sites...</option></select>
+      <div class="clock-actions">
+        <button id="clockInBtn" class="clock-in-btn" onclick="clockIn()">Clock In</button>
+        <button id="breakBtn" class="break-btn hidden" onclick="toggleBreak()">Start Break</button>
+        <button id="clockOutBtn" class="clock-out-btn hidden" onclick="clockOut()">Clock Out</button>
+      </div>
+      <div id="clockStatus" class="status"></div>
+    </section>
+
+    <section>
+      <button id="sosBtn" class="sos-btn" onclick="triggerSos()">🆘 SOS — SEND EMERGENCY ALERT</button>
+      <div class="sos-contact-row">
+        <a id="sosCallLink" href="#" class="sos-call-btn hidden">📞 Call Admin</a>
+        <a id="sosWaLink" href="#" class="sos-wa-btn hidden" target="_blank">💬 WhatsApp Admin</a>
+      </div>
+      <div id="sosContactHint" class="sos-contact-hint hidden">These also notify your admin directly by phone/WhatsApp.</div>
+      <div id="sosNoContact" class="sos-no-contact hidden"></div>
+      <div id="sosActiveBanner" class="sos-active-banner">
+        🆘 Your SOS is active — an admin has been notified.
+        <button class="sos-btn sos-safe-btn" onclick="cancelMySos()">✓ I'm Safe — Cancel Alert</button>
+      </div>
+      <div id="sosStatusMsg" class="status"></div>
+    </section>
+
+    <section>
+      <h3>Scan a Checkpoint</h3>
+      <p class="hint">Point your camera at any checkpoint's QR label. Works even with no signal — scans are queued and synced automatically.</p>
+      <button class="scanqr" onclick="openScanner()">📷 Open Camera Scanner</button>
+      <div id="activePatrolHint" class="hint"></div>
+      <div id="activeCheckpointRequirements" class="hidden" style="margin-top:12px;padding:12px;border:1px solid #bfdbfe;border-radius:7px;background:#eff6ff;">
+        <b id="activeCheckpointName"></b>
+        <p id="activeCheckpointInstructions" class="hint"></p>
+        <label id="activeConfirmWrap" class="hidden"><input id="activeInstructionConfirmed" type="checkbox" style="width:auto;"> I have read and understood the instructions</label>
+        <textarea id="activeCheckpointNote" class="hidden" rows="3" placeholder="Enter your required checkpoint observation"></textarea>
+        <button type="button" onclick="saveActiveCheckpointResponse()" style="margin-top:7px;background:#16a34a;">Save Checkpoint Response</button>
+        <div id="activeCheckpointStatus" class="status"></div>
+      </div>
+      <div id="qrScanStatus" class="status"></div>
+    </section>
+
+    <section>
+      <h3>Today's Progress</h3>
+      <div class="progress-wrap">
+        <span class="progress-count" id="progressCount">0</span>
+        <span class="progress-target" id="progressTarget">out of 0</span>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBarFill" style="width:0%;"></div></div>
+        <div id="progressCompleteMsg" class="progress-complete hidden">✓ Round complete!</div>
+      </div>
+      <div id="pendingSyncHint" class="hint hidden"></div>
+      <button class="remaining" onclick="showRemaining()">Check Remaining Checkpoints</button>
+    </section>
+
+    <section>
+      <h3>📅 My Shifts</h3>
+      <p class="hint">Your upcoming duty schedule, set by your admin.</p>
+      <div id="todayShiftSummary">Loading...</div>
+      <button class="shift-open-btn" onclick="window.location.href='my_shifts.html'">View Full Shift Schedule →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_timesheets.html'">Review My Timesheets →</button>
+      <button class="shift-open-btn" onclick="window.location.href='availability.html'">Availability & Leave →</button>
+      <button class="shift-open-btn" onclick="window.location.href='shift_marketplace.html'">Open Shifts & Swaps →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_patrols.html'">My Scheduled Patrols →</button>
+      <button class="shift-open-btn" onclick="window.location.href='handover.html'">Shift Handover Log →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_notifications.html'">My Notifications →</button>
+      <button class="shift-open-btn" onclick="window.location.href='team_messages.html'">Team Messages →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_safety.html'">Lone-Worker Safety Check →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_dispatches.html'">My Dispatches →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_training.html'">My Training & Policies →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_equipment.html'">My Equipment & Keys →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_inspections.html'">My Site Inspections →</button>
+    </section>
+
+    <section>
+      <h3>Report an Incident</h3>
+      <textarea id="incidentDescription" placeholder="Describe what happened" rows="3"></textarea>
+      <select id="incidentCategory"><option value="security">Security</option><option value="safety">Safety hazard</option><option value="medical">Medical</option><option value="fire">Fire</option><option value="property">Property damage</option><option value="access">Access control</option><option value="conduct">Conduct</option><option value="general">General</option></select>
+      <select id="incidentSeverity">
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+        <option value="critical">Critical</option>
+      </select>
+      <button type="button" class="photo-attach-btn" onclick="document.getElementById('incidentPhotoInput').click()">📷 Attach Photo Evidence</button>
+      <input type="file" id="incidentPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handlePhotoSelected(event)">
+      <div class="photo-count-hint" id="photoCountHint">0 of 3 photos attached</div>
+      <div id="photoCompressing" class="photo-compressing hidden">Compressing photo...</div>
+      <div id="photoPreviews" class="photo-previews"></div>
+      <button onclick="submitIncident()">Submit Report</button>
+      <p class="hint">Incident reports require a connection to submit — they are not queued offline.</p>
+      <div id="incidentStatus" class="status"></div>
+    </section>
+  </div>
+
+  <div id="remainingModal">
+    <div id="remainingModalContent">
+      <h3>Remaining Checkpoints</h3>
+      <ul id="remainingList"></ul>
+      <button class="qr-close" onclick="closeRemaining()">Close</button>
+    </div>
+  </div>
+
+  <div id="scannerModal">
+    <video id="scannerVideo" playsinline></video>
+    <canvas id="scannerCanvas"></canvas>
+    <div id="scannerStatus">Point your camera at a checkpoint QR code...</div>
+    <button class="qr-close" onclick="closeScanner()">Cancel</button>
+  </div>
+
+  <script>
+    let installPromptEvent = null;
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js')
+        .catch(err => console.warn('Service worker registration failed:', err.message)));
+    }
+    window.addEventListener('beforeinstallprompt', event => {
+      event.preventDefault(); installPromptEvent = event;
+      document.getElementById('installAppBtn').classList.remove('hidden');
+    });
+    window.addEventListener('appinstalled', () => {
+      installPromptEvent = null; document.getElementById('installAppBtn').classList.add('hidden');
+    });
+    document.getElementById('installAppBtn').addEventListener('click', async () => {
+      if (!installPromptEvent) return;
+      installPromptEvent.prompt(); await installPromptEvent.userChoice;
+      installPromptEvent = null; document.getElementById('installAppBtn').classList.add('hidden');
+    });
+    const API_BASE = 'https://patrolsync-backend.onrender.com';
+    let scannerStream = null;
+    let scannerActive = false;
+    const activePatrolRunId = localStorage.getItem('active_patrol_run_id');
+    document.getElementById('activePatrolHint').textContent = activePatrolRunId ? 'Scheduled patrol #' + activePatrolRunId + ' is active. Route order will be enforced.' : 'No scheduled patrol currently active.';
+    let activePatrolCheckpoint = null;
+
+    async function loadActiveCheckpointRequirements() {
+      const runId=localStorage.getItem('active_patrol_run_id'),box=document.getElementById('activeCheckpointRequirements');
+      if(!runId){activePatrolCheckpoint=null;box.classList.add('hidden');document.getElementById('activePatrolHint').textContent='No scheduled patrol currently active.';return;}
+      const {tenantId}=getSession();
+      try{const response=await fetch(API_BASE+'/api/patrol-runs?tenant_id='+tenantId,{headers:authHeaders()}),rows=await response.json();if(!response.ok)throw new Error(rows.error||'Failed to load active patrol');const run=rows.find(x=>String(x.id)===String(runId)&&x.status==='in_progress');if(!run){localStorage.removeItem('active_patrol_run_id');activePatrolCheckpoint=null;box.classList.add('hidden');return;}const next=run.checkpoints.find(x=>!x.scanned_at);if(!next){box.classList.add('hidden');return;}activePatrolCheckpoint={...next,run_id:run.id};document.getElementById('activePatrolHint').textContent='Active: '+run.route_name+' — '+run.scanned_count+'/'+run.checkpoint_count+' completed';document.getElementById('activeCheckpointName').textContent='Next checkpoint: '+next.name;document.getElementById('activeCheckpointInstructions').textContent=next.instructions||'No special instructions for this checkpoint.';document.getElementById('activeConfirmWrap').classList.toggle('hidden',!next.requires_confirmation);document.getElementById('activeCheckpointNote').classList.toggle('hidden',!next.requires_note);let saved={};try{saved=JSON.parse(localStorage.getItem('patrol_checkpoint_response_'+run.id+'_'+next.checkpoint_id)||'{}')}catch(e){}document.getElementById('activeInstructionConfirmed').checked=Boolean(saved.instruction_confirmed);document.getElementById('activeCheckpointNote').value=saved.checkpoint_note||'';document.getElementById('activeCheckpointStatus').textContent=saved.instruction_confirmed||saved.checkpoint_note?'Response saved — scan this checkpoint next.':'';box.classList.remove('hidden');}catch(err){document.getElementById('activePatrolHint').textContent=err.message;}
+    }
+
+    function saveActiveCheckpointResponse(){if(!activePatrolCheckpoint)return;const confirmed=document.getElementById('activeInstructionConfirmed').checked,note=document.getElementById('activeCheckpointNote').value.trim();if(activePatrolCheckpoint.requires_confirmation&&!confirmed)return alert('Please acknowledge the checkpoint instructions.');if(activePatrolCheckpoint.requires_note&&!note)return alert('Please enter the required written observation.');localStorage.setItem('patrol_checkpoint_response_'+activePatrolCheckpoint.run_id+'_'+activePatrolCheckpoint.checkpoint_id,JSON.stringify({instruction_confirmed:confirmed,checkpoint_note:note||null}));document.getElementById('activeCheckpointStatus').textContent='Response saved — you can now scan this checkpoint.';document.getElementById('activeCheckpointStatus').className='status success';}
+    let assignedSites = [];
+    let activeSosId = null;
+    let emergencyPhone = null;
+    let emergencyWhatsapp = null;
+    let attachedPhotos = [];
+    const MAX_PHOTOS = 3;
+
+    function getSession() {
+      return {
+        token: localStorage.getItem('guard_token'),
+        tenantId: localStorage.getItem('guard_tenant_id'),
+        userId: localStorage.getItem('guard_user_id'),
+        email: localStorage.getItem('guard_email')
+      };
+    }
+
+    function authHeaders() {
+      const { token } = getSession();
+      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+    }
+
+    let activeAttendance = null;
+    let attendanceLoadedAt = Date.now();
+    let attendanceTimer = null;
+
+    function formatClockDuration(totalSeconds) {
+      const seconds = Math.max(0, Math.floor(totalSeconds));
+      const hours = String(Math.floor(seconds / 3600)).padStart(2, '0');
+      const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+      return hours + ':' + minutes + ':' + String(seconds % 60).padStart(2, '0');
+    }
+
+    function attendanceWorkedSeconds() {
+      if (!activeAttendance) return 0;
+      const elapsed = (Date.now() - new Date(activeAttendance.clocked_in_at).getTime()) / 1000;
+      let breaks = Number(activeAttendance.break_seconds || 0);
+      if (activeAttendance.active_break_id) breaks += (Date.now() - attendanceLoadedAt) / 1000;
+      return Math.max(0, elapsed - breaks);
+    }
+
+    function renderAttendance() {
+      const state = document.getElementById('clockState');
+      const timer = document.getElementById('clockTimer');
+      const meta = document.getElementById('clockMeta');
+      const inBtn = document.getElementById('clockInBtn');
+      const breakBtn = document.getElementById('breakBtn');
+      const outBtn = document.getElementById('clockOutBtn');
+      if (!activeAttendance) {
+        state.textContent = 'Not clocked in'; timer.textContent = '00:00:00';
+        meta.textContent = 'Select your assigned site, then clock in.';
+        inBtn.classList.remove('hidden'); breakBtn.classList.add('hidden'); outBtn.classList.add('hidden');
+        return;
+      }
+      const onBreak = Boolean(activeAttendance.active_break_id);
+      state.textContent = onBreak ? 'On break' : 'Clocked in';
+      timer.textContent = formatClockDuration(attendanceWorkedSeconds());
+      meta.textContent = activeAttendance.site_name + ' · since ' + new Date(activeAttendance.clocked_in_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+      inBtn.classList.add('hidden'); breakBtn.classList.remove('hidden'); outBtn.classList.remove('hidden');
+      breakBtn.textContent = onBreak ? 'End Break' : 'Start Break';
+    }
+
+    async function loadAttendance() {
+      const { tenantId } = getSession();
+      try {
+        const response = await fetch(API_BASE + '/api/attendance/current?tenant_id=' + tenantId, { headers:authHeaders() });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to load time clock');
+        activeAttendance = data.session || null; attendanceLoadedAt = Date.now(); renderAttendance();
+      } catch (err) {
+        document.getElementById('clockStatus').textContent = err.message;
+        document.getElementById('clockStatus').className = 'status error';
+      }
+      if (!attendanceTimer) attendanceTimer = setInterval(renderAttendance, 1000);
+    }
+
+    function getClockLocation() {
+      return new Promise(resolve => {
+        if (!navigator.geolocation) return resolve({});
+        navigator.geolocation.getCurrentPosition(
+          position => resolve({ latitude:position.coords.latitude, longitude:position.coords.longitude, accuracy:position.coords.accuracy }),
+          () => resolve({}), { enableHighAccuracy:true, timeout:8000, maximumAge:30000 }
+        );
+      });
+    }
+
+    async function attendanceAction(path, extra) {
+      if (!navigator.onLine) throw new Error('An internet connection is required for attendance actions.');
+      const { tenantId } = getSession();
+      const location = await getClockLocation();
+      const response = await fetch(API_BASE + path, {
+        method:'POST', headers:authHeaders(), body:JSON.stringify({ tenant_id:Number(tenantId), ...location, ...(extra || {}) })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Attendance action failed');
+      activeAttendance = data.active === false ? null : (data.session || null);
+      attendanceLoadedAt = Date.now();
+      renderAttendance();
+    }
+
+    async function clockIn() {
+      const siteId = document.getElementById('siteSelect').value;
+      const status = document.getElementById('clockStatus');
+      if (!siteId) { status.textContent='Select an assigned site first.'; status.className='status error'; return; }
+      try { await attendanceAction('/api/attendance/clock-in', { site_id:Number(siteId) }); status.textContent='Clocked in successfully.'; status.className='status success'; }
+      catch (err) { status.textContent=err.message; status.className='status error'; }
+    }
+
+    async function toggleBreak() {
+      const status = document.getElementById('clockStatus');
+      try {
+        await attendanceAction(activeAttendance && activeAttendance.active_break_id ? '/api/attendance/break/end' : '/api/attendance/break/start');
+        status.textContent = activeAttendance.active_break_id ? 'Break started.' : 'Break ended.'; status.className='status success';
+      } catch (err) { status.textContent=err.message; status.className='status error'; }
+    }
+
+    async function clockOut() {
+      if (!confirm('Clock out now?')) return;
+      const status = document.getElementById('clockStatus');
+      try { await attendanceAction('/api/attendance/clock-out'); status.textContent='Clocked out successfully.'; status.className='status success'; }
+      catch (err) { status.textContent=err.message; status.className='status error'; }
+    }
+
+    function showScreen(name) {
+      document.getElementById('loginScreen').style.display = name === 'login' ? 'block' : 'none';
+      document.getElementById('guardScreen').style.display = name === 'guard' ? 'block' : 'none';
+    }
+
+    function clearAllSessions() {
+      localStorage.removeItem('token');
+      localStorage.removeItem('tenant_id');
+      localStorage.removeItem('user_email');
+      localStorage.removeItem('guard_token');
+      localStorage.removeItem('guard_tenant_id');
+      localStorage.removeItem('guard_user_id');
+      localStorage.removeItem('guard_email');
+    }
+
+    async function doLogin() {
+      const companyId = Number(document.getElementById('loginCompanyId').value);
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const statusDiv = document.getElementById('loginStatus');
+
+      if (!Number.isInteger(companyId) || companyId < 1 || !email || !password) {
+        statusDiv.textContent = 'Company ID, email and password are required';
+        statusDiv.className = 'status error';
+        return;
+      }
+
+      try {
+        const res = await fetch(API_BASE + '/api/auth/guard-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_id: companyId, email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Login failed');
+
+        if (data.user.role === 'admin') {
+          statusDiv.textContent = 'This is an admin account. Please use the admin login page.';
+          statusDiv.className = 'status error';
+          return;
+        }
+
+        clearAllSessions();
+        localStorage.setItem('guard_token', data.token);
+        localStorage.setItem('guard_tenant_id', data.tenant_id);
+        localStorage.setItem('guard_user_id', data.user.id);
+        localStorage.setItem('guard_email', data.user.email);
+        localStorage.setItem('guard_company_id', String(companyId));
+
+        statusDiv.textContent = '';
+        startGuardSession();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    function doLogout() {
+      stopLocationReporting();
+      if (attendanceTimer) { clearInterval(attendanceTimer); attendanceTimer = null; }
+      clearAllSessions();
+      showScreen('login');
+    }
+
+    async function loadAssignedSites() {
+      const { tenantId, userId } = getSession();
+      try {
+        const res = await fetch(API_BASE + '/api/guard-assignments?tenant_id=' + tenantId + '&user_id=' + userId, {
+          headers: authHeaders()
+        });
+        const assignments = await res.json();
+        if (!res.ok) throw new Error(assignments.error || 'Could not load assigned sites');
+        if (!Array.isArray(assignments)) throw new Error('Unexpected assigned-site response');
+        assignedSites = assignments.map(a => ({ id: a.site_id, name: a.site_name, round_size: a.round_size, geofence_enabled:a.geofence_enabled, geofence_radius_m:a.geofence_radius_m }));
+
+        const select = document.getElementById('siteSelect');
+        select.innerHTML = '';
+        if (assignedSites.length === 0) {
+          select.innerHTML = '<option value="">No site assigned</option>';
+          resetProgressDisplay();
+          return;
+        }
+        assignedSites.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.name + (s.geofence_enabled ? ' · GPS required' : '');
+          select.appendChild(opt);
+        });
+        select.value = assignedSites[0].id;
+        loadProgress();
+        refreshCheckpointCache();
+      } catch (err) {
+        console.error('loadAssignedSites failed:', err.message);
+        const select = document.getElementById('siteSelect');
+        select.innerHTML = '<option value="">Unable to load assigned sites</option>';
+        const status = document.getElementById('clockStatus');
+        status.textContent = err.message;
+        status.className = 'status error';
+      }
+    }
+    document.getElementById('siteSelect').addEventListener('change', loadProgress);
+
+    function resetProgressDisplay() {
+      document.getElementById('progressCount').textContent = '0';
+      document.getElementById('progressTarget').textContent = 'out of 0';
+      document.getElementById('progressBarFill').style.width = '0%';
+      document.getElementById('progressCompleteMsg').classList.add('hidden');
+    }
+
+    // --- Offline mode: checkpoint cache + scan queue ---
+    // Two localStorage-backed stores:
+    // guard_checkpoint_cache: { qr_code: { id, name, site_id, site_name } }
+    // refreshed opportunistically whenever online, so QR scans can be
+    // validated and matched to a checkpoint even with zero connectivity.
+    // guard_scan_queue: [{ local_id, tenant_id, checkpoint_id, user_id,
+    // latitude, longitude, scanned_at, checkpoint_name }] — scans made
+    // while offline (or when a live request fails) are pushed here instead
+    // of being lost, then flushed to the server one-by-one as soon as
+    // connectivity returns.
+    function getCheckpointCacheKey() {
+      const { tenantId } = getSession();
+      return 'guard_checkpoint_cache_' + tenantId;
+    }
+    function getQueueKey() {
+      const { tenantId, userId } = getSession();
+      return 'guard_scan_queue_' + tenantId + '_' + userId;
+    }
+    function loadCheckpointCache() {
+      try { return JSON.parse(localStorage.getItem(getCheckpointCacheKey())) || {}; } catch (err) { return {}; }
+    }
+    function saveCheckpointCache(cache) {
+      localStorage.setItem(getCheckpointCacheKey(), JSON.stringify(cache));
+    }
+    function loadQueue() {
+      try { return JSON.parse(localStorage.getItem(getQueueKey())) || []; } catch (err) { return []; }
+    }
+    function saveQueue(queue) {
+      localStorage.setItem(getQueueKey(), JSON.stringify(queue));
+    }
+
+    async function refreshCheckpointCache() {
+      if (!navigator.onLine) return;
+      const { tenantId } = getSession();
+      const cache = loadCheckpointCache();
+      try {
+        for (const site of assignedSites) {
+          const res = await fetch(API_BASE + '/api/checkpoints?tenant_id=' + tenantId + '&site_id=' + site.id, { headers: authHeaders() });
+          if (!res.ok) continue;
+          const checkpoints = await res.json();
+          checkpoints.forEach(cp => {
+            cache[cp.qr_code] = { id: cp.id, name: cp.name, site_id: cp.site_id, site_name: site.name };
+          });
+        }
+        saveCheckpointCache(cache);
+      } catch (err) {
+        console.error('refreshCheckpointCache failed (likely offline):', err.message);
+      }
+    }
+
+    function updateConnectionBanner() {
+      const banner = document.getElementById('connectionBanner');
+      const text = document.getElementById('connectionText');
+      const syncBtn = document.getElementById('syncNowBtn');
+      const queue = loadQueue();
+
+      if (navigator.onLine) {
+        banner.className = 'connection-banner online';
+        text.textContent = queue.length > 0 ? ('Online — syncing ' + queue.length + ' queued scan(s)...') : 'Online';
+        syncBtn.classList.toggle('hidden', queue.length === 0);
+      } else {
+        banner.className = 'connection-banner offline';
+        text.textContent = 'Offline' + (queue.length > 0 ? ' — ' + queue.length + ' scan(s) queued' : ' — scans will be queued');
+        syncBtn.classList.add('hidden');
+      }
+    }
+    window.addEventListener('online', () => { updateConnectionBanner(); syncQueue(); refreshCheckpointCache(); });
+    window.addEventListener('offline', updateConnectionBanner);
+
+    async function syncQueue() {
+      if (!navigator.onLine) return;
+      let queue = loadQueue();
+      if (queue.length === 0) { updateConnectionBanner(); return; }
+
+      updateConnectionBanner();
+      const remaining = [];
+      for (const item of queue) {
+        try {
+          const res = await fetch(API_BASE + '/api/patrol-logs', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+              tenant_id: item.tenant_id,
+              checkpoint_id: item.checkpoint_id,
+              user_id: item.user_id,
+              latitude: item.latitude,
+              longitude: item.longitude,
+              accuracy: item.accuracy,
+              scanned_at: item.scanned_at,
+              device_scanned_at: item.device_scanned_at || item.scanned_at,
+              patrol_run_id: item.patrol_run_id || null,
+              checkpoint_note: item.checkpoint_note || null,
+              instruction_confirmed: Boolean(item.instruction_confirmed)
+            })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) remaining.push(item);
+          else {
+            if(item.patrol_run_id)localStorage.removeItem('patrol_checkpoint_response_'+item.patrol_run_id+'_'+item.checkpoint_id);
+            if (data.patrol_complete) localStorage.removeItem('active_patrol_run_id');
+          }
+        } catch (err) {
+          remaining.push(item);
+          break;
+        }
+      }
+      saveQueue(remaining);
+      updateConnectionBanner();
+      loadProgress();
+
+      if (remaining.length === 0) {
+        const statusEl = document.getElementById('qrScanStatus');
+        if (statusEl) {
+          statusEl.textContent = 'All queued scans synced successfully.';
+          statusEl.className = 'status success';
+        }
+      }
+    }
+
+    async function loadProgress() {
+      const { tenantId, userId } = getSession();
+      const siteId = document.getElementById('siteSelect').value;
+      if (!siteId) { resetProgressDisplay(); return; }
+
+      const queue = loadQueue();
+      const queuedForSite = queue.filter(q => String(q.site_id) === String(siteId));
+      const pendingHint = document.getElementById('pendingSyncHint');
+
+      if (!navigator.onLine) {
+        // Fully offline: show queued-only progress from local queue, since
+        // we can't reach the server to get the authoritative count.
+        const uniqueCheckpoints = new Set(queuedForSite.map(q => q.checkpoint_id));
+        document.getElementById('progressCount').textContent = uniqueCheckpoints.size;
+        document.getElementById('progressTarget').textContent = '(offline — showing queued scans only)';
+        document.getElementById('progressBarFill').style.width = '0%';
+        document.getElementById('progressCompleteMsg').classList.add('hidden');
+        pendingHint.textContent = queuedForSite.length + ' scan(s) waiting to sync once back online.';
+        pendingHint.classList.toggle('hidden', queuedForSite.length === 0);
+        return;
+      }
+
+      try {
+        const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, {
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load progress');
+
+        // Merge in any still-queued scans not yet reflected server-side, so
+        // the guard's count doesn't appear to go backward right after
+        // scanning offline and before the sync completes.
+        const queuedCheckpointIds = new Set(queuedForSite.map(q => q.checkpoint_id));
+        const effectiveScanned = data.scanned_count + queuedForSite.filter(q => data.remaining.some(r => r.checkpoint_id === q.checkpoint_id)).length;
+
+        document.getElementById('progressCount').textContent = effectiveScanned;
+        document.getElementById('progressTarget').textContent = 'out of ' + data.target;
+        const pct = data.target > 0 ? Math.min(100, (effectiveScanned / data.target) * 100) : 0;
+        document.getElementById('progressBarFill').style.width = pct + '%';
+        document.getElementById('progressCompleteMsg').classList.toggle('hidden', effectiveScanned < data.target);
+
+        pendingHint.textContent = queuedForSite.length + ' scan(s) waiting to sync.';
+        pendingHint.classList.toggle('hidden', queuedForSite.length === 0);
+      } catch (err) {
+        console.error('loadProgress failed:', err.message);
+      }
+    }
+
+    async function showRemaining() {
+      const { tenantId, userId } = getSession();
+      const siteId = document.getElementById('siteSelect').value;
+      const list = document.getElementById('remainingList');
+      if (!siteId) { alert('No site assigned yet.'); return; }
+
+      list.innerHTML = '<li>Loading...</li>';
+      document.getElementById('remainingModal').style.display = 'flex';
+
+      if (!navigator.onLine) {
+        list.innerHTML = '<li>You are offline — remaining checkpoints can\'t be checked right now. Queued scans will sync automatically once you\'re back online.</li>';
+        return;
+      }
+
+      try {
+        const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, {
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load remaining checkpoints');
+
+        const queue = loadQueue();
+        const queuedIds = new Set(queue.filter(q => String(q.site_id) === String(siteId)).map(q => q.checkpoint_id));
+        const trueRemaining = data.remaining.filter(cp => !queuedIds.has(cp.checkpoint_id));
+
+        list.innerHTML = '';
+        if (trueRemaining.length === 0) {
+          list.innerHTML = '<li>✓ All checkpoints scanned for today!</li>';
+          return;
+        }
+        trueRemaining.forEach(cp => {
+          const li = document.createElement('li');
+          li.textContent = cp.name;
+          list.appendChild(li);
+        });
+      } catch (err) {
+        list.innerHTML = '<li class="error">' + err.message + '</li>';
+      }
+    }
+    function closeRemaining() {
+      document.getElementById('remainingModal').style.display = 'none';
+    }
+
+    async function openScanner() {
+      if(activePatrolCheckpoint){let saved={};try{saved=JSON.parse(localStorage.getItem('patrol_checkpoint_response_'+activePatrolCheckpoint.run_id+'_'+activePatrolCheckpoint.checkpoint_id)||'{}')}catch(e){}if(activePatrolCheckpoint.requires_confirmation&&!saved.instruction_confirmed)return alert('Acknowledge and save the checkpoint instructions before scanning.');if(activePatrolCheckpoint.requires_note&&!String(saved.checkpoint_note||'').trim())return alert('Enter and save the required written observation before scanning.');}
+      const modal = document.getElementById('scannerModal');
+      const video = document.getElementById('scannerVideo');
+      const statusDiv = document.getElementById('scannerStatus');
+      statusDiv.textContent = 'Requesting camera access...';
+      modal.style.display = 'flex';
+      try {
+        scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = scannerStream;
+        await video.play();
+        scannerActive = true;
+        statusDiv.textContent = 'Point your camera at a checkpoint QR code...';
+        requestAnimationFrame(scanFrame);
+      } catch (err) {
+        statusDiv.textContent = 'Camera access denied or unavailable: ' + err.message;
+      }
+    }
+    function closeScanner() {
+      scannerActive = false;
+      if (scannerStream) {
+        scannerStream.getTracks().forEach(track => track.stop());
+        scannerStream = null;
+      }
+      document.getElementById('scannerModal').style.display = 'none';
+    }
+    function scanFrame() {
+      if (!scannerActive) return;
+      const video = document.getElementById('scannerVideo');
+      const canvas = document.getElementById('scannerCanvas');
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code && code.data) {
+          handleScannedCode(code.data);
+          return;
+        }
+      }
+      requestAnimationFrame(scanFrame);
+    }
+
+    // Core scan handler, now offline-aware:
+    // 1. If online, try the live lookup + log exactly as before.
+    // 2. If that fails for network reasons (fetch throws OR the browser
+    //    reports offline), fall back to the local checkpoint cache to
+    //    validate the QR code, then push the scan into the local queue
+    //    with an accurate scanned_at timestamp instead of losing it.
+    async function handleScannedCode(qrValue) {
+      scannerActive = false;
+      const statusDiv = document.getElementById('scannerStatus');
+      const { tenantId, userId } = getSession();
+      statusDiv.textContent = 'Capturing GPS evidence...';
+      const scanLocation = await getClockLocation();
+      const deviceScannedAt = new Date().toISOString();
+
+      if (navigator.onLine) {
+        statusDiv.textContent = 'Found code: ' + qrValue + ' — looking up checkpoint...';
+        try {
+          const lookupRes = await fetch(API_BASE + '/api/checkpoints/lookup?tenant_id=' + tenantId + '&qr_code=' + encodeURIComponent(qrValue), { headers: authHeaders() });
+          const checkpoint = await lookupRes.json();
+          if (!lookupRes.ok) throw new Error(checkpoint.error || 'Checkpoint not found');
+
+          const isAssigned = assignedSites.some(s => s.id === checkpoint.site_id);
+          if (!isAssigned) throw new Error('This checkpoint belongs to "' + checkpoint.site_name + '", which is not one of your assigned sites.');
+
+          statusDiv.textContent = 'Logging scan for ' + checkpoint.name + ' (' + checkpoint.site_name + ')...';
+          const activeRunId=localStorage.getItem('active_patrol_run_id');
+          let checkpointResponse={};
+          try{checkpointResponse=JSON.parse(localStorage.getItem('patrol_checkpoint_response_'+activeRunId+'_'+checkpoint.id)||'{}')}catch(e){}
+          const scanRes = await fetch(API_BASE + '/api/patrol-logs', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ tenant_id: Number(tenantId), checkpoint_id: checkpoint.id, user_id: Number(userId), latitude:scanLocation.latitude, longitude:scanLocation.longitude, accuracy:scanLocation.accuracy, device_scanned_at:deviceScannedAt, patrol_run_id:activeRunId||null, checkpoint_note:checkpointResponse.checkpoint_note||null, instruction_confirmed:Boolean(checkpointResponse.instruction_confirmed) })
+          });
+          const scanData = await scanRes.json();
+          if (!scanRes.ok) throw new Error(scanData.error || 'Failed to log scan');
+
+          if (scanData.patrol_complete) {
+            localStorage.removeItem('active_patrol_run_id');
+            statusDiv.textContent = '✓ Patrol completed! Final checkpoint: ' + checkpoint.name;
+          } else {
+            statusDiv.textContent = '✓ Scanned ' + checkpoint.name + ' successfully!' + (scanData.checkpoint_count ? ' (' + scanData.scanned_count + '/' + scanData.checkpoint_count + ')' : '');
+          }
+          if(activeRunId)localStorage.removeItem('patrol_checkpoint_response_'+activeRunId+'_'+checkpoint.id);
+          finishScanUI(statusDiv, 'success');
+          return;
+        } catch (err) {
+          // If it's a genuine validation error (checkpoint not found, wrong
+          // site), don't silently queue it — show the real error. Only fall
+          // through to offline queueing for network-level failures.
+          if (localStorage.getItem('active_patrol_run_id') || err.message.includes('not found') || err.message.includes('not one of your assigned')) {
+            statusDiv.textContent = err.message;
+            retryFrameAfterDelay(statusDiv);
+            return;
+          }
+          console.warn('Online scan failed, falling back to offline queue:', err.message);
+          queueScanOffline(qrValue, statusDiv, scanLocation, deviceScannedAt);
+        }
+      } else {
+        queueScanOffline(qrValue, statusDiv, scanLocation, deviceScannedAt);
+      }
+    }
+
+    function queueScanOffline(qrValue, statusDiv, scanLocation, deviceScannedAt) {
+      const { tenantId, userId } = getSession();
+      const cache = loadCheckpointCache();
+      const cached = cache[qrValue];
+      if (!cached) {
+        statusDiv.textContent = 'Unknown checkpoint (not in offline cache). Connect to the internet at least once at this site before going offline.';
+        retryFrameAfterDelay(statusDiv);
+        return;
+      }
+      const isAssigned = assignedSites.some(s => s.id === cached.site_id);
+      if (!isAssigned) {
+        statusDiv.textContent = 'This checkpoint belongs to "' + cached.site_name + '", which is not one of your assigned sites.';
+        retryFrameAfterDelay(statusDiv);
+        return;
+      }
+
+      const queue = loadQueue();
+      const activeRunId=localStorage.getItem('active_patrol_run_id');let checkpointResponse={};try{checkpointResponse=JSON.parse(localStorage.getItem('patrol_checkpoint_response_'+activeRunId+'_'+cached.id)||'{}')}catch(e){}
+      queue.push({
+        local_id: Date.now() + '-' + Math.random().toString(36).slice(2),
+        tenant_id: Number(tenantId),
+        site_id: cached.site_id,
+        checkpoint_id: cached.id,
+        checkpoint_name: cached.name,
+        user_id: Number(userId),
+        latitude: scanLocation.latitude || null,
+        longitude: scanLocation.longitude || null,
+        accuracy: scanLocation.accuracy || null,
+        scanned_at: deviceScannedAt,
+        device_scanned_at: deviceScannedAt,
+        patrol_run_id: localStorage.getItem('active_patrol_run_id') || null
+        ,checkpoint_note: checkpointResponse.checkpoint_note || null
+        ,instruction_confirmed: Boolean(checkpointResponse.instruction_confirmed)
+      });
+      saveQueue(queue);
+      updateConnectionBanner();
+
+      statusDiv.textContent = 'Queued offline: ' + cached.name + ' — will sync automatically when back online.';
+      finishScanUI(statusDiv, 'queued');
+    }
+
+    function finishScanUI(statusDiv, kind) {
+      setTimeout(() => {
+        closeScanner();
+        const qrScanStatus = document.getElementById('qrScanStatus');
+        qrScanStatus.textContent = statusDiv.textContent;
+        qrScanStatus.className = 'status ' + (kind === 'queued' ? 'queued-tag' : 'success');
+        loadProgress();
+        loadActiveCheckpointRequirements();
+      }, 1400);
+    }
+
+    function retryFrameAfterDelay(statusDiv) {
+      setTimeout(() => {
+        if (document.getElementById('scannerModal').style.display !== 'none') {
+          scannerActive = true;
+          statusDiv.textContent = 'Point your camera at a checkpoint QR code...';
+          requestAnimationFrame(scanFrame);
+        }
+      }, 2500);
+    }
+
+    // --- Incident photo attachments ---
+    function compressImage(file, maxDimension, quality) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = (e) => { img.src = e.target.result; };
+        reader.onerror = reject;
+        img.onload = () => {
+          let width, height;
+          ({ width, height } = img);
+          if (width > height) {
+            if (width > maxDimension) { height = Math.round(height * maxDimension / width); width = maxDimension; }
+          } else {
+            if (height > maxDimension) { width = Math.round(width * maxDimension / height); height = maxDimension; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handlePhotoSelected(event) {
+      const file = event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+      if (attachedPhotos.length >= MAX_PHOTOS) { alert('You can attach up to ' + MAX_PHOTOS + ' photos per report.'); return; }
+      if (!file.type.startsWith('image/')) { alert('Please select an image file.'); return; }
+
+      document.getElementById('photoCompressing').classList.remove('hidden');
+      try {
+        const compressedDataUrl = await compressImage(file, 1000, 0.7);
+        attachedPhotos.push(compressedDataUrl);
+        renderPhotoPreviews();
+      } catch (err) {
+        alert('Failed to process photo: ' + err.message);
+      } finally {
+        document.getElementById('photoCompressing').classList.add('hidden');
+      }
+    }
+    function removePhoto(index) {
+      attachedPhotos.splice(index, 1);
+      renderPhotoPreviews();
+    }
+    function renderPhotoPreviews() {
+      const container = document.getElementById('photoPreviews');
+      container.innerHTML = attachedPhotos.map((dataUrl, i) =>
+        '<div class="photo-thumb-wrap"><img src="' + dataUrl + '" alt="Evidence photo ' + (i + 1) + '">' +
+        '<button type="button" class="photo-remove-btn" onclick="removePhoto(' + i + ')">✕</button></div>'
+      ).join('');
+      document.getElementById('photoCountHint').textContent = attachedPhotos.length + ' of ' + MAX_PHOTOS + ' photos attached';
+    }
+
+    async function submitIncident() {
+      const { tenantId } = getSession();
+      const siteId = document.getElementById('siteSelect').value;
+      const description = document.getElementById('incidentDescription').value;
+      const severity = document.getElementById('incidentSeverity').value;
+      const category = document.getElementById('incidentCategory').value;
+      const statusDiv = document.getElementById('incidentStatus');
+
+      if (!navigator.onLine) {
+        statusDiv.textContent = 'You are offline. Incident reports (especially with photos) require a connection — please try again once back online.';
+        statusDiv.className = 'status error';
+        return;
+      }
+      if (!siteId) { statusDiv.textContent = 'No site assigned — cannot submit report'; statusDiv.className = 'status error'; return; }
+      if (!description) { statusDiv.textContent = 'Description is required'; statusDiv.className = 'status error'; return; }
+
+      try {
+        const res = await fetch(API_BASE + '/api/incidents', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            tenant_id: Number(tenantId),
+            site_id: Number(siteId),
+            description,
+            severity,
+            category,
+            photos: attachedPhotos
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to submit incident');
+
+        statusDiv.textContent = 'Incident submitted' + (attachedPhotos.length ? ' with ' + attachedPhotos.length + ' photo(s)' : '') + '. Thank you.';
+        statusDiv.className = 'status success';
+        document.getElementById('incidentDescription').value = '';
+        attachedPhotos = [];
+        renderPhotoPreviews();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
+    }
+
+    // --- Emergency contacts (independent call number + WhatsApp number) ---
+    function cleanPhoneForTel(raw) { return raw.replace(/[^0-9+]/g, ''); }
+    function cleanPhoneForWhatsapp(raw) { return raw.replace(/[^0-9]/g, ''); }
+
+    async function loadEmergencyContacts() {
+      if (!navigator.onLine) return;
+      const { tenantId } = getSession();
+      try {
+        const res = await fetch(API_BASE + '/api/tenants');
+        const tenants = await res.json();
+        const tenant = tenants.find(t => t.id === Number(tenantId));
+        emergencyPhone = tenant && tenant.emergency_phone ? tenant.emergency_phone.trim() : null;
+        emergencyWhatsapp = tenant && tenant.emergency_whatsapp ? tenant.emergency_whatsapp.trim() : null;
+        applyEmergencyContactLinks();
+      } catch (err) {
+        console.error('loadEmergencyContacts failed:', err.message);
+      }
+    }
+
+    function applyEmergencyContactLinks() {
+      const callLink = document.getElementById('sosCallLink');
+      const waLink = document.getElementById('sosWaLink');
+      const hint = document.getElementById('sosContactHint');
+      const noContact = document.getElementById('sosNoContact');
+
+      if (emergencyPhone) {
+        callLink.classList.remove('hidden');
+        callLink.href = 'tel:' + cleanPhoneForTel(emergencyPhone);
+      } else {
+        callLink.classList.add('hidden');
+      }
+
+      if (emergencyWhatsapp) {
+        waLink.classList.remove('hidden');
+        const { email } = getSession();
+        const siteId = document.getElementById('siteSelect').value;
+        const siteName = assignedSites.find(s => String(s.id) === String(siteId));
+        const waMessage = 'EMERGENCY: ' + email + ' needs help' + (siteName ? ' at ' + siteName.name : '') + '. Please respond immediately.';
+        waLink.href = 'https://wa.me/' + cleanPhoneForWhatsapp(emergencyWhatsapp) + '?text=' + encodeURIComponent(waMessage);
+      } else {
+        waLink.classList.add('hidden');
+      }
+
+      if (!emergencyPhone && !emergencyWhatsapp) {
+        hint.classList.add('hidden');
+        noContact.classList.remove('hidden');
+        noContact.textContent = 'No emergency contact set by your admin yet — only the app alert will be sent.';
+      } else if (!emergencyPhone || !emergencyWhatsapp) {
+        hint.classList.remove('hidden');
+        noContact.classList.remove('hidden');
+        noContact.textContent = !emergencyPhone ? 'No call number set — WhatsApp is available above.' : 'No WhatsApp number set — call is available above.';
+      } else {
+        hint.classList.remove('hidden');
+        noContact.classList.add('hidden');
+      }
+    }
+    document.getElementById('siteSelect').addEventListener('change', applyEmergencyContactLinks);
+
+    function triggerSos() {
+      const { tenantId } = getSession();
+      const siteId = document.getElementById('siteSelect').value;
+      const btn = document.getElementById('sosBtn');
+      const statusDiv = document.getElementById('sosStatusMsg');
+
+      if (!navigator.onLine) {
+        statusDiv.textContent = 'You are offline — the in-app SOS alert cannot be sent without a connection. Use Call or WhatsApp above if available on your phone plan.';
+        statusDiv.className = 'status error';
+        return;
+      }
+      if (!siteId) {
+        statusDiv.textContent = 'Cannot send SOS — no site assigned to your account.';
+        statusDiv.className = 'status error';
+        return;
+      }
+      if (!confirm('Send an emergency SOS alert to your site admin now?')) return;
+
+      btn.disabled = true;
+      btn.classList.add('sending');
+      btn.textContent = 'Sending alert...';
+      statusDiv.textContent = '';
+
+      function sendAlert(lat, lng) {
+        fetch(API_BASE + '/api/sos', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ tenant_id: Number(tenantId), site_id: Number(siteId), latitude: lat, longitude: lng })
+        })
+          .then(res => res.json().then(data => ({ ok: res.ok, data })))
+          .then(({ ok, data }) => {
+            if (!ok) throw new Error(data.error || 'Failed to send SOS');
+            activeSosId = data.id;
+            document.getElementById('sosActiveBanner').classList.add('show');
+            statusDiv.textContent = 'Alert sent successfully. Use Call/WhatsApp below for immediate backup.';
+            statusDiv.className = 'status success';
+            btn.textContent = 'SOS ALREADY ACTIVE';
+          })
+          .catch(err => {
+            statusDiv.textContent = err.message;
+            statusDiv.className = 'status error';
+            btn.disabled = false;
+            btn.classList.remove('sending');
+            btn.textContent = '🆘 SOS — SEND EMERGENCY ALERT';
+          });
+      }
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => sendAlert(pos.coords.latitude, pos.coords.longitude),
+          () => sendAlert(null, null),
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      } else {
+        sendAlert(null, null);
+      }
+    }
+
+    function cancelMySos() {
+      const { tenantId } = getSession();
+      if (!activeSosId) return;
+      if (!confirm('Cancel this SOS alert?')) return;
+
+      fetch(API_BASE + '/api/sos/' + activeSosId + '/resolve', {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ tenant_id: Number(tenantId) })
+      })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) throw new Error(data.error || 'Failed to cancel SOS');
+          activeSosId = null;
+          document.getElementById('sosActiveBanner').classList.remove('show');
+          const btn = document.getElementById('sosBtn');
+          btn.disabled = false;
+          btn.classList.remove('sending');
+          btn.textContent = '🆘 SOS — SEND EMERGENCY ALERT';
+          document.getElementById('sosStatusMsg').textContent = 'Alert cancelled.';
+          document.getElementById('sosStatusMsg').className = 'status success';
+        })
+        .catch(err => {
+          document.getElementById('sosStatusMsg').textContent = err.message;
+          document.getElementById('sosStatusMsg').className = 'status error';
+        });
+    }
+
+    // --- My Shifts summary widget ---
+    // Shows only today's shift(s) inline for a quick glance; the full
+    // upcoming schedule lives on my_shifts.html. Reuses the same
+    // /api/shifts endpoint the dedicated page uses, filtered to today only.
+    async function loadTodayShiftSummary() {
+      const { tenantId, userId } = getSession();
+      const container = document.getElementById('todayShiftSummary');
+      if (!navigator.onLine) {
+        container.innerHTML = '<span class="hint">Offline — connect to view today\'s shift.</span>';
+        return;
+      }
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const res = await fetch(API_BASE + '/api/shifts?tenant_id=' + tenantId + '&user_id=' + userId + '&start_date=' + today + '&end_date=' + today, {
+          headers: authHeaders()
+        });
+        const shifts = await res.json();
+        if (!res.ok) throw new Error(shifts.error || 'Failed to load shifts');
+
+        if (shifts.length === 0) {
+          container.innerHTML = '<span class="hint">No shift scheduled for today.</span>';
+          return;
+        }
+
+        container.innerHTML = shifts.map(s =>
+          '<div class="shift-today-row"><span class="shift-today-site">' + escapeHtmlGuard(s.site_name) + '</span>' +
+          '<span class="shift-badge ' + s.employment_type + '">' + (s.employment_type === 'full_time' ? 'Full-Time' : 'Part-Time') + '</span>' +
+          '<div>🕒 ' + s.start_time + ' – ' + s.end_time + '</div></div>'
+        ).join('');
+      } catch (err) {
+        console.error('loadTodayShiftSummary failed:', err.message);
+        container.innerHTML = '<span class="hint">Failed to load today\'s shift.</span>';
+      }
+    }
+    function escapeHtmlGuard(str) {
+      if (str === null || str === undefined) return '';
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    // --- Live guard map: periodic location reporting ---
+    // Silently reports this guard's GPS position to the backend every 45
+    // seconds while logged in with the app open and a site selected. Does
+    // NOT run in the background if the tab/app is closed (browsers don't
+    // allow that without a paid background-location permission, and that's
+    // a deliberate privacy choice here too). Failures (offline, permission
+    // denied) are swallowed silently so they never interrupt the guard's
+    // actual workflow.
+    let locationReportInterval = null;
+
+    function reportCurrentLocation() {
+      if (!navigator.geolocation || !navigator.onLine) return;
+      const { tenantId } = getSession();
+      const siteId = document.getElementById('siteSelect') ? document.getElementById('siteSelect').value : null;
+      if (!tenantId) return;
+
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          fetch(API_BASE + '/api/guard-locations', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+              tenant_id: Number(tenantId),
+              site_id: siteId ? Number(siteId) : null,
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude
+            })
+          }).catch(err => console.warn('Location report failed (likely offline):', err.message));
+        },
+        err => console.warn('Geolocation unavailable for live map:', err.message),
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 }
+      );
+    }
+
+    function startLocationReporting() {
+      if (locationReportInterval) return;
+      reportCurrentLocation();
+      locationReportInterval = setInterval(reportCurrentLocation, 45000);
+    }
+    function stopLocationReporting() {
+      if (locationReportInterval) {
+        clearInterval(locationReportInterval);
+        locationReportInterval = null;
+      }
+    }
+
+    function startGuardSession() {
+      const { email } = getSession();
+      document.getElementById('guardName').textContent = email || 'Guard';
+      showScreen('guard');
+      updateConnectionBanner();
+      loadAssignedSites();
+      loadEmergencyContacts();
+      loadTodayShiftSummary();
+      loadAttendance();
+      loadActiveCheckpointRequirements();
+      syncQueue();
+      startLocationReporting();
+    }
+
+    function init() {
+      const rememberedCompanyId = localStorage.getItem('guard_company_id');
+      if (rememberedCompanyId) document.getElementById('loginCompanyId').value = rememberedCompanyId;
+      const { token, tenantId } = getSession();
+      if (token && tenantId) {
+        startGuardSession();
+      } else {
+        showScreen('login');
+      }
+      setInterval(() => { if (navigator.onLine) syncQueue(); }, 30000);
+    }
+    init();
+  </script>
+</body>
+</html>
