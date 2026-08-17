@@ -1195,6 +1195,12 @@
             removeBtn.onclick = () => removeGuard(g.id, g.email);
             actionsDiv.appendChild(resetBtn);
             actionsDiv.appendChild(removeBtn);
+          } else {
+            const restoreBtn = document.createElement('button');
+            restoreBtn.textContent = 'Restore';
+            restoreBtn.className = 'resetpw';
+            restoreBtn.onclick = () => restoreAccount(g.id, g.email);
+            actionsDiv.appendChild(restoreBtn);
           }
           li.appendChild(label);
           li.appendChild(actionsDiv);
@@ -1292,7 +1298,11 @@
           button.textContent = 'Permanently Delete';
           button.className = 'remove';
           button.onclick = () => permanentlyDeleteAccount(account.id, account.email);
-          row.appendChild(label); row.appendChild(button); box.appendChild(row);
+          const restore = document.createElement('button');
+          restore.textContent = 'Restore';
+          restore.className = 'resetpw';
+          restore.onclick = () => restoreAccount(account.id, account.email);
+          row.appendChild(label); row.appendChild(restore); row.appendChild(button); box.appendChild(row);
         });
       } catch (err) {
         box.innerHTML = '<small style="color:#dc2626">' + err.message + '</small>';
@@ -1315,6 +1325,25 @@
         statusDiv.textContent = data.message;
         statusDiv.className = 'status success';
         loadGuards(); loadPlanAndUsage();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+        alert(err.message);
+      }
+    }
+
+    async function restoreAccount(id, email) {
+      if (!confirm('Restore ' + email + ' (ID ' + id + ')? You may need to reset the password and reassign the site.')) return;
+      const statusDiv = document.getElementById('guardStatus');
+      try {
+        const res = await fetch(API_BASE + '/api/users/' + id + '/restore', {
+          method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ tenant_id: Number(tenantId) })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not restore account');
+        statusDiv.textContent = data.message;
+        statusDiv.className = 'status success';
+        loadGuards(); loadAssignments(); loadPlanAndUsage();
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
