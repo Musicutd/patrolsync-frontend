@@ -88,8 +88,8 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Login failed');
 
-        if (data.user.role !== 'admin') {
-          statusDiv.textContent = 'This account is a guard account. Please use the guard login page.';
+        if (!['admin', 'staff'].includes(data.user.role)) {
+          statusDiv.textContent = 'This account must use the guard or client login page.';
           statusDiv.className = 'status error';
           return;
         }
@@ -98,10 +98,11 @@
         localStorage.setItem('token', data.token);
         localStorage.setItem('tenant_id', data.tenant_id);
         localStorage.setItem('user_email', data.user.email);
+        localStorage.setItem('user_role', data.user.role);
 
         statusDiv.textContent = 'Welcome back! Redirecting...';
         statusDiv.className = 'status success';
-        setTimeout(() => { window.location.href = 'dashboard.html'; }, 600);
+        setTimeout(() => { window.location.href = data.user.role === 'staff' ? 'staff_dashboard.html' : 'dashboard.html'; }, 600);
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
