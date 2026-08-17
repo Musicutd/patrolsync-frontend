@@ -1161,7 +1161,7 @@
       guards.forEach(g => {
         const opt = document.createElement('option');
         opt.value = g.id;
-        opt.textContent = g.email;
+        opt.textContent = g.email + ' (ID ' + g.id + ')';
         select.appendChild(opt);
       });
     }
@@ -1177,7 +1177,7 @@
         guards.forEach(g => {
           const li = document.createElement('li');
           const label = document.createElement('span');
-          label.textContent = g.email;
+          label.textContent = g.email + ' (Guard ID ' + g.id + ')';
 
           const actionsDiv = document.createElement('div');
           actionsDiv.className = 'guard-actions';
@@ -1266,7 +1266,7 @@
           const li = document.createElement('li');
           const label = document.createElement('span');
           const targetText = a.round_size !== null ? a.round_size + ' scans/day' : 'all checkpoints';
-          label.textContent = a.guard_email + ' → ' + a.site_name + ' (' + targetText + ')';
+          label.textContent = a.guard_email + ' (Guard ID ' + a.user_id + ') → ' + a.site_name + ' (' + targetText + ')';
           const removeBtn = document.createElement('button');
           removeBtn.textContent = 'Remove';
           removeBtn.className = 'remove';
