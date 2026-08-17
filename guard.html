@@ -167,6 +167,8 @@
       <div id="clockState" class="clock-state">Not clocked in</div>
       <div id="clockTimer" class="clock-timer">00:00:00</div>
       <div id="clockMeta" class="clock-meta">Select your assigned site, then clock in.</div>
+      <label for="siteSelect" style="display:block;margin-top:12px;font-weight:bold;">Assigned Site</label>
+      <select id="siteSelect"><option value="">Loading assigned sites...</option></select>
       <div class="clock-actions">
         <button id="clockInBtn" class="clock-in-btn" onclick="clockIn()">Clock In</button>
         <button id="breakBtn" class="break-btn hidden" onclick="toggleBreak()">Start Break</button>
@@ -235,11 +237,6 @@
       <button class="shift-open-btn" onclick="window.location.href='my_training.html'">My Training & Policies →</button>
       <button class="shift-open-btn" onclick="window.location.href='my_equipment.html'">My Equipment & Keys →</button>
       <button class="shift-open-btn" onclick="window.location.href='my_inspections.html'">My Site Inspections →</button>
-    </section>
-
-    <section id="siteSection">
-      <h3>Your Assigned Site</h3>
-      <select id="siteSelect"><option value="">Loading...</option></select>
     </section>
 
     <section>
@@ -502,6 +499,8 @@
           headers: authHeaders()
         });
         const assignments = await res.json();
+        if (!res.ok) throw new Error(assignments.error || 'Could not load assigned sites');
+        if (!Array.isArray(assignments)) throw new Error('Unexpected assigned-site response');
         assignedSites = assignments.map(a => ({ id: a.site_id, name: a.site_name, round_size: a.round_size, geofence_enabled:a.geofence_enabled, geofence_radius_m:a.geofence_radius_m }));
 
         const select = document.getElementById('siteSelect');
@@ -522,6 +521,11 @@
         refreshCheckpointCache();
       } catch (err) {
         console.error('loadAssignedSites failed:', err.message);
+        const select = document.getElementById('siteSelect');
+        select.innerHTML = '<option value="">Unable to load assigned sites</option>';
+        const status = document.getElementById('clockStatus');
+        status.textContent = err.message;
+        status.className = 'status error';
       }
     }
     document.getElementById('siteSelect').addEventListener('change', loadProgress);
