@@ -1,4 +1,4 @@
-const CACHE_NAME = 'patrolsync-guard-v1';
+const CACHE_NAME = 'patrolsync-guard-v2';
 const CORE = ['./guard.html','./offline.html','./manifest.webmanifest','./patrolsync-icon.svg'];
 const FIELD_PAGES = ['./my_shifts.html','./my_timesheets.html','./availability.html','./shift_marketplace.html','./my_patrols.html','./handover.html','./my_notifications.html','./team_messages.html','./my_safety.html','./my_dispatches.html'];
 
@@ -20,7 +20,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(request.url);
   if (url.hostname === 'patrolsync-backend.onrender.com' || url.pathname.startsWith('/api/')) return;
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).then(response => {
+    event.respondWith(fetch(request,{cache:'no-store'}).then(response => {
       if (response.ok && url.origin === self.location.origin) caches.open(CACHE_NAME).then(cache => cache.put(request,response.clone()));
       return response;
     }).catch(async () => (await caches.match(request)) || caches.match('./offline.html')));
