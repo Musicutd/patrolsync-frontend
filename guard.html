@@ -139,6 +139,7 @@
   <div id="loginScreen">
     <h2>PatrolSync Guard Login</h2>
     <section>
+      <input type="number" id="loginCompanyId" placeholder="Company ID" min="1" inputmode="numeric">
       <input type="email" id="loginEmail" placeholder="Your email">
       <input type="password" id="loginPassword" placeholder="Password">
       <button onclick="doLogin()">Log In</button>
@@ -446,21 +447,22 @@
     }
 
     async function doLogin() {
+      const companyId = Number(document.getElementById('loginCompanyId').value);
       const email = document.getElementById('loginEmail').value.trim();
       const password = document.getElementById('loginPassword').value;
       const statusDiv = document.getElementById('loginStatus');
 
-      if (!email || !password) {
-        statusDiv.textContent = 'Email and password are required';
+      if (!Number.isInteger(companyId) || companyId < 1 || !email || !password) {
+        statusDiv.textContent = 'Company ID, email and password are required';
         statusDiv.className = 'status error';
         return;
       }
 
       try {
-        const res = await fetch(API_BASE + '/api/auth/login', {
+        const res = await fetch(API_BASE + '/api/auth/guard-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ company_id: companyId, email, password })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Login failed');
@@ -476,6 +478,7 @@
         localStorage.setItem('guard_tenant_id', data.tenant_id);
         localStorage.setItem('guard_user_id', data.user.id);
         localStorage.setItem('guard_email', data.user.email);
+        localStorage.setItem('guard_company_id', String(companyId));
 
         statusDiv.textContent = '';
         startGuardSession();
@@ -1261,6 +1264,8 @@
     }
 
     function init() {
+      const rememberedCompanyId = localStorage.getItem('guard_company_id');
+      if (rememberedCompanyId) document.getElementById('loginCompanyId').value = rememberedCompanyId;
       const { token, tenantId } = getSession();
       if (token && tenantId) {
         startGuardSession();
