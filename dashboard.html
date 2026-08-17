@@ -1169,40 +1169,100 @@
 
     async function loadGuards() {
       try {
-        const res = await fetchWithTimeout(API_BASE + '/api/users?tenant_id=' + tenantId + '&role=guard', { headers: authHeaders() }, 8000);
+        const res = await fetchWithTimeout(API_BASE + '/api/users?tenant_id=' + tenantId + '&role=guard&include_inactive=true', { headers: authHeaders() }, 8000);
         const guards = await res.json();
         if (!res.ok && handleAuthError(guards.error)) return;
-        currentGuards = guards;
+        const activeGuards = guards.filter(g => g.account_active !== false);
+        currentGuards = activeGuards;
         const list = document.getElementById('guardList');
         list.innerHTML = '';
         guards.forEach(g => {
           const li = document.createElement('li');
           const label = document.createElement('span');
-          label.textContent = g.email + ' (Guard ID ' + g.id + ')';
+          label.textContent = g.email + ' (Guard ID ' + g.id + ')' + (g.account_active === false ? ' — ARCHIVED' : ' — ACTIVE');
+          if (g.account_active === false) label.style.color = '#64748b';
 
           const actionsDiv = document.createElement('div');
           actionsDiv.className = 'guard-actions';
-
-          const resetBtn = document.createElement('button');
-          resetBtn.textContent = 'Reset Password';
-          resetBtn.className = 'resetpw';
-          resetBtn.onclick = () => openResetPwModal(g.id, g.email);
-
-          const removeBtn = document.createElement('button');
-          removeBtn.textContent = 'Remove';
-          removeBtn.className = 'remove';
-          removeBtn.onclick = () => removeGuard(g.id, g.email);
-
-          actionsDiv.appendChild(resetBtn);
-          actionsDiv.appendChild(removeBtn);
+          if (g.account_active !== false) {
+            const resetBtn = document.createElement('button');
+            resetBtn.textContent = 'Reset Password';
+            resetBtn.className = 'resetpw';
+            resetBtn.onclick = () => openResetPwModal(g.id, g.email);
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = 'Archive';
+            removeBtn.className = 'remove';
+            removeBtn.onclick = () => removeGuard(g.id, g.email);
+            actionsDiv.appendChild(resetBtn);
+            actionsDiv.appendChild(removeBtn);
+          }
           li.appendChild(label);
           li.appendChild(actionsDiv);
           list.appendChild(li);
         });
-        populateGuardDropdown(document.getElementById('assignGuard'), guards);
-        populateGuardDropdown(document.getElementById('certGuardSelect'), guards);
+        populateGuardDropdown(document.getElementById('assignGuard'), activeGuards);
+        populateGuardDropdown(document.getElementById('certGuardSelect'), activeGuards);
+        loadDashboardDuplicates();
       } catch (err) {
         console.error('loadGuards failed:', err.message);
+      }
+    }
+
+    async function loadDashboardDuplicates() {
+      const guardList = document.getElementById('guardList');
+      let box = document.getElementById('dashboardDuplicateAccounts');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'dashboardDuplicateAccounts';
+        box.style.marginTop = '12px';
+        guardList.after(box);
+      }
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/diagnostics/duplicate-users?tenant_id=' + tenantId, { headers: authHeaders() }, 8000);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not load duplicate accounts');
+        if (!data.duplicates.length) { box.innerHTML = ''; return; }
+        box.innerHTML = '<h4 style="color:#b45309">Duplicate Accounts Requiring Attention</h4>';
+        data.duplicates.forEach(account => {
+          const row = document.createElement('div');
+          row.style.cssText = 'padding:10px 0;border-top:1px solid #e5e7eb';
+          const info = document.createElement('span');
+          info.textContent = account.email + ' (' + account.role + ' ID ' + account.id + ') — assignments ' + account.active_assignments + ', open clock-ins ' + account.open_clock_ins + ', future shifts ' + account.future_shifts;
+          row.appendChild(info);
+          if (account.safe_to_archive) {
+            const button = document.createElement('button');
+            button.textContent = 'Archive Duplicate ID ' + account.id;
+            button.className = 'remove';
+            button.onclick = () => archiveDashboardDuplicate(account.id);
+            row.appendChild(button);
+          } else {
+            const locked = document.createElement('small');
+            locked.textContent = ' Locked because active work exists';
+            locked.style.color = '#b45309';
+            row.appendChild(locked);
+          }
+          box.appendChild(row);
+        });
+      } catch (err) {
+        box.innerHTML = '<small style="color:#dc2626">' + err.message + '</small>';
+      }
+    }
+
+    async function archiveDashboardDuplicate(id) {
+      if (!confirm('Archive duplicate account ID ' + id + '? Historical records will remain available.')) return;
+      const statusDiv = document.getElementById('guardStatus');
+      try {
+        const res = await fetch(API_BASE + '/api/diagnostics/duplicate-users/' + id + '/archive', {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify({ tenant_id: Number(tenantId) })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not archive duplicate');
+        statusDiv.textContent = data.message;
+        statusDiv.className = 'status success';
+        loadGuards(); loadAssignments(); loadPlanAndUsage();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
       }
     }
 
