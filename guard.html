@@ -279,7 +279,7 @@
   <script>
     let installPromptEvent = null;
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js')
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js?v=2', { updateViaCache: 'none' })
         .catch(err => console.warn('Service worker registration failed:', err.message)));
     }
     window.addEventListener('beforeinstallprompt', event => {
@@ -444,6 +444,7 @@
       localStorage.removeItem('guard_tenant_id');
       localStorage.removeItem('guard_user_id');
       localStorage.removeItem('guard_email');
+      localStorage.removeItem('guard_session_scoped');
     }
 
     async function doLogin() {
@@ -479,6 +480,7 @@
         localStorage.setItem('guard_user_id', data.user.id);
         localStorage.setItem('guard_email', data.user.email);
         localStorage.setItem('guard_company_id', String(companyId));
+        localStorage.setItem('guard_session_scoped', '1');
 
         statusDiv.textContent = '';
         startGuardSession();
@@ -1267,6 +1269,14 @@
       const rememberedCompanyId = localStorage.getItem('guard_company_id');
       if (rememberedCompanyId) document.getElementById('loginCompanyId').value = rememberedCompanyId;
       const { token, tenantId } = getSession();
+      if (token && tenantId && localStorage.getItem('guard_session_scoped') !== '1') {
+        clearAllSessions();
+        showScreen('login');
+        const status = document.getElementById('loginStatus');
+        status.textContent = 'Please log in again using your Company ID to refresh this device session.';
+        status.className = 'status error';
+        return;
+      }
       if (token && tenantId) {
         startGuardSession();
       } else {
