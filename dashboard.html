@@ -1203,6 +1203,7 @@
         populateGuardDropdown(document.getElementById('assignGuard'), activeGuards);
         populateGuardDropdown(document.getElementById('certGuardSelect'), activeGuards);
         loadDashboardDuplicates();
+        loadArchivedAccounts();
       } catch (err) {
         console.error('loadGuards failed:', err.message);
       }
@@ -1263,6 +1264,61 @@
       } catch (err) {
         statusDiv.textContent = err.message;
         statusDiv.className = 'status error';
+      }
+    }
+
+    async function loadArchivedAccounts() {
+      const guardList = document.getElementById('guardList');
+      let box = document.getElementById('archivedAccountManagement');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'archivedAccountManagement';
+        box.style.marginTop = '12px';
+        guardList.after(box);
+      }
+      try {
+        const res = await fetchWithTimeout(API_BASE + '/api/users?tenant_id=' + tenantId + '&include_inactive=true', { headers: authHeaders() }, 8000);
+        const users = await res.json();
+        if (!res.ok) throw new Error(users.error || 'Could not load archived accounts');
+        const archived = users.filter(u => u.account_active === false && (u.role === 'guard' || u.role === 'staff'));
+        if (!archived.length) { box.innerHTML = ''; return; }
+        box.innerHTML = '<h4 style="color:#64748b">Archived Guard & Staff Accounts</h4><p style="font-size:12px;color:#64748b">Permanent deletion is allowed only when no operational or historical records reference the account.</p>';
+        archived.forEach(account => {
+          const row = document.createElement('div');
+          row.style.cssText = 'padding:10px 0;border-top:1px solid #e5e7eb';
+          const label = document.createElement('span');
+          label.textContent = account.email + ' (' + account.role + ' ID ' + account.id + ') — ARCHIVED';
+          const button = document.createElement('button');
+          button.textContent = 'Permanently Delete';
+          button.className = 'remove';
+          button.onclick = () => permanentlyDeleteAccount(account.id, account.email);
+          row.appendChild(label); row.appendChild(button); box.appendChild(row);
+        });
+      } catch (err) {
+        box.innerHTML = '<small style="color:#dc2626">' + err.message + '</small>';
+      }
+    }
+
+    async function permanentlyDeleteAccount(id, email) {
+      const typed = prompt('Permanent deletion cannot be undone. To delete ' + email + ' (ID ' + id + '), type: DELETE ' + id);
+      if (typed !== 'DELETE ' + id) return;
+      const statusDiv = document.getElementById('guardStatus');
+      try {
+        const res = await fetch(API_BASE + '/api/users/' + id + '/permanent', {
+          method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ tenant_id: Number(tenantId), confirmation: typed })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const detail = data.references && data.references.length ? ' Referenced by: ' + data.references.map(x => x.table + ' (' + x.count + ')').join(', ') : '';
+          throw new Error((data.error || 'Permanent deletion failed') + detail);
+        }
+        statusDiv.textContent = data.message;
+        statusDiv.className = 'status success';
+        loadGuards(); loadPlanAndUsage();
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+        alert(err.message);
       }
     }
 
