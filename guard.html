@@ -153,7 +153,7 @@
 
   <div id="guardScreen">
     <div id="header">
-      <h2 id="guardName">Guard</h2>
+      <div><h2 id="guardName" style="margin-bottom:2px;">Guard</h2><div id="guardSessionIdentity" class="hint"></div></div>
       <button id="installAppBtn" class="install-btn hidden">Install App</button>
       <button class="logout" onclick="doLogout()">Log Out</button>
     </div>
@@ -460,7 +460,7 @@
       }
 
       try {
-        const res = await fetch(API_BASE + '/api/auth/guard-login', {
+        const res = await fetch(API_BASE + '/api/auth/guard-login-v2', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ company_id: companyId, email, password })
@@ -1252,8 +1252,9 @@
     }
 
     function startGuardSession() {
-      const { email } = getSession();
+      const { email,tenantId,userId } = getSession();
       document.getElementById('guardName').textContent = email || 'Guard';
+      document.getElementById('guardSessionIdentity').textContent = `Company ID ${tenantId} · Guard ID ${userId}`;
       showScreen('guard');
       updateConnectionBanner();
       loadAssignedSites();
