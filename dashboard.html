@@ -768,7 +768,7 @@
           editBtn.className = 'cert-edit';
           editBtn.onclick = () => openEditCertModal(c.id);
           const removeBtn = document.createElement('button');
-          removeBtn.textContent = 'Remove';
+          removeBtn.textContent = 'Archive';
           removeBtn.className = 'remove';
           removeBtn.onclick = () => removeCertification(c.id, c.cert_name);
 
@@ -1231,7 +1231,7 @@
     }
 
     async function removeGuard(guardId, guardEmail) {
-      if (!confirm('Remove guard ' + guardEmail + '? This cannot be undone.')) return;
+      if (!confirm('Archive guard ' + guardEmail + '? Login will be disabled and active site assignments removed. Historical records will be preserved.')) return;
       const statusDiv = document.getElementById('guardStatus');
       try {
         const res = await fetch(API_BASE + '/api/users/' + guardId + '?tenant_id=' + tenantId, {
@@ -1240,7 +1240,7 @@
         });
         const data = await res.json();
         if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to remove guard'); }
-        statusDiv.textContent = 'Guard removed.';
+        statusDiv.textContent = data.message || 'Guard archived.';
         statusDiv.className = 'status success';
         loadGuards();
         loadPlanAndUsage();
