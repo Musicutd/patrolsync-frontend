@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>PatrolSync - Dashboard</title>
+  <link rel="stylesheet" href="patrolsync-ui.css">
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; max-width: 700px; margin: 30px auto; padding: 20px; }
@@ -151,9 +152,37 @@
     .cert-date-row label { font-size: 12px; font-weight: bold; color: #333; display: block; margin-bottom: 2px; }
   </style>
 </head>
-<body>
+<body class="ps-admin-shell">
+  <aside class="ps-sidebar" aria-label="Primary navigation">
+    <div class="ps-brand"><div class="ps-brand-mark">✓</div><div class="ps-brand-copy"><strong>PatrolSync</strong><span>Operations Cloud</span></div></div>
+    <div class="ps-nav-label">Command</div><nav class="ps-nav">
+      <a class="active" href="dashboard.html"><span class="ps-nav-icon">▦</span>Overview</a>
+      <a href="attendance.html"><span class="ps-nav-icon">◷</span>Attendance</a>
+      <a href="dispatch_center.html"><span class="ps-nav-icon">⌁</span>Dispatch Center</a>
+      <a href="incident_management.html"><span class="ps-nav-icon">△</span>Incident Cases</a>
+    </nav>
+    <div class="ps-nav-label">Workforce</div><nav class="ps-nav">
+      <a href="shift_scheduler.html"><span class="ps-nav-icon">▣</span>Shift Scheduler</a>
+      <a href="timesheets.html"><span class="ps-nav-icon">◫</span>Timesheets</a>
+      <a href="leave_management.html"><span class="ps-nav-icon">◇</span>Leave Management</a>
+      <a href="training_compliance.html"><span class="ps-nav-icon">◎</span>Training & Compliance</a>
+    </nav>
+    <div class="ps-nav-label">Field Operations</div><nav class="ps-nav">
+      <a href="patrol_routes.html"><span class="ps-nav-icon">⌖</span>Patrol Routes</a>
+      <a href="patrol_runs.html"><span class="ps-nav-icon">↻</span>Patrol Runs</a>
+      <a href="lone_worker.html"><span class="ps-nav-icon">◉</span>Lone Worker</a>
+      <a href="quality_inspections.html"><span class="ps-nav-icon">✓</span>Quality</a>
+    </nav>
+    <div class="ps-nav-label">Business</div><nav class="ps-nav">
+      <a href="service_contracts.html"><span class="ps-nav-icon">▤</span>Contracts & SLAs</a>
+      <a href="client_reports.html"><span class="ps-nav-icon">▥</span>Client Reports</a>
+      <a href="invoices.html"><span class="ps-nav-icon">€</span>Billing</a>
+      <a href="analytics.html"><span class="ps-nav-icon">⌁</span>Analytics</a>
+    </nav>
+    <div class="ps-sidebar-foot">Secure multi-tenant operations<br>PatrolSync Platform</div>
+  </aside>
   <div id="header">
-    <h2 id="companyName">Loading...</h2>
+    <div class="ps-header-copy"><button class="ps-menu-toggle" onclick="document.body.classList.toggle('ps-nav-open')" aria-label="Open navigation">☰</button><div><h2 id="companyName">Loading...</h2><span style="font-size:12px;color:#64748b">Security operations workspace</span></div></div>
     <button class="logout" onclick="logout()">Log Out</button>
   </div>
   <p><b>Company ID:</b> <span id="tenantIdLabel">-</span> <span style="font-size:12px;color:#64748b;">— give this number to guards for login and password recovery</span></p>
