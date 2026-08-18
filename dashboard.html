@@ -897,7 +897,7 @@
 
     async function loadTenantInfo() {
       try {
-        const res = await fetchWithTimeout(API_BASE + '/api/tenants', {}, 8000);
+        const res = await fetchWithTimeout(API_BASE + '/api/tenants', { headers: authHeaders() }, 8000);
         const tenants = await res.json();
         const tenant = tenants.find(t => t.id === Number(tenantId));
         if (tenant) {
@@ -953,7 +953,7 @@
     // --- Emergency contacts (independent call number + WhatsApp number) ---
     async function loadEmergencyContacts() {
       try {
-        const res = await fetchWithTimeout(API_BASE + '/api/tenants', {}, 8000);
+        const res = await fetchWithTimeout(API_BASE + '/api/tenants', { headers: authHeaders() }, 8000);
         const tenants = await res.json();
         const tenant = tenants.find(t => t.id === Number(tenantId));
         if (tenant) {
