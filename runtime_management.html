@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PatrolSync Runtime Monitor</title>
+  <style>
+    body{font-family:Arial;max-width:1200px;margin:25px auto;padding:0 18px;background:#f1f5f9;color:#0f172a}.card{background:#fff;border:1px solid #dbe3ee;border-radius:9px;padding:18px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric b{display:block;font-size:25px;margin-top:7px}button{background:#0f766e;color:white;border:0;border-radius:6px;padding:9px 13px;cursor:pointer}.muted{color:#64748b;font-size:13px}.error{color:#dc2626}.good{color:#15803d;font-weight:bold}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e2e8f0;text-align:left}@media(max-width:750px){.grid{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+  <p><a href="platform_dashboard.html">← Platform Console</a></p>
+  <h2>Runtime & Deployment Safety</h2>
+  <p>Live state for this backend instance. Render can use <code>/health</code> for health checks; <code>/live</code> reports process liveness and <code>/ready</code> reports whether the instance can accept work.</p>
+  <button onclick="loadRuntime()">Refresh</button> <label style="margin-left:12px"><input id="auto" type="checkbox" checked onchange="toggleAuto()"> refresh every 5 seconds</label> <span id="status" class="muted"></span>
+  <div id="metrics" class="grid"></div>
+  <div class="card"><h3>Database Connection Pools</h3><div id="pools"></div></div>
+  <div class="card"><h3>Deployment Behaviour</h3><ul><li>Readiness becomes false before shutdown begins.</li><li>New requests receive HTTP 503 with a retry hint while draining.</li><li>Existing requests are allowed to finish for up to 25 seconds.</li><li>Recurring job timers stop before database connections close.</li><li>System and restricted tenant pools close cleanly.</li><li>Database advisory locks continue preventing duplicate jobs across instances.</li></ul></div>
+  <div class="card"><h3>Render Configuration</h3><table><tr><th>Health Check Path</th><td><code>/health</code></td></tr><tr><th>Liveness diagnostic</th><td><code>/live</code></td></tr><tr><th>Readiness diagnostic</th><td><code>/ready</code></td></tr><tr><th>Shutdown deadline</th><td>25 seconds</td></tr></table></div>
+  <script>
+    const API='https://patrolsync-backend.onrender.com',token=localStorage.getItem('platform_token'),statusEl=document.getElementById('status'),metricsEl=document.getElementById('metrics'),poolsEl=document.getElementById('pools');let timer=null;
+    if(!token)location.replace('platform_login.html');
+    const bytes=n=>n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';
+    const duration=s=>{s=Number(s||0);const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return`${d?d+'d ':''}${h}h ${m}m`};
+    async function api(path){const r=await fetch(API+path,{headers:{Authorization:'Bearer '+token}}),d=await r.json().catch(()=>({error:'Unexpected response'}));if(r.status===401){localStorage.removeItem('platform_token');location.replace('platform_login.html');throw Error('Session expired')}if(!r.ok)throw Error(d.error||'Request failed');return d}
+    async function loadRuntime(){try{const d=await api('/api/platform/runtime');metricsEl.innerHTML=`<div class="card metric">State<b class="${d.ready&&!d.draining?'good':'error'}">${d.ready&&!d.draining?'READY':'DRAINING'}</b></div><div class="card metric">Active requests<b>${d.active_requests}</b></div><div class="card metric">Uptime<b>${duration(d.uptime_seconds)}</b></div><div class="card metric">Memory RSS<b>${bytes(d.memory.rss_bytes)}</b></div><div class="card metric">Database latency<b>${d.database.latency_ms??'—'} ms</b></div><div class="card metric">Scheduled jobs<b>${d.background.scheduled_jobs}</b></div><div class="card metric">Cache entries<b>${d.cache.entries}</b></div><div class="card metric">Total requests<b>${d.total_requests}</b></div>`;const s=d.database.system_pool,t=d.database.tenant_pool;poolsEl.innerHTML=`<p><b>System:</b> ${s.total}/${s.max} open · ${s.idle} idle · <span class="${s.waiting?'error':'good'}">${s.waiting} waiting</span></p><p><b>Tenant:</b> ${t.total}/${t.max} open · ${t.idle} idle · <span class="${t.waiting?'error':'good'}">${t.waiting} waiting</span></p><p class="muted">Instance: ${d.instance_id} · Node ${d.node_version} · Database paths separated: ${d.database.paths_separated?'Yes':'No'}</p>`;statusEl.textContent=' Updated '+new Date().toLocaleTimeString();statusEl.className='muted'}catch(e){statusEl.textContent=' '+e.message;statusEl.className='error'}}
+    function toggleAuto(){clearInterval(timer);timer=document.getElementById('auto').checked?setInterval(loadRuntime,5000):null}toggleAuto();loadRuntime();
+  </script>
+</body>
+</html>
