@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="patrolsync-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="patrolsync-guard.css">
   <title>PatrolSync - Guard</title>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
@@ -135,10 +136,12 @@
     .install-btn { background:#0f766e; width:auto; padding:7px 12px; margin-left:auto; margin-right:8px; }
   </style>
 </head>
-<body>
-  <div id="loginScreen">
-    <h2>PatrolSync Guard Login</h2>
-    <section>
+<body class="ps-guard-app">
+  <div id="loginScreen" class="ps-login-shell">
+    <div class="ps-login-brand"><span class="ps-login-mark">✓</span><div><strong>PatrolSync</strong><small>FIELD OPERATIONS</small></div></div>
+    <h2>Welcome back</h2>
+    <p class="ps-login-intro">Sign in to start your shift and access today's patrol operations.</p>
+    <section class="ps-login-card">
       <input type="number" id="loginCompanyId" placeholder="Company ID" min="1" inputmode="numeric">
       <input type="email" id="loginEmail" placeholder="Your email">
       <input type="password" id="loginPassword" placeholder="Password">
@@ -151,7 +154,7 @@
     <div class="admin-link"><a href="client_portal.html">Are you a client? Log in here →</a></div>
   </div>
 
-  <div id="guardScreen">
+  <div id="guardScreen" class="ps-guard-screen">
     <div id="header">
       <div><h2 id="guardName" style="margin-bottom:2px;">Guard</h2><div id="guardSessionIdentity" class="hint"></div></div>
       <button id="installAppBtn" class="install-btn hidden">Install App</button>
@@ -178,7 +181,7 @@
       <div id="clockStatus" class="status"></div>
     </section>
 
-    <section>
+    <section class="ps-emergency-card">
       <button id="sosBtn" class="sos-btn" onclick="triggerSos()">🆘 SOS — SEND EMERGENCY ALERT</button>
       <div class="sos-contact-row">
         <a id="sosCallLink" href="#" class="sos-call-btn hidden">📞 Call Admin</a>
@@ -193,7 +196,7 @@
       <div id="sosStatusMsg" class="status"></div>
     </section>
 
-    <section>
+    <section class="ps-scan-card">
       <h3>Scan a Checkpoint</h3>
       <p class="hint">Point your camera at any checkpoint's QR label. Works even with no signal — scans are queued and synced automatically.</p>
       <button class="scanqr" onclick="openScanner()">📷 Open Camera Scanner</button>
@@ -209,7 +212,7 @@
       <div id="qrScanStatus" class="status"></div>
     </section>
 
-    <section>
+    <section class="ps-progress-card">
       <h3>Today's Progress</h3>
       <div class="progress-wrap">
         <span class="progress-count" id="progressCount">0</span>
@@ -221,7 +224,7 @@
       <button class="remaining" onclick="showRemaining()">Check Remaining Checkpoints</button>
     </section>
 
-    <section>
+    <section class="ps-services-card">
       <h3>📅 My Shifts</h3>
       <p class="hint">Your upcoming duty schedule, set by your admin.</p>
       <div id="todayShiftSummary">Loading...</div>
@@ -240,7 +243,7 @@
       <button class="shift-open-btn" onclick="window.location.href='my_inspections.html'">My Site Inspections →</button>
     </section>
 
-    <section>
+    <section class="ps-incident-card">
       <h3>Report an Incident</h3>
       <textarea id="incidentDescription" placeholder="Describe what happened" rows="3"></textarea>
       <select id="incidentCategory"><option value="security">Security</option><option value="safety">Safety hazard</option><option value="medical">Medical</option><option value="fire">Fire</option><option value="property">Property damage</option><option value="access">Access control</option><option value="conduct">Conduct</option><option value="general">General</option></select>
