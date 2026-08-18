@@ -196,11 +196,7 @@
     <span id="planBadge" class="plan-badge plan-starter">Loading...</span>
     <div class="price-line" id="planPriceLine"></div>
     <div id="usageBars"></div>
-    <div class="upgrade-row">
-      <select id="upgradeSelect"><option value="">Loading plans...</option></select>
-      <button onclick="changePlan()">Change Plan</button>
-    </div>
-    <div id="planStatus" class="status"></div>
+    <p style="font-size:13px;color:#64748b;margin-bottom:0;">Plan changes are managed by PatrolSync. Contact support if you need to upgrade or change your subscription.</p>
   </section>
 
   <section>
@@ -898,7 +894,6 @@
     }
 
     let currentTenant = null;
-    let allPlans = null;
 
     async function loadTenantInfo() {
       try {
@@ -1009,11 +1004,7 @@
       const priceLine = document.getElementById('planPriceLine');
       const barsDiv = document.getElementById('usageBars');
       try {
-        const [plansRes, usageRes] = await Promise.all([
-          fetchWithTimeout(API_BASE + '/api/plans', {}, 8000),
-          fetchWithTimeout(API_BASE + '/api/usage?tenant_id=' + tenantId, { headers: authHeaders() }, 8000)
-        ]);
-        allPlans = await plansRes.json();
+        const usageRes = await fetchWithTimeout(API_BASE + '/api/usage?tenant_id=' + tenantId, { headers: authHeaders() }, 8000);
         const usageData = await usageRes.json();
         if (!usageRes.ok) { if (handleAuthError(usageData.error)) return; throw new Error(usageData.error || 'Failed to load usage'); }
 
@@ -1053,39 +1044,9 @@
           barsDiv.appendChild(item);
         });
 
-        const upgradeSelect = document.getElementById('upgradeSelect');
-        upgradeSelect.innerHTML = '';
-        Object.keys(allPlans).forEach(p => {
-          const opt = document.createElement('option');
-          opt.value = p;
-          opt.textContent = p.charAt(0).toUpperCase() + p.slice(1) + ' (€' + allPlans[p].monthly_price + '/mo)';
-          if (p === plan) opt.selected = true;
-          upgradeSelect.appendChild(opt);
-        });
       } catch (err) {
         console.error('loadPlanAndUsage failed:', err.message);
         badge.textContent = 'Unavailable';
-      }
-    }
-
-    async function changePlan() {
-      const newPlan = document.getElementById('upgradeSelect').value;
-      const statusDiv = document.getElementById('planStatus');
-      if (!newPlan) return;
-      try {
-        const res = await fetch(API_BASE + '/api/tenants/' + tenantId + '/plan', {
-          method: 'PATCH',
-          headers: authHeaders(),
-          body: JSON.stringify({ plan: newPlan })
-        });
-        const data = await res.json();
-        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to change plan'); }
-        statusDiv.textContent = 'Plan changed to ' + data.plan + '.';
-        statusDiv.className = 'status success';
-        loadPlanAndUsage();
-      } catch (err) {
-        statusDiv.textContent = err.message;
-        statusDiv.className = 'status error';
       }
     }
 
