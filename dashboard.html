@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>PatrolSync - Dashboard</title>
   <link rel="stylesheet" href="patrolsync-ui.css">
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
@@ -154,6 +155,7 @@
 </head>
 <body class="ps-admin-shell">
   <aside class="ps-sidebar" aria-label="Primary navigation">
+    <button class="ps-nav-close" onclick="document.body.classList.remove('ps-nav-open')" aria-label="Close navigation">×</button>
     <div class="ps-brand"><div class="ps-brand-mark">✓</div><div class="ps-brand-copy"><strong>PatrolSync</strong><span>Operations Cloud</span></div></div>
     <div class="ps-nav-label">Command</div><nav class="ps-nav">
       <a class="active" href="dashboard.html"><span class="ps-nav-icon">▦</span>Overview</a>
