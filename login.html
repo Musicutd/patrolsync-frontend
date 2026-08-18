@@ -28,7 +28,7 @@
   <button onclick="doLogin()">Log In</button>
   <div id="mfaStep" style="display:none;border:1px solid #dbe3ee;border-radius:8px;padding:12px;margin-top:12px">
     <p id="mfaMessage">Enter the six-digit code sent to your email.</p>
-    <input type="text" id="mfaCode" inputmode="numeric" maxlength="6" placeholder="6-digit verification code">
+    <input type="text" id="mfaCode" maxlength="11" autocomplete="one-time-code" placeholder="6-digit code or recovery code">
     <button onclick="verifyMfa()">Verify & Log In</button>
     <button onclick="cancelMfa()" style="background:#64748b">Cancel</button>
   </div>
@@ -129,7 +129,7 @@
 
     async function verifyMfa() {
       const code = document.getElementById('mfaCode').value.trim(), statusDiv = document.getElementById('loginStatus');
-      if (!mfaChallenge || !/^\d{6}$/.test(code)) { statusDiv.textContent='Enter the six-digit code'; statusDiv.className='status error'; return; }
+      if (!mfaChallenge || (!/^\d{6}$/.test(code) && !/^[A-Za-z0-9]{5}-?[A-Za-z0-9]{5}$/.test(code))) { statusDiv.textContent='Enter the six-digit code or a recovery code'; statusDiv.className='status error'; return; }
       try {
         const res=await fetch(API_BASE+'/api/auth/mfa/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({challenge_token:mfaChallenge,code})});
         const data=await res.json(); if(!res.ok)throw Error(data.error||'Verification failed');
