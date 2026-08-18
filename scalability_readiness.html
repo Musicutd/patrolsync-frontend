@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PatrolSync Scalability Readiness</title>
+  <style>
+    body{font-family:Arial;max-width:1200px;margin:25px auto;padding:0 18px;background:#f1f5f9;color:#0f172a}.card{background:#fff;border:1px solid #dbe3ee;border-radius:9px;padding:18px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric b{display:block;font-size:27px;margin-top:7px}button{background:#0f766e;color:white;border:0;border-radius:6px;padding:10px 14px;cursor:pointer}.muted{color:#64748b;font-size:13px}.pass{color:#15803d}.warning{color:#b45309}.fail{color:#dc2626}.headline{font-size:22px;font-weight:bold}.check{border-left:5px solid #94a3b8}.check.pass{border-left-color:#16a34a}.check.warning{border-left-color:#d97706}.check.fail{border-left-color:#dc2626}.check h3{margin:0 0 7px;color:#0f172a}.badge{font-weight:bold;text-transform:uppercase;margin-right:8px}@media(max-width:750px){.grid{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+  <p><a href="platform_dashboard.html">← Platform Console</a></p>
+  <h2>Scalability Readiness</h2>
+  <p>This read-only gate verifies whether the current production deployment has the foundations required to scale safely.</p>
+  <button onclick="runGate()">Run Scalability Gate</button> <span id="status" class="muted"></span>
+  <div id="outcome" class="card"><span class="muted">Run the gate to begin.</span></div>
+  <div id="metrics" class="grid"></div><div id="checks"></div>
+  <script>
+    const API='https://patrolsync-backend.onrender.com',token=localStorage.getItem('platform_token'),statusEl=document.getElementById('status'),outcomeEl=document.getElementById('outcome'),metricsEl=document.getElementById('metrics'),checksEl=document.getElementById('checks');
+    if(!token)location.replace('platform_login.html');
+    const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    async function api(path){const r=await fetch(API+path,{headers:{Authorization:'Bearer '+token}}),d=await r.json().catch(()=>({error:'Unexpected response'}));if(r.status===401){localStorage.removeItem('platform_token');location.replace('platform_login.html');throw Error('Session expired')}if(!r.ok)throw Error(d.error||'Request failed');return d}
+    async function runGate(){statusEl.textContent=' Running…';outcomeEl.innerHTML='<span class="muted">Checking production systems…</span>';metricsEl.innerHTML='';checksEl.innerHTML='';try{const d=await api('/api/platform/scalability-readiness');outcomeEl.innerHTML=`<div class="headline ${d.ready?'pass':'fail'}">${d.ready?'READY TO SCALE':'ACTION REQUIRED'}</div><p>${d.ready?'All critical scalability checks passed. Warnings should still be reviewed.':'Correct the failed checks before increasing production traffic or instance count.'}</p><span class="muted">Completed in ${d.duration_ms} ms · ${new Date(d.generated_at).toLocaleString()}</span>`;metricsEl.innerHTML=`<div class="card metric">Passed<b class="pass">${d.summary.passed}</b></div><div class="card metric">Warnings<b class="warning">${d.summary.warnings}</b></div><div class="card metric">Failures<b class="fail">${d.summary.failures}</b></div><div class="card metric">Total checks<b>${d.summary.total}</b></div>`;checksEl.innerHTML=d.checks.map(x=>`<div class="card check ${x.status}"><h3><span class="badge ${x.status}">${x.status}</span>${esc(x.title)}</h3><div>${esc(x.message)}</div></div>`).join('');statusEl.textContent=' Completed';statusEl.className='muted'}catch(e){outcomeEl.innerHTML=`<span class="fail">${esc(e.message)}</span>`;statusEl.textContent=' Failed';statusEl.className='fail'}}
+    runGate();
+  </script>
+</body>
+</html>
