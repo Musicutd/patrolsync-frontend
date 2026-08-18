@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PatrolSync Response Cache</title>
+  <style>
+    body{font-family:Arial;max-width:1200px;margin:25px auto;padding:0 18px;background:#f1f5f9;color:#0f172a}.card{background:#fff;border:1px solid #dbe3ee;border-radius:9px;padding:18px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric b{display:block;font-size:27px;margin-top:7px}button{background:#0f766e;color:white;border:0;border-radius:6px;padding:9px 13px;cursor:pointer}.danger{background:#dc2626}.muted{color:#64748b;font-size:13px}.error{color:#dc2626}.good{color:#15803d;font-weight:bold}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px}.table-wrap{overflow:auto}@media(max-width:750px){.grid{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+  <p><a href="platform_dashboard.html">← Platform Console</a></p>
+  <h2>Response Cache</h2>
+  <p>Short-lived caching reduces repeated PostgreSQL work for private platform-console reads. Guard, subscriber, attendance, dispatch, patrol, and safety APIs remain live and uncached.</p>
+  <button onclick="loadCache()">Refresh</button> <button class="danger" onclick="clearCache()">Clear Cache</button> <span id="status" class="muted"></span>
+  <div id="metrics" class="grid"></div>
+  <div class="card"><h3>Safety Rules</h3><p class="good">Automatic invalidation is enabled.</p><p>Successful platform changes clear cached responses. Entries also expire after 5–60 seconds depending on the endpoint. Authentication is checked before every cache hit.</p><p class="muted">Use <code>?fresh=1</code> on a cached GET endpoint to bypass its cache during diagnostics.</p></div>
+  <div class="card"><h3>Active Entries</h3><div class="table-wrap"><table><thead><tr><th>Endpoint group</th><th>Age</th><th>Expires in</th><th>Size</th><th>Cache key</th></tr></thead><tbody id="entries"></tbody></table></div></div>
+  <script>
+    const API='https://patrolsync-backend.onrender.com',token=localStorage.getItem('platform_token'),statusEl=document.getElementById('status'),metricsEl=document.getElementById('metrics'),entriesEl=document.getElementById('entries');
+    if(!token)location.replace('platform_login.html');
+    const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const bytes=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';
+    async function api(path,options={}){options.headers={Authorization:'Bearer '+token,'Content-Type':'application/json',...(options.headers||{})};const r=await fetch(API+path,options),d=await r.json().catch(()=>({error:'Unexpected response'}));if(r.status===401){localStorage.removeItem('platform_token');location.replace('platform_login.html');throw Error('Session expired')}if(!r.ok)throw Error(d.error||'Request failed');return d}
+    async function loadCache(){statusEl.textContent=' Loading…';try{const d=await api('/api/platform/cache');metricsEl.innerHTML=`<div class="card metric">Hit rate<b>${d.hit_rate_percent}%</b></div><div class="card metric">Hits / misses<b>${d.stats.hits} / ${d.stats.misses}</b></div><div class="card metric">Active entries<b>${d.current_entries} / ${d.max_entries}</b></div><div class="card metric">Memory used<b>${bytes(d.current_bytes)}</b></div>`;entriesEl.innerHTML=d.entries.length?d.entries.map(x=>`<tr><td>${esc(x.name)}</td><td>${x.age_seconds}s</td><td>${x.expires_in_seconds}s</td><td>${bytes(x.bytes)}</td><td><code>${esc(x.key)}</code></td></tr>`).join(''):'<tr><td colspan="5" class="muted">No active entries. Open or refresh other Platform Console pages to populate the cache.</td></tr>';statusEl.textContent=' Updated '+new Date().toLocaleTimeString();statusEl.className='muted'}catch(e){statusEl.textContent=' '+e.message;statusEl.className='error'}}
+    async function clearCache(){if(!confirm('Clear all short-lived platform response cache entries?'))return;try{const d=await api('/api/platform/cache',{method:'DELETE'});alert(d.message);await loadCache()}catch(e){alert(e.message)}}
+    loadCache();
+  </script>
+</body>
+</html>
