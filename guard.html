@@ -1030,7 +1030,7 @@
       if (!navigator.onLine) return;
       const { tenantId } = getSession();
       try {
-        const res = await fetch(API_BASE + '/api/tenants');
+        const res = await fetch(API_BASE + '/api/tenants', { headers: authHeaders() });
         const tenants = await res.json();
         const tenant = tenants.find(t => t.id === Number(tenantId));
         emergencyPhone = tenant && tenant.emergency_phone ? tenant.emergency_phone.trim() : null;
