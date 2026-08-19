@@ -25,6 +25,21 @@
       button.setAttribute('aria-label', dark ? 'Use light theme' : 'Use dark theme');
     }
     document.addEventListener('DOMContentLoaded', updateThemeButton);
+    function showWorkspaceView(view, updateHash) {
+      const selected = view || 'overview';
+      document.querySelectorAll('.workspace-view').forEach(panel => panel.classList.toggle('active', panel.dataset.view === selected));
+      document.querySelectorAll('[data-workspace-link]').forEach(link => link.classList.toggle('active', link.dataset.workspaceLink === selected));
+      const titles = {overview:'Operations Overview',company:'Company & Sites',workforce:'Workforce Management',tools:'Operations Tools',patrol:'Patrol Configuration',reports:'Reports & Compliance',incidents:'Incident Desk'};
+      const label = document.getElementById('workspaceViewTitle'); if (label) label.textContent = titles[selected] || 'Operations Overview';
+      document.body.classList.remove('ps-nav-open');
+      if (updateHash) history.replaceState(null, '', '#' + selected);
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('[data-workspace-link]').forEach(link => link.addEventListener('click', function (event) { event.preventDefault(); showWorkspaceView(this.dataset.workspaceLink, true); }));
+      const requested = location.hash.replace('#','');
+      showWorkspaceView(['overview','company','workforce','tools','patrol','reports','incidents'].includes(requested) ? requested : 'overview', false);
+    });
   </script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <style>
@@ -119,6 +134,25 @@
 
     /* --- Emergency contacts section --- */
     .emergency-label { font-size: 13px; font-weight: bold; display: block; margin-top: 8px; color: #333; }
+    .workspace-view { display:none; max-width:1180px; margin:16px 30px 20px calc(var(--ps-sidebar) + 30px); }
+    .workspace-view.active { display:block; animation:workspaceIn .18s ease-out; }
+    @keyframes workspaceIn { from { opacity:.35; transform:translateY(5px); } to { opacity:1; transform:none; } }
+    .workspace-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; align-items:start; }
+    .workspace-grid > section,.workspace-view > section { margin:0; min-height:190px; padding:22px; border:1px solid var(--ps-border,#d9e0e5); border-radius:14px; background:var(--ps-surface,#fff); box-shadow:var(--ps-shadow,0 5px 16px rgba(15,23,42,.06)); }
+    .workspace-grid > section h3,.workspace-view > section h3 { color:var(--ps-text,#17212b)!important; }
+    .workspace-grid > section.workspace-wide { grid-column:1/-1; }
+    .workspace-hero { padding:24px; margin-bottom:18px; border:1px solid #99ddd6; border-radius:15px; background:linear-gradient(135deg,rgba(22,184,167,.14),rgba(57,120,246,.08)); }
+    .workspace-hero h2 { margin:0 0 7px; font-size:26px; }
+    .workspace-hero p { margin:0; color:#64748b; }
+    .tool-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+    .tool-grid button { min-height:76px; margin:0; padding:14px; text-align:left; border-radius:11px; background:#f4f8fa; color:#17212b; border:1px solid #d6e0e6; font-weight:750; }
+    .tool-grid button:hover { border-color:#16b8a7; transform:translateY(-1px); box-shadow:0 7px 18px rgba(15,23,42,.08); }
+    html[data-theme="dark"] .tool-grid button { background:#141d25; color:#e7edf2; border-color:#293640; }
+    html[data-theme="dark"] .workspace-hero { border-color:#17685f; background:linear-gradient(135deg,rgba(22,184,167,.13),rgba(57,120,246,.07)); }
+    html[data-theme="dark"] .workspace-hero p { color:#91a0ad; }
+    .ps-nav a.workspace-local { cursor:pointer; }
+    @media(max-width:900px){.workspace-view{margin:14px}.workspace-grid{grid-template-columns:1fr}.workspace-grid > section.workspace-wide{grid-column:auto}.tool-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:560px){.workspace-grid{gap:12px}.workspace-grid > section{min-height:0;padding:17px}.tool-grid{grid-template-columns:1fr}.tool-grid button{min-height:58px}.workspace-hero{padding:18px}.workspace-hero h2{font-size:22px}}
 
     /* --- Incident photo viewer --- */
     .incident-row-main { flex: 1; }
@@ -179,10 +213,18 @@
     <button class="ps-nav-close" onclick="document.body.classList.remove('ps-nav-open')" aria-label="Close navigation">×</button>
     <div class="ps-brand"><div class="ps-brand-mark">✓</div><div class="ps-brand-copy"><strong>PatrolSync</strong><span>Operations Cloud</span></div></div>
     <div class="ps-nav-label">Command</div><nav class="ps-nav">
-      <a class="active" href="dashboard.html"><span class="ps-nav-icon">▦</span>Overview</a>
+      <a class="workspace-local active" href="#overview" data-workspace-link="overview"><span class="ps-nav-icon">▦</span>Overview</a>
       <a href="attendance.html"><span class="ps-nav-icon">◷</span>Attendance</a>
       <a href="dispatch_center.html"><span class="ps-nav-icon">⌁</span>Dispatch Center</a>
       <a href="incident_management.html"><span class="ps-nav-icon">△</span>Incident Cases</a>
+    </nav>
+    <div class="ps-nav-label">Workspace</div><nav class="ps-nav">
+      <a class="workspace-local" href="#company" data-workspace-link="company"><span class="ps-nav-icon">⌂</span>Company & Sites</a>
+      <a class="workspace-local" href="#workforce" data-workspace-link="workforce"><span class="ps-nav-icon">◎</span>Workforce</a>
+      <a class="workspace-local" href="#tools" data-workspace-link="tools"><span class="ps-nav-icon">▦</span>Operations Tools</a>
+      <a class="workspace-local" href="#patrol" data-workspace-link="patrol"><span class="ps-nav-icon">⌖</span>Patrol Setup</a>
+      <a class="workspace-local" href="#reports" data-workspace-link="reports"><span class="ps-nav-icon">▥</span>Reports</a>
+      <a class="workspace-local" href="#incidents" data-workspace-link="incidents"><span class="ps-nav-icon">△</span>Incident Desk</a>
     </nav>
     <div class="ps-nav-label">Workforce</div><nav class="ps-nav">
       <a href="shift_scheduler.html"><span class="ps-nav-icon">▣</span>Shift Scheduler</a>
@@ -209,12 +251,16 @@
     <div class="ps-sidebar-foot">Secure multi-tenant operations<br>PatrolSync Platform</div>
   </aside>
   <div id="header">
-    <div class="ps-header-copy"><button class="ps-menu-toggle" onclick="document.body.classList.toggle('ps-nav-open')" aria-label="Open navigation">☰</button><div><h2 id="companyName">Loading...</h2><span style="font-size:12px;color:#64748b">Security operations workspace</span></div></div>
+    <div class="ps-header-copy"><button class="ps-menu-toggle" onclick="document.body.classList.toggle('ps-nav-open')" aria-label="Open navigation">☰</button><div><h2 id="companyName">Loading...</h2><span id="workspaceViewTitle" style="font-size:12px;color:#64748b">Operations Overview</span></div></div>
     <div class="ps-header-actions"><button id="themeToggle" class="ps-theme-toggle" type="button" onclick="togglePatrolSyncTheme()" aria-label="Change color theme"><span>☾</span><b>Dark</b></button><button class="logout" onclick="logout()">Log Out</button></div>
   </div>
   <p><b>Company ID:</b> <span id="tenantIdLabel">-</span> <span style="font-size:12px;color:#64748b;">— give this number to guards for login and password recovery</span></p>
 
-  <section class="sos-section">
+  <div class="workspace-view active" data-view="overview">
+  <div class="workspace-hero"><h2>Command overview</h2><p>Live exceptions and operational priorities for your company. Use the sidebar to open setup and management areas.</p></div>
+  <div class="workspace-grid">
+
+  <section class="sos-section workspace-wide">
     <div class="sos-header-row">
       <div class="sos-title">
         <h3 style="margin:0;">🆘 SOS Alerts</h3>
@@ -246,7 +292,9 @@
     <button onclick="loadExpiringCertifications()">Refresh</button>
     <ul id="certExpiringList"></ul>
   </section>
+  </div></div>
 
+  <div class="workspace-view" data-view="company"><div class="workspace-hero"><h2>Company & sites</h2><p>Manage subscription visibility, regional settings, emergency contacts, and operating locations.</p></div><div class="workspace-grid">
   <section>
     <h3>Plan & Usage</h3>
     <span id="planBadge" class="plan-badge plan-starter">Loading...</span>
@@ -284,7 +332,9 @@
     <div id="siteStatus" class="status"></div>
     <ul id="siteList"></ul>
   </section>
+  </div></div>
 
+  <div class="workspace-view" data-view="workforce"><div class="workspace-hero"><h2>Workforce management</h2><p>Manage guards, site assignments, shifts, certifications, and client access.</p></div><div class="workspace-grid">
   <section>
     <h3>Add a Guard</h3>
     <input type="email" id="guardEmail" placeholder="Guard email">
@@ -312,10 +362,12 @@
     <p style="font-size:13px; color:#4c1d95; margin-top:6px;">Build weekly or monthly duty rosters for full-time and part-time guards. Guards see their own upcoming shifts in their portal automatically.</p>
     <button class="shift-open-btn" onclick="window.location.href='shift_scheduler.html'">Open Shift Scheduler →</button>
   </section>
+  </div></div>
 
-  <section style="border-color:#93c5fd; background:#eff6ff;">
-    <h3 style="margin:0;">Attendance & Time Clock</h3>
-    <p style="font-size:13px; color:#1e3a8a;">Review live clock-ins, breaks, completed sessions, and worked hours.</p>
+  <div class="workspace-view" data-view="tools"><div class="workspace-hero"><h2>Operations tools</h2><p>Open a focused management module. Each tool has its own workspace and only appears when selected.</p></div>
+  <section class="workspace-wide">
+    <h3 style="margin-top:0;">Choose a module</h3>
+    <div class="tool-grid">
     <button onclick="window.location.href='attendance.html'">Open Attendance →</button>
     <button onclick="window.location.href='timesheets.html'">Review Timesheets →</button>
     <button onclick="window.location.href='leave_management.html'">Manage Leave →</button>
@@ -354,8 +406,11 @@
     <button onclick="window.location.href='integrity_tests.html'">Automated Integrity Tests →</button>
     <button onclick="window.location.href='mfa_settings.html'">Two-Step Verification →</button>
     <button onclick="window.location.href='session_management.html'">Active Sessions & Devices →</button>
+    </div>
   </section>
+  </div>
 
+  <div class="workspace-view" data-view="workforce"><div class="workspace-grid">
   <section class="cert-section">
     <h3>🎓 Guard Certifications</h3>
     <p style="font-size:13px; color:#92400e;">Track licenses and certifications per guard (e.g. SIA license, first aid, fire warden) with expiry warnings.</p>
@@ -375,7 +430,9 @@
     <div id="clientAccountStatus" class="status"></div>
     <ul id="clientAccountList"></ul>
   </section>
+  </div></div>
 
+  <div class="workspace-view" data-view="patrol"><div class="workspace-hero"><h2>Patrol configuration</h2><p>Configure checkpoints and schedules, then review current compliance.</p></div><div class="workspace-grid">
   <section>
     <h3>Checkpoints</h3>
     <button class="managerlink" onclick="window.location.href='checkpoint_manager.html'">🗂 Open Full Checkpoint Manager (with QR codes)</button>
@@ -426,7 +483,9 @@
     <button onclick="loadCompliance()">Check Compliance</button>
     <ul id="complianceList"></ul>
   </section>
+  </div></div>
 
+  <div class="workspace-view" data-view="reports"><div class="workspace-hero"><h2>Reports & compliance</h2><p>Generate client-ready evidence packs and export operational records.</p></div><div class="workspace-grid">
   <section>
     <h3>📄 Compliance Reports</h3>
     <p style="font-size:13px; color:#666;">Export checkpoint activity and incidents for a site over a date range. PDF gives a formatted client-facing summary; CSV gives raw rows for Excel/Google Sheets analysis.</p>
@@ -442,7 +501,9 @@
     </div>
     <div id="reportStatus" class="status"></div>
   </section>
+  </div></div>
 
+  <div class="workspace-view" data-view="incidents"><div class="workspace-hero"><h2>Incident desk</h2><p>Record new events and review reported incidents from one focused area.</p></div><div class="workspace-grid">
   <section>
     <h3>Report Incident</h3>
     <select id="incidentSite">
@@ -468,6 +529,7 @@
     <button class="clear-link" onclick="clearIncidentFilter()">Clear date filter (show all)</button>
     <ul id="incidentList"></ul>
   </section>
+  </div></div>
 
   <div id="qrModal">
     <div id="qrModalContent">
