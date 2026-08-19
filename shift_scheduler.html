@@ -211,6 +211,8 @@
 <div id="editModal">
   <div id="editModalContent">
     <h3>Edit Shift</h3>
+    <label>Assigned Guard</label>
+    <select id="editGuard"></select>
     <label>Date</label>
     <input type="date" id="editShiftDate">
     <label>Start Time</label>
@@ -760,6 +762,10 @@
 
   function openEditModal(shift) {
     editingShiftId = shift.id;
+    const sourceGuard = document.getElementById('shiftGuard');
+    const editGuard = document.getElementById('editGuard');
+    editGuard.innerHTML = sourceGuard.innerHTML;
+    editGuard.value = String(shift.user_id);
     document.getElementById('editShiftDate').value = normalizeShiftDate(shift.shift_date);
     document.getElementById('editStartTime').value = shift.start_time;
     document.getElementById('editEndTime').value = shift.end_time;
@@ -779,8 +785,15 @@
     const shiftDate = document.getElementById('editShiftDate').value;
     const startTime = document.getElementById('editStartTime').value;
     const endTime = document.getElementById('editEndTime').value;
+    const guardId = document.getElementById('editGuard').value;
     const employmentType = document.getElementById('editEmploymentType').value;
     const notes = document.getElementById('editNotes').value.trim();
+
+    if (!guardId) {
+      statusDiv.textContent = 'Select the guard who should receive this shift.';
+      statusDiv.className = 'msg error';
+      return;
+    }
 
     try {
       const res = await fetch(API_BASE + '/api/shifts/' + editingShiftId, {
@@ -788,6 +801,7 @@
         headers: authHeaders(),
         body: JSON.stringify({
           tenant_id: Number(tenantId),
+          user_id: Number(guardId),
           shift_date: shiftDate,
           start_time: startTime,
           end_time: endTime,
