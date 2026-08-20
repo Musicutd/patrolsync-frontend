@@ -14,8 +14,12 @@ body.ps-admin-shell{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystem
 .ps-brand{display:flex;align-items:center;gap:11px;padding:0 9px 21px;border-bottom:1px solid var(--ps-border);margin-bottom:16px}
 .ps-brand-mark{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,var(--ps-teal-2),#14b8a6);display:grid;place-items:center;color:#fff;font-size:21px;box-shadow:0 8px 20px #0d948844}
 .ps-brand-copy strong{display:block;color:var(--ps-text);font-size:18px;letter-spacing:-.35px}.ps-brand-copy span{font-size:11px;color:var(--ps-sidebar-muted);text-transform:uppercase;letter-spacing:.12em}
-.ps-nav-label{padding:12px 11px 6px;color:var(--ps-sidebar-muted);font-size:10px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+.ps-nav-label{display:flex;align-items:center;justify-content:space-between;padding:14px 11px 7px;color:var(--ps-sidebar-muted);font-size:10px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;cursor:pointer;user-select:none;border-radius:7px;outline:none}
+.ps-nav-label:hover,.ps-nav-label:focus-visible{color:var(--ps-teal);background:rgba(20,184,166,.06)}
+.ps-nav-chevron{font-size:13px;font-weight:600;line-height:1;transform:rotate(0);transition:transform .16s ease;color:var(--ps-sidebar-muted)}
+.ps-nav-label.collapsed .ps-nav-chevron{transform:rotate(-90deg)}
 .ps-nav{display:grid;gap:3px}.ps-nav a{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:8px;color:var(--ps-sidebar-text);text-decoration:none;font-size:13px;font-weight:600;transition:.16s ease}.ps-nav a:hover{background:#0d948811;color:var(--ps-teal-2);transform:translateX(2px)}.ps-nav a.active{background:#0d948820;color:var(--ps-teal-2);box-shadow:none}.ps-nav-icon{width:20px;text-align:center;font-size:15px}
+.ps-nav.ps-nav-collapsed{display:none}
 .ps-sidebar-foot{margin:22px 8px 0;padding-top:15px;border-top:1px solid var(--ps-border);color:var(--ps-sidebar-muted);font-size:11px}
 body.ps-admin-shell>#header{min-height:68px;margin:0 0 0 var(--ps-sidebar)!important;padding:12px 30px!important;background:var(--ps-header-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--ps-border);position:sticky;top:0;z-index:900;display:flex!important;box-shadow:none}
 body.ps-admin-shell>#header h2{font-size:21px!important;letter-spacing:-.3px;color:var(--ps-navy)!important;margin:0!important}
