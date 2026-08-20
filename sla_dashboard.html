@@ -1,5 +1,29 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Live SLA Performance</title><style>body{font-family:Arial;max-width:1200px;margin:24px auto;padding:0 15px;background:#f8fafc;color:#0f172a}.filters,.contract{background:#fff;border:1px solid #dbe2ea;border-radius:10px;padding:16px;margin:12px 0}.filters{display:grid;grid-template-columns:1fr 160px 160px auto;gap:8px}select,input,button{padding:9px;box-sizing:border-box}button{border:0;border-radius:5px;background:#2563eb;color:#fff}.headline{display:flex;justify-content:space-between;align-items:center}.overall{padding:5px 10px;border-radius:14px;font-weight:bold}.met{background:#dcfce7;color:#166534}.missed{background:#fee2e2;color:#991b1b}.no_data{background:#e2e8f0;color:#475569}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{border:1px solid #e2e8f0;border-radius:8px;padding:12px}.value{font-size:27px;font-weight:bold}.bar{height:8px;background:#e2e8f0;border-radius:5px;overflow:hidden;margin-top:8px}.fill{height:100%;background:#16a34a}.metric.missed .fill{background:#dc2626}.detail{font-size:12px;color:#64748b;margin-top:7px}@media(max-width:800px){.filters,.metrics{grid-template-columns:1fr}}</style>  <link rel="stylesheet" href="patrolsync-module.css">
   <script src="patrolsync-module.js" defer></script>
+  <style>
+    body.ps-module-shell .filters,
+    body.ps-module-shell .contract{background:var(--pm-surface)!important;color:var(--pm-text)!important;border:1px solid var(--pm-border)!important;border-radius:12px!important;box-shadow:var(--pm-shadow)!important}
+    body.ps-module-shell .filters{padding:16px!important}
+    body.ps-module-shell .contract{padding:18px!important;margin:14px 0!important}
+    body.ps-module-shell #summary{margin:14px 0;color:var(--pm-text);font-weight:700}
+    body.ps-module-shell .headline{gap:16px;margin-bottom:14px}
+    body.ps-module-shell .headline h3{margin:0 0 5px;color:var(--pm-text)!important}
+    body.ps-module-shell .headline small{color:var(--pm-muted)!important}
+    body.ps-module-shell .metrics{gap:12px}
+    body.ps-module-shell .metric{min-height:150px!important;background:var(--pm-soft)!important;color:var(--pm-text)!important;border:1px solid var(--pm-border)!important;border-left:3px solid var(--pm-teal-bright)!important}
+    body.ps-module-shell .metric>b{color:var(--pm-muted)!important}
+    body.ps-module-shell .metric .value{color:var(--pm-text)!important}
+    body.ps-module-shell .bar{background:color-mix(in srgb,var(--pm-muted) 22%,var(--pm-surface))!important}
+    body.ps-module-shell .metric .fill{background:var(--pm-green)!important}
+    body.ps-module-shell .metric.missed{background:color-mix(in srgb,var(--pm-red) 5%,var(--pm-soft))!important;border-left-color:var(--pm-red)!important}
+    body.ps-module-shell .metric.missed .fill{background:var(--pm-red)!important}
+    body.ps-module-shell .detail{color:var(--pm-muted)!important}
+    body.ps-module-shell .overall{border:1px solid transparent;text-transform:capitalize}
+    body.ps-module-shell .overall.met{background:color-mix(in srgb,var(--pm-green) 15%,var(--pm-surface))!important;color:var(--pm-green)!important;border-color:color-mix(in srgb,var(--pm-green) 35%,var(--pm-border))}
+    body.ps-module-shell .overall.missed{background:color-mix(in srgb,var(--pm-red) 14%,var(--pm-surface))!important;color:var(--pm-red)!important;border-color:color-mix(in srgb,var(--pm-red) 34%,var(--pm-border))}
+    body.ps-module-shell .overall.no_data{background:var(--pm-soft)!important;color:var(--pm-muted)!important;border-color:var(--pm-border)}
+    @media(max-width:800px){body.ps-module-shell .headline{align-items:flex-start;flex-direction:column}body.ps-module-shell .overall{align-self:flex-start}}
+  </style>
 </head><body class="ps-module-shell"><p><a href="dashboard.html">← Dashboard</a></p><h2>Live Contract SLA Performance</h2><div class="filters"><select id="site"><option value="">All contract sites</option></select><input id="from" type="date"><input id="to" type="date"><button id="refresh">Calculate</button></div><div id="summary"></div><div id="contracts"></div><script>
 const API='https://patrolsync-backend.onrender.com',token=localStorage.getItem('token'),tenant=localStorage.getItem('tenant_id'),H=()=>({'Authorization':'Bearer '+token}),$=x=>document.getElementById(x);if(!token||!tenant)location.replace('login.html');const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));async function api(u){const r=await fetch(API+u,{headers:H()}),d=await r.json();if(!r.ok)throw Error(d.error||'Request failed');return d}const day=d=>{const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())};async function init(){const now=new Date(),first=new Date(now.getFullYear(),now.getMonth(),1);$('from').value=day(first);$('to').value=day(now);const sites=await api('/api/sites?tenant_id='+tenant);$('site').innerHTML='<option value="">All contract sites</option>'+sites.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join('');load()}
 function metric(title,m,detail){const value=m.actual===null?'No data':m.actual.toFixed(2)+'%';return '<div class="metric '+m.status+'"><b>'+title+'</b><div class="value">'+value+'</div><div>Target: '+m.target+'%</div><div class="bar"><div class="fill" style="width:'+Math.min(100,m.actual||0)+'%"></div></div><div class="detail">'+detail+'</div></div>'}
