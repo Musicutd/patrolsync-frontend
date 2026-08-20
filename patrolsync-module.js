@@ -3,10 +3,11 @@
   const preferred=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
   document.documentElement.dataset.theme=saved||preferred;
   const groups=[
-    ['Command',[['dashboard.html','▦','Overview'],['attendance.html','◷','Attendance'],['dispatch_center.html','⌁','Dispatch Center'],['incident_management.html','△','Incident Cases']]],
-    ['Workforce',[['shift_scheduler.html','▣','Shift Scheduler'],['timesheets.html','◫','Timesheets'],['leave_management.html','◇','Leave Management'],['training_compliance.html','◎','Training & Compliance']]],
-    ['Field Operations',[['patrol_routes.html','⌖','Patrol Routes'],['lone_worker.html','◉','Lone Worker'],['quality_inspections.html','✓','Quality Inspections']]],
-    ['Business',[['service_contracts.html','▤','Contracts & SLAs'],['client_reports.html','▥','Client Reports'],['invoices.html','€','Billing & Invoices'],['analytics.html','⌁','Analytics']]]
+    ['Command',[['dashboard.html','▦','Overview'],['attendance.html','◷','Attendance'],['dispatch_center.html','⌁','Dispatch Center'],['incident_management.html','△','Incident Cases'],['notification_center.html','●','Notifications']]],
+    ['Workforce',[['shift_scheduler.html','▣','Shift Scheduler'],['shift_operations.html','↔','Confirmations & Swaps'],['availability.html','◫','Availability'],['timesheets.html','◫','Timesheets'],['leave_management.html','◇','Leave Management'],['training_compliance.html','◎','Training & Compliance']]],
+    ['Field Operations',[['patrol_routes.html','⌖','Patrol Routes'],['patrol_runs.html','↻','Patrol Runs'],['patrol_alerts.html','△','Patrol Alerts'],['patrol_evidence.html','◇','Patrol Evidence'],['trustproof.html','◆','TrustProof'],['checkpoint_requirements.html','✓','Checkpoint Instructions'],['handover_management.html','↦','Shift Handovers'],['lone_worker.html','◉','Lone Worker'],['asset_management.html','▣','Equipment & Assets'],['quality_inspections.html','✓','Quality Inspections']]],
+    ['Business',[['service_contracts.html','▤','Contracts & SLAs'],['sla_dashboard.html','◷','Live SLA'],['client_reports.html','▥','Client Reports'],['service_tickets.html','◇','Service Tickets'],['contract_renewals.html','↻','Contract Renewals'],['invoices.html','€','Billing & Invoices'],['analytics.html','⌁','Analytics'],['email_deliveries.html','✉','Email Deliveries']]],
+    ['Administration',[['access_control.html','◈','Roles & Permissions'],['team_messages.html','◎','Team Messages'],['geofences.html','⌖','Site Geofences'],['integrations.html','⌁','API & Webhooks'],['audit_log.html','▥','Audit Log'],['system_health.html','♡','System Health'],['integrity_tests.html','✓','Integrity Tests'],['security_recovery.html','▣','Security & Recovery'],['mfa_settings.html','◇','Two-Step Verification'],['session_management.html','◉','Sessions & Devices']]]
   ];
   function file(){return location.pathname.split('/').pop()||'dashboard.html'}
   function esc(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
