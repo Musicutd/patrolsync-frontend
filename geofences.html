@@ -6,8 +6,10 @@
   <style>
     body{font-family:Arial,sans-serif;max-width:1000px;margin:30px auto;padding:0 18px;background:#f8fafc;color:#172033}a{color:#2563eb;text-decoration:none}.card{background:#fff;border:1px solid #dbe2ea;border-radius:10px;padding:18px;margin:16px 0}.site-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}.site-card{border:1px solid #e2e8f0;border-radius:8px;padding:14px;border-left:6px solid #94a3b8}.site-card.enabled{border-left-color:#16a34a}.badge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:bold;background:#e2e8f0}.enabled .badge{background:#dcfce7;color:#166534}label{display:block;font-size:12px;font-weight:bold;margin:10px 0 4px}input,select{width:100%;padding:9px;box-sizing:border-box}button{padding:10px 14px;border:0;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;margin-top:10px}.secondary{background:#64748b}.danger{background:#dc2626}.row{display:flex;gap:10px}.row>div{flex:1}.status{font-weight:bold;margin-top:10px}.error{color:#dc2626}.success{color:#16a34a}.hint{font-size:13px;color:#64748b}.modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.65);align-items:center;justify-content:center;padding:15px}.modal-content{background:#fff;border-radius:10px;padding:20px;width:min(520px,100%)}@media(max-width:600px){.row{display:block}}
   </style>
+  <link rel="stylesheet" href="patrolsync-module.css">
+  <script src="patrolsync-module.js" defer></script>
 </head>
-<body>
+<body class="ps-module-shell">
   <p><a href="dashboard.html">← Back to Dashboard</a></p>
   <h2>Site Geofences</h2>
   <p class="hint">When enabled, guards must be physically inside the configured radius to clock in. Use your current location while standing at the site, or enter verified coordinates.</p>
