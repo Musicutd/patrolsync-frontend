@@ -45,6 +45,36 @@
           extraView.remove();
         });
       }
+      const toolsGrid = document.querySelector('[data-view="tools"] .tool-grid');
+      if (toolsGrid && !toolsGrid.dataset.organized) {
+        const categories = [
+          { title: 'Workforce operations', icon: '◎', files: ['attendance.html','timesheets.html','leave_management.html','shift_operations.html'] },
+          { title: 'Intelligence & assurance', icon: '✦', files: ['coverage_autopilot.html','operations_risk.html','intelligence_readiness.html','audit_log.html','integrity_tests.html'] },
+          { title: 'Patrol, incidents & safety', icon: '⌖', files: ['patrol_routes.html','patrol_runs.html','patrol_alerts.html','patrol_evidence.html','trustproof.html','checkpoint_requirements.html','incident_management.html','handover_management.html','lone_worker.html','dispatch_center.html'] },
+          { title: 'Clients, reporting & finance', icon: '▥', files: ['service_contracts.html','sla_dashboard.html','client_reports.html','invoices.html','analytics.html','service_tickets.html','contract_renewals.html','email_deliveries.html'] },
+          { title: 'People, communications & quality', icon: '◇', files: ['notification_center.html','team_messages.html','training_compliance.html','asset_management.html','quality_inspections.html'] },
+          { title: 'Administration & security', icon: '⚙', files: ['access_control.html','integrations.html','system_health.html','security_recovery.html','mfa_settings.html','session_management.html'] }
+        ];
+        const buttons = Array.from(toolsGrid.querySelectorAll('button'));
+        categories.forEach(category => {
+          const group = document.createElement('div');
+          group.className = 'tool-category';
+          group.innerHTML = '<div class="tool-category-heading"><span>' + category.icon + '</span><div><h4>' + category.title + '</h4><small>' + category.files.length + ' focused modules</small></div></div><div class="tool-category-links"></div>';
+          const links = group.querySelector('.tool-category-links');
+          buttons.filter(button => category.files.some(file => button.getAttribute('onclick').includes(file))).forEach(button => links.appendChild(button));
+          if (links.children.length) toolsGrid.appendChild(group);
+        });
+        const remaining = buttons.filter(button => button.parentElement === toolsGrid);
+        if (remaining.length) {
+          const group = document.createElement('div');
+          group.className = 'tool-category';
+          group.innerHTML = '<div class="tool-category-heading"><span>＋</span><div><h4>Additional tools</h4><small>' + remaining.length + ' modules</small></div></div><div class="tool-category-links"></div>';
+          const links = group.querySelector('.tool-category-links');
+          remaining.forEach(button => links.appendChild(button));
+          toolsGrid.appendChild(group);
+        }
+        toolsGrid.dataset.organized = 'true';
+      }
       document.querySelectorAll('[data-workspace-link]').forEach(link => link.addEventListener('click', function (event) { event.preventDefault(); showWorkspaceView(this.dataset.workspaceLink, true); }));
       const requested = location.hash.replace('#','');
       showWorkspaceView(['overview','company','workforce','tools','patrol','reports','incidents'].includes(requested) ? requested : 'overview', false);
