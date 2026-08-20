@@ -1,6 +1,23 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Notifications & Escalations</title>
 <style>body{font-family:Arial;max-width:1200px;margin:24px auto;padding:0 15px;background:#f8fafc;color:#172033}.card{background:#fff;border:1px solid #dbe2ea;border-radius:9px;padding:16px;margin:14px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}input,select,textarea,button{width:100%;padding:10px;box-sizing:border-box;margin:5px 0}button{border:0;border-radius:5px;background:#2563eb;color:#fff;cursor:pointer}.danger{background:#dc2626}.note{border-left:5px solid #94a3b8;padding:12px;margin:9px 0;background:#f8fafc}.note.high{border-color:#f59e0b}.note.critical{border-color:#dc2626;background:#fff1f2}.meta{font-size:12px;color:#64748b}.badge{display:inline-block;padding:3px 8px;border-radius:12px;background:#e2e8f0;font-size:12px}.error{color:#dc2626}.success{color:#15803d}@media(max-width:700px){.grid{grid-template-columns:1fr}}</style>  <link rel="stylesheet" href="patrolsync-module.css">
   <script src="patrolsync-module.js" defer></script>
+  <style>
+    body.ps-module-shell .note{padding:15px 16px;margin:10px 0;background:var(--pm-soft)!important;color:var(--pm-text)!important;border:1px solid var(--pm-border);border-left:4px solid var(--pm-muted)!important;border-radius:8px}
+    body.ps-module-shell .note.high{border-left-color:var(--pm-amber)!important;background:color-mix(in srgb,var(--pm-amber) 6%,var(--pm-surface))!important}
+    body.ps-module-shell .note.critical{border-left-color:var(--pm-red)!important;background:color-mix(in srgb,var(--pm-red) 7%,var(--pm-surface))!important}
+    body.ps-module-shell .note>b{color:var(--pm-text)!important;font-size:15px}
+    body.ps-module-shell .note>p{color:var(--pm-text)!important}
+    body.ps-module-shell .note .meta{color:var(--pm-muted)!important}
+    body.ps-module-shell .note .badge{margin-left:5px;background:var(--pm-surface)!important;color:var(--pm-text)!important;border:1px solid var(--pm-border)!important}
+    body.ps-module-shell .note.high .badge{color:var(--pm-amber)!important;border-color:color-mix(in srgb,var(--pm-amber) 45%,var(--pm-border))!important}
+    body.ps-module-shell .note.critical .badge{color:var(--pm-red)!important;border-color:color-mix(in srgb,var(--pm-red) 45%,var(--pm-border))!important}
+    body.ps-module-shell .note a{color:var(--pm-teal)!important;font-weight:700}
+    body.ps-module-shell .note button.danger{background:var(--pm-red)!important;color:#fff!important}
+    body.ps-module-shell #summary{margin:13px 0;color:var(--pm-text)}
+    body.ps-module-shell #summary p{margin:0}
+    body.ps-module-shell input[type="checkbox"]{width:17px!important;height:17px!important;min-height:0!important;accent-color:var(--pm-teal)}
+    body.ps-module-shell .success{color:var(--pm-green)!important}body.ps-module-shell .error{color:var(--pm-red)!important}
+  </style>
 </head>
 <body class="ps-module-shell"><p><a href="dashboard.html">← Dashboard</a></p><h2>Notifications & Escalations</h2><p>Send operational notices now. Automated event rules will use this same inbox in the next Phase 4 step.</p>
 <div class="card"><h3>Create Notification</h3><div class="grid"><label>Title<input id="title" maxlength="160" placeholder="e.g. Urgent post-order update"></label><label>Category<select id="category"><option>general</option><option>schedule</option><option>patrol</option><option>safety</option><option>incident</option><option>compliance</option></select></label><label>Priority<select id="priority"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="critical">Critical</option></select></label><label>Audience<select id="audience"><option value="all_guards">All guards</option><option value="specific_guard">Specific guard</option><option value="admins">Admins</option><option value="all">Admins and guards</option></select></label><label id="guardWrap" style="display:none">Guard<select id="guard"><option value="">Select a guard</option></select></label><label>Expires (optional)<input id="expires" type="datetime-local"></label></div><label>Message<textarea id="message" rows="4" maxlength="4000" placeholder="Write clear instructions..."></textarea></label><label>Action link (optional)<input id="url" placeholder="e.g. my_shifts.html"></label><label><input id="ack" type="checkbox" style="width:auto"> Require acknowledgement</label><button id="send">Send Notification</button><p id="status"></p></div>
