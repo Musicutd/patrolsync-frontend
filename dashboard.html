@@ -36,6 +36,15 @@
       window.scrollTo({top:0,behavior:'smooth'});
     }
     document.addEventListener('DOMContentLoaded', function () {
+      const workforceViews = Array.from(document.querySelectorAll('.workspace-view[data-view="workforce"]'));
+      if (workforceViews.length > 1) {
+        const primaryGrid = workforceViews[0].querySelector('.workspace-grid');
+        workforceViews.slice(1).forEach(extraView => {
+          const extraGrid = extraView.querySelector('.workspace-grid');
+          if (primaryGrid && extraGrid) Array.from(extraGrid.children).forEach(card => primaryGrid.appendChild(card));
+          extraView.remove();
+        });
+      }
       document.querySelectorAll('[data-workspace-link]').forEach(link => link.addEventListener('click', function (event) { event.preventDefault(); showWorkspaceView(this.dataset.workspaceLink, true); }));
       const requested = location.hash.replace('#','');
       showWorkspaceView(['overview','company','workforce','tools','patrol','reports','incidents'].includes(requested) ? requested : 'overview', false);
@@ -379,7 +388,7 @@
     <ul id="assignmentList"></ul>
   </section>
 
-  <section class="shift-section">
+  <section class="shift-section workspace-wide workforce-launcher">
     <h3 style="margin:0;">📅 Shift Scheduling</h3>
     <p style="font-size:13px; color:#4c1d95; margin-top:6px;">Build weekly or monthly duty rosters for full-time and part-time guards. Guards see their own upcoming shifts in their portal automatically.</p>
     <button class="shift-open-btn" onclick="window.location.href='shift_scheduler.html'">Open Shift Scheduler →</button>
