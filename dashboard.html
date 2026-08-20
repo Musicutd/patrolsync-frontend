@@ -258,6 +258,28 @@
 
   <div class="workspace-view active" data-view="overview">
   <div class="workspace-hero"><h2>Command overview</h2><p>Live exceptions and operational priorities for your company. Use the sidebar to open setup and management areas.</p></div>
+  <div class="command-metrics" aria-label="Current operational status">
+    <article class="command-metric metric-safe">
+      <span class="metric-label">SOS alerts</span>
+      <div><strong id="metricSos">0</strong><span>active</span></div>
+      <small>Live emergency alerts</small>
+    </article>
+    <article class="command-metric metric-danger">
+      <span class="metric-label">Overdue checkpoints</span>
+      <div><strong id="metricAlerts">0</strong><span>open</span></div>
+      <small>Requires operational review</small>
+    </article>
+    <article class="command-metric metric-warning">
+      <span class="metric-label">Certifications</span>
+      <div><strong id="metricCerts">0</strong><span>expiring</span></div>
+      <small>Expired or due in 30 days</small>
+    </article>
+    <article class="command-metric metric-primary">
+      <span class="metric-label">Guard accounts</span>
+      <div><strong id="metricGuards">0</strong><span>active</span></div>
+      <small>Available workforce profiles</small>
+    </article>
+  </div>
   <div class="workspace-grid">
 
   <section class="sos-section workspace-wide">
@@ -728,11 +750,13 @@
 
         if (alerts.length === 0) {
           badge.classList.add('hidden');
+          document.getElementById('metricSos').textContent = '0';
           summary.innerHTML = '<div class="sos-none">✓ No active SOS alerts.</div>';
           return;
         }
 
         badge.textContent = alerts.length + ' active';
+        document.getElementById('metricSos').textContent = alerts.length;
         badge.classList.remove('hidden');
         summary.innerHTML = alerts.slice(0, 3).map(a =>
           '<div class="sos-guard-row">🆘 ' + escapeHtml(a.guard_email) + ' at ' + escapeHtml(a.site_name) + '</div>'
@@ -759,11 +783,13 @@
 
         if (!res.ok || alerts.length === 0) {
           badge.classList.add('hidden');
+          document.getElementById('metricAlerts').textContent = '0';
           list.innerHTML = '<li class="no-alerts">✓ No open alerts — everything is on schedule.</li>';
           return;
         }
 
         badge.textContent = alerts.length;
+        document.getElementById('metricAlerts').textContent = alerts.length;
         badge.classList.remove('hidden');
 
         alerts.forEach(a => {
@@ -832,11 +858,13 @@
         list.innerHTML = '';
         if (certs.length === 0) {
           badge.classList.add('hidden');
+          document.getElementById('metricCerts').textContent = '0';
           list.innerHTML = '<li class="no-alerts">✓ No certifications expiring or expired.</li>';
           return;
         }
 
         badge.textContent = certs.length;
+        document.getElementById('metricCerts').textContent = certs.length;
         badge.classList.remove('hidden');
 
         certs.forEach(c => {
@@ -1258,6 +1286,7 @@
         const guards = await res.json();
         if (!res.ok && handleAuthError(guards.error)) return;
         const activeGuards = guards.filter(g => g.account_active !== false);
+        document.getElementById('metricGuards').textContent = activeGuards.length;
         currentGuards = activeGuards;
         const list = document.getElementById('guardList');
         list.innerHTML = '';
