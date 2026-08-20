@@ -218,6 +218,11 @@
     .tool-grid button { min-height:76px; margin:0; padding:14px; text-align:left; border-radius:11px; background:#f4f8fa; color:#17212b; border:1px solid #d6e0e6; font-weight:750; }
     .tool-grid button:hover { border-color:#16b8a7; transform:translateY(-1px); box-shadow:0 7px 18px rgba(15,23,42,.08); }
     html[data-theme="dark"] .tool-grid button { background:#141d25; color:#e7edf2; border-color:#293640; }
+    body.ps-admin-shell .tool-category-links button { background:var(--ps-soft)!important; color:var(--ps-text)!important; border:1px solid var(--ps-border)!important; }
+    body.ps-admin-shell .tool-category-links button:hover,
+    body.ps-admin-shell .tool-category-links button:focus-visible { background:color-mix(in srgb,var(--ps-teal) 12%,var(--ps-surface))!important; color:var(--ps-teal)!important; border-color:var(--ps-teal-2)!important; }
+    html[data-theme="dark"] body.ps-admin-shell .tool-category-links button:hover,
+    html[data-theme="dark"] body.ps-admin-shell .tool-category-links button:focus-visible { background:rgba(45,212,191,.13)!important; color:#5eead4!important; border-color:#2dd4bf!important; }
     html[data-theme="dark"] .workspace-hero { border-color:#17685f; background:linear-gradient(135deg,rgba(22,184,167,.13),rgba(57,120,246,.07)); }
     html[data-theme="dark"] .workspace-hero p { color:#91a0ad; }
     .ps-nav a.workspace-local { cursor:pointer; }
