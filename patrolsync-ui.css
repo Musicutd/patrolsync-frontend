@@ -68,7 +68,7 @@ html[data-theme="dark"] body.ps-admin-shell input::placeholder,html[data-theme="
 .command-metric small{color:var(--ps-muted);font-size:11px}
 .metric-safe,.metric-primary{--metric-color:var(--ps-teal-2)}.metric-danger{--metric-color:var(--ps-red)}.metric-warning{--metric-color:var(--ps-amber)}
 .workspace-grid{gap:16px!important}
-.workspace-grid>section,.workspace-view>section{min-height:230px!important;padding:24px!important;border-radius:var(--ps-radius)!important;box-shadow:var(--ps-shadow)!important}
+.workspace-grid>section,.workspace-view>section{min-height:0!important;padding:22px!important;border-radius:var(--ps-radius)!important;box-shadow:var(--ps-shadow)!important;align-self:start}
 .workspace-grid>.workspace-wide{min-height:0!important}
 .workspace-grid>section h3,.workspace-view>section h3{font-size:17px!important;letter-spacing:-.2px}
 body.ps-admin-shell button:not(.logout):not(.ps-theme-toggle):not(.ps-menu-toggle):not(.remove):not(.dismiss):not(.resetpw){background:var(--ps-teal)!important;box-shadow:0 4px 12px rgba(15,143,131,.14)}
@@ -81,6 +81,10 @@ body.ps-admin-shell .sos-open-btn{background:var(--ps-red)!important;box-shadow:
 html[data-theme="dark"] .ps-nav a.active{background:#141e30;color:#2dd4bf;box-shadow:inset 2px 0 #2dd4bf}
 html[data-theme="dark"] .workspace-hero{background:var(--ps-surface)!important;border-color:var(--ps-border)!important;border-left-color:var(--ps-teal-2)!important}
 html[data-theme="dark"] .command-metric{background:#111927}
+.workforce-launcher{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center!important}
+.workforce-launcher h3,.workforce-launcher p{grid-column:1}.workforce-launcher button{grid-column:2;grid-row:1/3;margin:0!important;min-width:190px}
+.workspace-view[data-view="workforce"] .workspace-grid{align-items:start}
+.workspace-view[data-view="workforce"] .cert-section,.workspace-view[data-view="workforce"] .client-section{height:auto}
 @media(max-width:1080px){.command-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:900px){.workspace-view{margin:14px!important}.command-metric{min-height:126px}.workspace-grid>section,.workspace-view>section{min-height:0!important}}
-@media(max-width:560px){.command-metrics{grid-template-columns:1fr 1fr;gap:10px}.command-metric{min-height:118px;padding:16px}.command-metric strong{font-size:29px}.command-metric small{display:none}.workspace-hero{padding:18px!important}}
+@media(max-width:560px){.command-metrics{grid-template-columns:1fr 1fr;gap:10px}.command-metric{min-height:118px;padding:16px}.command-metric strong{font-size:29px}.command-metric small{display:none}.workspace-hero{padding:18px!important}.workforce-launcher{display:block}.workforce-launcher button{width:100%!important;margin-top:8px!important}}
