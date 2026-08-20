@@ -24,6 +24,36 @@
       button.innerHTML = dark ? '<span>☀</span><b>Light</b>' : '<span>☾</span><b>Dark</b>';
       button.setAttribute('aria-label', dark ? 'Use light theme' : 'Use dark theme');
     }
+    function setupSidebarGroups() {
+      let saved = {};
+      try { saved = JSON.parse(localStorage.getItem('patrolsync_nav_groups') || '{}'); } catch (_) { saved = {}; }
+      document.querySelectorAll('.ps-sidebar .ps-nav-label').forEach((label, index) => {
+        const nav = label.nextElementSibling;
+        if (!nav || !nav.classList.contains('ps-nav')) return;
+        const key = label.textContent.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        label.dataset.navGroup = key;
+        label.setAttribute('role', 'button');
+        label.setAttribute('tabindex', '0');
+        label.innerHTML = '<span>' + label.textContent.trim() + '</span><b class="ps-nav-chevron">⌄</b>';
+        const containsActive = !!nav.querySelector('a.active');
+        const open = containsActive || (saved[key] !== undefined ? saved[key] : index === 0);
+        nav.classList.toggle('ps-nav-collapsed', !open);
+        label.classList.toggle('collapsed', !open);
+        label.setAttribute('aria-expanded', String(open));
+        const toggle = () => {
+          const nextOpen = nav.classList.contains('ps-nav-collapsed');
+          nav.classList.toggle('ps-nav-collapsed', !nextOpen);
+          label.classList.toggle('collapsed', !nextOpen);
+          label.setAttribute('aria-expanded', String(nextOpen));
+          saved[key] = nextOpen;
+          localStorage.setItem('patrolsync_nav_groups', JSON.stringify(saved));
+        };
+        label.addEventListener('click', toggle);
+        label.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(); }
+        });
+      });
+    }
     document.addEventListener('DOMContentLoaded', updateThemeButton);
     function showWorkspaceView(view, updateHash) {
       const selected = view || 'overview';
@@ -78,6 +108,7 @@
       document.querySelectorAll('[data-workspace-link]').forEach(link => link.addEventListener('click', function (event) { event.preventDefault(); showWorkspaceView(this.dataset.workspaceLink, true); }));
       const requested = location.hash.replace('#','');
       showWorkspaceView(['overview','company','workforce','tools','patrol','reports','incidents'].includes(requested) ? requested : 'overview', false);
+      setupSidebarGroups();
     });
   </script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
