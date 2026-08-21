@@ -5,27 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PatrolSync - Log In</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 420px; margin: 60px auto; padding: 20px; }
-    h2 { color: #222; text-align: center; }
-    input, button { width: 100%; padding: 12px; margin: 8px 0; box-sizing: border-box; font-size: 15px; border-radius: 6px; border: 1px solid #ccc; }
-    button { background: #2563eb; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 14px; }
-    .status { font-weight: bold; margin-top: 10px; text-align: center; }
-    .success { color: green; }
-    .error { color: red; }
-    .links-row { text-align: center; margin-top: 20px; font-size: 14px; display: flex; justify-content: center; gap: 16px; }
-    .links-row a { color: #2563eb; }
-    .role-link { display: block; text-align: center; margin-top: 10px; }
-    .role-link a { color: #7c3aed; font-weight: bold; font-size: 14px; }
-    .client-link a { color: #047857; }
+    :root{--bg:#eef3f8;--surface:#fff;--surface2:#f5f8fb;--border:#d6e0ea;--text:#101a2b;--muted:#65748a;--teal:#159b90;--teal2:#2dd4bf;--red:#dc3655;--shadow:0 25px 75px rgba(15,23,42,.14)}html[data-theme="dark"]{color-scheme:dark;--bg:#080e16;--surface:#111a27;--surface2:#151f2e;--border:#293548;--text:#f1f5f9;--muted:#95a3b7;--teal:#2dd4bf;--teal2:#5eead4;--red:#fb5d78;--shadow:0 28px 85px #0008}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text)}body{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.auth-shell{min-height:100vh;display:grid;grid-template-columns:minmax(390px,.95fr) minmax(480px,1.05fr)}.auth-visual{position:relative;display:flex;flex-direction:column;justify-content:space-between;padding:44px;background:linear-gradient(145deg,#061525,#0b2637 58%,#0b4146);color:#fff;overflow:hidden}.auth-visual:after{content:"";position:absolute;width:530px;height:530px;border-radius:50%;right:-240px;bottom:-260px;background:#2dd4bf14;border:1px solid #5eead428}.brand{display:flex;align-items:center;gap:12px;position:relative;z-index:1}.brand-mark{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:linear-gradient(145deg,#129d90,#2dd4bf);font-size:24px;box-shadow:0 12px 30px #2dd4bf33}.brand strong{display:block;font-size:21px}.brand small{display:block;color:#9eb0c2;font-size:10px;letter-spacing:.15em;text-transform:uppercase}.auth-copy{position:relative;z-index:1;max-width:520px}.eyebrow{color:#5eead4;font-size:11px;font-weight:900;letter-spacing:.15em;text-transform:uppercase}.auth-copy h1{margin:12px 0 15px;font-size:42px;line-height:1.08}.auth-copy p{color:#b8c5d2;line-height:1.7}.benefits{display:grid;gap:13px;margin-top:26px}.benefits div{display:flex;gap:10px;color:#dce6ee;font-size:13px}.benefits b{color:#5eead4}.legal{position:relative;z-index:1;color:#8295a8;font-size:11px}.auth-area{position:relative;display:grid;place-items:center;padding:42px}.theme-toggle{position:absolute;top:25px;right:27px;width:auto;margin:0;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text)}.auth-card{width:min(455px,100%);padding:32px;background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow)}.badge{display:inline-block;padding:5px 9px;border-radius:999px;background:color-mix(in srgb,var(--teal) 13%,var(--surface2));color:var(--teal);font-size:10px;font-weight:900;letter-spacing:.07em;text-transform:uppercase}.auth-card h2{margin:10px 0 6px;font-size:27px}.intro{margin:0 0 20px;color:var(--muted);font-size:13px;line-height:1.55}.field-label{display:block;margin:13px 0 4px;color:var(--muted);font-size:11px;font-weight:900;letter-spacing:.06em;text-transform:uppercase}input,button{width:100%;padding:12px;margin:5px 0;border-radius:9px;font:inherit}input{background:var(--surface2);color:var(--text);border:1px solid var(--border);outline:none}input:focus{border-color:var(--teal);box-shadow:0 0 0 3px color-mix(in srgb,var(--teal) 15%,transparent)}button{background:var(--teal);color:#061411;border:0;font-weight:900;cursor:pointer}.status{font-weight:700;margin-top:10px;text-align:center;font-size:13px}.success{color:var(--teal)}.error{color:var(--red)}#mfaStep{background:var(--surface2)!important;border:1px solid var(--border)!important;border-radius:11px!important;padding:15px!important;margin-top:14px!important}#mfaStep p{color:var(--muted);font-size:13px;line-height:1.5}.links-row{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:20px;padding-top:18px;border-top:1px solid var(--border);font-size:13px}.auth-card a{color:var(--teal)}.role-choices{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:13px}.role-link{margin:0}.role-link a{display:block;padding:10px;border:1px solid var(--border);border-radius:8px;text-align:center;text-decoration:none;color:var(--text);font-size:12px;font-weight:800}.role-link a:hover{border-color:var(--teal);color:var(--teal)}@media(max-width:850px){.auth-shell{grid-template-columns:1fr}.auth-visual{min-height:300px;padding:28px}.auth-copy h1{font-size:31px}.benefits{display:none}.auth-area{padding:62px 18px 34px}.legal{display:none}}@media(max-width:480px){.auth-visual{min-height:235px}.auth-card{padding:23px}.role-choices{grid-template-columns:1fr}.theme-toggle span{display:none}}
   </style>
 </head>
 <body>
-  <h2>PatrolSync — Admin Log In</h2>
-
-  <input type="email" id="loginEmail" placeholder="Email">
-  <input type="password" id="loginPassword" placeholder="Password">
-
-  <button onclick="doLogin()">Log In</button>
+<div class="auth-shell"><section class="auth-visual"><div class="brand"><div class="brand-mark">✓</div><div><strong>PatrolSync</strong><small>Operations Cloud</small></div></div><div class="auth-copy"><div class="eyebrow">Subscriber operations</div><h1>Run safer, clearer security operations.</h1><p>Manage patrols, guards, incidents, workforce coverage, client service and compliance from one protected workspace.</p><div class="benefits"><div><b>✓</b><span>Real-time command and field visibility</span></div><div><b>✓</b><span>Tenant-isolated operational records</span></div><div><b>✓</b><span>Two-step verification for protected accounts</span></div></div></div><div class="legal">PatrolSync · Malta, European Union</div></section><main class="auth-area"><button class="theme-toggle" type="button" onclick="togglePublicTheme()">☀ <span>Light</span></button><section class="auth-card"><span class="badge">Company workspace</span><h2>Welcome back</h2><p class="intro">Sign in as a subscriber administrator or authorized staff member.</p><label class="field-label" for="loginEmail">Work email</label><input type="email" id="loginEmail" autocomplete="username" placeholder="you@company.com"><label class="field-label" for="loginPassword">Password</label><input type="password" id="loginPassword" autocomplete="current-password" placeholder="Enter your password"><button onclick="doLogin()">Open operations workspace</button>
   <div id="mfaStep" style="display:none;border:1px solid #dbe3ee;border-radius:8px;padding:12px;margin-top:12px">
     <p id="mfaMessage">Enter the six-digit code sent to your email.</p>
     <input type="text" id="mfaCode" maxlength="11" autocomplete="one-time-code" placeholder="6-digit code or recovery code">
@@ -39,15 +23,14 @@
     <a href="forgot_password.html">Forgot password?</a>
   </div>
 
-  <div class="role-link">
-    <a href="guard.html">Are you a guard? Log in here →</a>
-  </div>
-
-  <div class="role-link client-link">
-    <a href="client_portal.html">Are you a client? Log in here →</a>
-  </div>
+  <div class="role-choices"><div class="role-link"><a href="guard.html">Guard login →</a></div><div class="role-link client-link"><a href="client_portal.html">Client portal →</a></div></div>
+</section></main></div>
 
   <script>
+    document.documentElement.dataset.theme=localStorage.getItem('patrolsync_public_theme')||'dark';
+    function drawPublicTheme(){const b=document.querySelector('.theme-toggle');if(b)b.innerHTML=document.documentElement.dataset.theme==='dark'?'☀ <span>Light</span>':'☾ <span>Dark</span>'}
+    function togglePublicTheme(){const next=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=next;localStorage.setItem('patrolsync_public_theme',next);drawPublicTheme()}
+    drawPublicTheme();
     const API_BASE = 'https://patrolsync-backend.onrender.com';
     let mfaChallenge = null;
 
