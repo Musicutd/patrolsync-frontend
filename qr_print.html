@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>PatrolSync - Print QR Codes</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
@@ -70,8 +71,39 @@
       .qr-cell { border: none; }
     }
   </style>
+  <link rel="stylesheet" href="patrolsync-module.css">
+  <script src="patrolsync-module.js" defer></script>
+  <style>
+    body.ps-module-shell .pm-main{max-width:1280px}
+    body.ps-module-shell .pm-main>h2{margin:0 0 6px;color:var(--pm-text);font-size:28px}
+    body.ps-module-shell .pm-main>p[style]{margin:0 0 10px!important;color:var(--pm-muted)!important;line-height:1.5}
+    body.ps-module-shell button.backlink{padding:0;margin:0 0 17px;background:transparent;color:var(--pm-teal);box-shadow:none}
+    body.ps-module-shell section{margin:0 0 16px;padding:19px;border:1px solid var(--pm-border);border-radius:13px;background:var(--pm-surface);color:var(--pm-text);box-shadow:var(--pm-shadow)}
+    body.ps-module-shell section h3{margin:0 0 15px;color:var(--pm-text);font-size:18px}
+    body.ps-module-shell label{color:var(--pm-text)}
+    body.ps-module-shell select,body.ps-module-shell input{min-height:42px;border:1px solid var(--pm-border);border-radius:8px;background:var(--pm-soft);color:var(--pm-text);outline:none}
+    body.ps-module-shell select:focus,body.ps-module-shell input:focus{border-color:var(--pm-teal);box-shadow:0 0 0 3px color-mix(in srgb,var(--pm-teal) 18%,transparent)}
+    body.ps-module-shell button{border-radius:8px;background:var(--pm-teal);color:#052a26;font-weight:850}
+    body.ps-module-shell button.secondary{background:var(--pm-soft);color:var(--pm-text);border:1px solid var(--pm-border)}
+    body.ps-module-shell button.printbtn{background:var(--pm-green);color:#fff}
+    body.ps-module-shell button.pdfbtn{background:#7756d8;color:#fff}
+    body.ps-module-shell .info-banner{padding:12px 14px;border:1px solid color-mix(in srgb,#6d6ee8 45%,var(--pm-border));border-radius:9px;background:color-mix(in srgb,#6d6ee8 8%,var(--pm-surface));color:var(--pm-text)}
+    body.ps-module-shell .lib-status,body.ps-module-shell .empty-msg{color:var(--pm-muted)}
+    body.ps-module-shell #checkpointChecklist{max-height:280px;border:1px solid var(--pm-border);border-radius:9px;background:var(--pm-soft)}
+    body.ps-module-shell .cp-check-row{padding:8px 5px;border-bottom:1px solid var(--pm-border)}
+    body.ps-module-shell .cp-check-row:last-child{border-bottom:0}
+    body.ps-module-shell .cp-check-row label{color:var(--pm-text)}
+    body.ps-module-shell .status.success{color:var(--pm-green)}
+    body.ps-module-shell .status.error{color:var(--pm-red)}
+    body.ps-module-shell #previewWrapper{overflow:auto;padding:22px;border:1px solid var(--pm-border);border-radius:10px;background:var(--pm-soft)}
+    body.ps-module-shell .print-page{color:#111;background:#fff}
+    body.ps-module-shell .page-label{color:var(--pm-muted)}
+    @media(min-width:900px){body.ps-module-shell .pm-main{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:16px;align-items:start}body.ps-module-shell .pm-main>button.backlink,body.ps-module-shell .pm-main>h2,body.ps-module-shell .pm-main>p,body.ps-module-shell .pm-main>#libStatus,body.ps-module-shell .pm-main>#preselectBanner{grid-column:1/-1}body.ps-module-shell .pm-main>section:nth-of-type(1),body.ps-module-shell .pm-main>section:nth-of-type(2){grid-column:1}body.ps-module-shell .pm-main>section:nth-of-type(3){grid-column:2;grid-row:6/8}}
+    @media(max-width:700px){body.ps-module-shell section{padding:15px}body.ps-module-shell .row{display:grid;grid-template-columns:1fr}body.ps-module-shell .row>div{min-width:0}body.ps-module-shell .toolbar,body.ps-module-shell .select-actions{display:grid;grid-template-columns:1fr}body.ps-module-shell .toolbar button,body.ps-module-shell .select-actions button{width:100%}}
+    @media print{body.ps-module-shell{display:block!important;background:#fff!important}body.ps-module-shell .pm-sidebar,body.ps-module-shell .pm-topbar{display:none!important}body.ps-module-shell .pm-main{display:block!important;margin:0!important;padding:0!important;max-width:none!important}body.ps-module-shell #previewWrapper{border:0!important;border-radius:0!important}}
+  </style>
 </head>
-<body>
+<body class="ps-module-shell">
   <button class="backlink" onclick="window.location.href='checkpoint_manager.html'">← Back to Checkpoint Manager</button>
   <h2>🖨️ Print / Export Checkpoint QR Codes</h2>
   <p style="font-size:13px; color:#666;">Select a site and the checkpoints you want printed, choose your paper size and how many codes per sheet, then generate a preview. From there you can print directly or download a matching PDF.</p>
