@@ -1,4 +1,4 @@
-const CACHE_NAME = 'patrolsync-guard-v3';
+const CACHE_NAME = 'patrolsync-guard-v4';
 const CORE = ['./guard.html','./offline.html','./manifest.webmanifest','./patrolsync-icon.svg'];
 const FIELD_PAGES = ['./my_shifts.html','./my_timesheets.html','./availability.html','./shift_marketplace.html','./my_patrols.html','./handover.html','./my_notifications.html','./team_messages.html','./my_safety.html','./my_dispatches.html','./my_equipment.html','./my_inspections.html','./my_training.html','./patrolsync-guard.css','./patrolsync-guard-ui.js'];
 
