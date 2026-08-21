@@ -1,7 +1,6 @@
 (function(){
   const saved=localStorage.getItem('patrolsync_theme');
-  const preferred=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
-  document.documentElement.dataset.theme=saved||preferred;
+  document.documentElement.dataset.theme=saved||'dark';
   const groups=[
     ['Command',[['dashboard.html','▦','Overview'],['attendance.html','◷','Attendance'],['dispatch_center.html','⌁','Dispatch Center'],['incident_management.html','△','Incident Cases'],['notification_center.html','●','Notifications']]],
     ['Workforce',[['shift_scheduler.html','▣','Shift Scheduler'],['shift_operations.html','↔','Confirmations & Swaps'],['availability.html','◫','Availability'],['timesheets.html','◫','Timesheets'],['leave_management.html','◇','Leave Management'],['training_compliance.html','◎','Training & Compliance']]],
