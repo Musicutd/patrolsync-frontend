@@ -283,7 +283,7 @@
   <script>
     let installPromptEvent = null;
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js?v=5', { updateViaCache: 'none' })
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js?v=6', { updateViaCache: 'none' })
         .catch(err => console.warn('Service worker registration failed:', err.message)));
     }
     window.addEventListener('beforeinstallprompt', event => {
