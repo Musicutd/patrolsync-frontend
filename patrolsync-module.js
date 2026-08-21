@@ -12,6 +12,7 @@
   function file(){return location.pathname.split('/').pop()||'dashboard.html'}
   function esc(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
   function init(){
+    if(!localStorage.getItem('token')&&localStorage.getItem('guard_token')&&['availability.html','team_messages.html'].includes(file()))return;
     document.body.classList.add('ps-module-shell');
     const current=file(),title=(document.querySelector('h1,h2')||{}).textContent||document.title;
     const sidebar=document.createElement('aside');sidebar.className='pm-sidebar';sidebar.innerHTML='<button class="pm-sidebar-close" aria-label="Close navigation">×</button><div class="pm-brand"><div class="pm-mark">✓</div><div><strong>PatrolSync</strong><small>Operations Cloud</small></div></div>'+groups.map(g=>'<div class="pm-nav-group"><div class="pm-nav-label">'+esc(g[0])+'</div><nav class="pm-nav">'+g[1].map(x=>'<a href="'+x[0]+'" class="'+(x[0]===current?'active':'')+'"><span>'+x[1]+'</span>'+esc(x[2])+'</a>').join('')+'</nav></div>').join('');
