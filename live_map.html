@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Live Guard Map - PatrolSync</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -45,13 +46,44 @@
   .trail-close-btn { background: #64748b; color: white; border: none; border-radius: 4px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
   .trail-summary { font-size: 13px; color: #555; margin-top: 8px; }
 </style>
+<link rel="stylesheet" href="patrolsync-module.css">
+<script src="patrolsync-module.js" defer></script>
+<style>
+  body.ps-module-shell .pm-main{max-width:1450px}
+  body.ps-module-shell .pm-main>p:first-child{margin-top:0}
+  body.ps-module-shell .pm-main>h2{margin:0 0 7px;font-size:28px;color:var(--pm-text)}
+  body.ps-module-shell .pm-main>p[style]{margin:0 0 18px!important;color:var(--pm-muted)!important;line-height:1.5}
+  body.ps-module-shell .map-card,body.ps-module-shell .guard-list{padding:18px;border:1px solid var(--pm-border);border-radius:14px;background:var(--pm-surface);color:var(--pm-text);box-shadow:var(--pm-shadow)}
+  body.ps-module-shell #mapContainer{height:min(570px,62vh);margin:0;border:1px solid var(--pm-border);border-radius:11px;background:var(--pm-soft)}
+  body.ps-module-shell .legend{gap:18px;margin:13px 2px 0;color:var(--pm-muted)}
+  body.ps-module-shell .trail-panel{margin-top:14px;padding:14px;border:1px solid color-mix(in srgb,#8b5cf6 40%,var(--pm-border));border-radius:10px;background:color-mix(in srgb,#8b5cf6 7%,var(--pm-surface));color:var(--pm-text)}
+  body.ps-module-shell .trail-header h3{color:var(--pm-text)}
+  body.ps-module-shell .trail-controls select{border-color:var(--pm-border);background:var(--pm-soft);color:var(--pm-text)}
+  body.ps-module-shell .trail-summary{color:var(--pm-muted)}
+  body.ps-module-shell .trail-btn{border-radius:7px;background:#7756d8;color:#fff;font-weight:800}
+  body.ps-module-shell .trail-close-btn{border-radius:7px;background:var(--pm-soft);color:var(--pm-text);border:1px solid var(--pm-border)}
+  body.ps-module-shell .guard-list{margin-top:16px}
+  body.ps-module-shell .guard-list h3{margin:0 0 10px;font-size:18px;color:var(--pm-text)}
+  body.ps-module-shell .guard-list table{width:100%;border-collapse:collapse;color:var(--pm-text)}
+  body.ps-module-shell .guard-list th,body.ps-module-shell .guard-list td{padding:11px 8px;border-bottom:1px solid var(--pm-border);color:var(--pm-text)}
+  body.ps-module-shell .guard-list th{color:var(--pm-muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+  body.ps-module-shell .guard-list tbody tr:hover{background:color-mix(in srgb,var(--pm-teal) 5%,var(--pm-surface))}
+  body.ps-module-shell .empty-state{color:var(--pm-muted)}
+  body.ps-module-shell .status.error{color:var(--pm-red)}
+  body.ps-module-shell a.back-link{color:var(--pm-teal)}
+  body.ps-module-shell .leaflet-popup-content-wrapper,body.ps-module-shell .leaflet-popup-tip{background:var(--pm-surface);color:var(--pm-text)}
+  body.ps-module-shell .leaflet-control-zoom a{background:var(--pm-surface);color:var(--pm-text);border-color:var(--pm-border)}
+  html[data-theme="dark"] body.ps-module-shell .leaflet-tile{filter:brightness(.68) contrast(1.17) saturate(.72)}
+  @media(max-width:700px){body.ps-module-shell .map-card,body.ps-module-shell .guard-list{padding:12px}body.ps-module-shell #mapContainer{height:54vh;min-height:390px}body.ps-module-shell .trail-header{align-items:flex-start;flex-direction:column}body.ps-module-shell .trail-controls{width:100%;flex-wrap:wrap}body.ps-module-shell .trail-controls select{flex:1}body.ps-module-shell .guard-list{overflow-x:auto}body.ps-module-shell .guard-list table{min-width:660px}}
+</style>
 </head>
-<body>
+<body class="ps-module-shell">
 
 <p><a href="dashboard.html" class="back-link">← Back to Dashboard</a></p>
 <h2><span class="live-dot"></span> Live Guard Map</h2>
 <p style="font-size:13px; color:#666;">Shows each guard's most recent reported position. Updates automatically every 20 seconds. Guards must have the app open with location permission granted for their position to appear.</p>
 
+<section class="map-card">
 <div id="statusMsg" class="status"></div>
 <div id="mapContainer"></div>
 
@@ -80,6 +112,7 @@
   </div>
   <div id="trailSummary" class="trail-summary"></div>
 </div>
+</section>
 
 <div class="guard-list">
   <h3>Guard Status</h3>
