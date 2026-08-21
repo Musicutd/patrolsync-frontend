@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Checkpoint Manager - PatrolSync</title>
 <style>
   body { font-family: Arial, sans-serif; max-width: 950px; margin: 40px auto; padding: 0 20px; }
@@ -56,8 +57,46 @@
   button.bulk-open-btn { background: #7c3aed; }
   button.select-link-btn { background: none; color: #2563eb; text-decoration: underline; padding: 4px 0; font-size: 13px; width: auto; }
 </style>
+<link rel="stylesheet" href="patrolsync-module.css">
+<script src="patrolsync-module.js" defer></script>
+<style>
+  body.ps-module-shell .card{margin:0 0 16px;padding:20px;border:1px solid var(--pm-border);border-radius:13px;background:var(--pm-surface);color:var(--pm-text);box-shadow:var(--pm-shadow)}
+  body.ps-module-shell .card h3{margin:0 0 15px;color:var(--pm-text);font-size:18px;letter-spacing:-.02em}
+  body.ps-module-shell input:not([type="checkbox"]),body.ps-module-shell select{display:block;width:100%;min-height:43px;margin:6px 0 12px;padding:10px 12px;border:1px solid var(--pm-border);border-radius:8px;background:var(--pm-soft);color:var(--pm-text);outline:none}
+  body.ps-module-shell input:focus,body.ps-module-shell select:focus{border-color:var(--pm-teal);box-shadow:0 0 0 3px color-mix(in srgb,var(--pm-teal) 18%,transparent)}
+  body.ps-module-shell button{border-radius:8px;background:var(--pm-teal);color:#052a26;font-weight:850}
+  body.ps-module-shell button:hover{filter:brightness(1.05)}
+  body.ps-module-shell button.delete-btn{background:var(--pm-red);color:#fff}
+  body.ps-module-shell button.locate-btn{background:var(--pm-green);color:#fff}
+  body.ps-module-shell button.bulk-selected-btn{background:#4f75dd;color:#fff}
+  body.ps-module-shell button.bulk-open-btn{background:#7453d6;color:#fff}
+  body.ps-module-shell button.select-link-btn{background:transparent;color:var(--pm-teal);box-shadow:none;padding:5px 2px}
+  body.ps-module-shell .usage-bar-bg{background:var(--pm-soft);border:1px solid var(--pm-border)}
+  body.ps-module-shell .usage-label,body.ps-module-shell .gps-hint{color:var(--pm-muted)}
+  body.ps-module-shell .toggle-label{color:var(--pm-text)}
+  body.ps-module-shell .slider{background:var(--pm-border)}
+  body.ps-module-shell .slider:before{background:var(--pm-surface)}
+  body.ps-module-shell input:checked+.slider{background:var(--pm-teal)}
+  body.ps-module-shell .bulk-print-card{border-color:color-mix(in srgb,#8067e8 46%,var(--pm-border));background:color-mix(in srgb,#8067e8 7%,var(--pm-surface))}
+  body.ps-module-shell .bulk-print-card p{color:var(--pm-muted)!important;line-height:1.5}
+  body.ps-module-shell table{width:100%;margin-top:12px;border-collapse:collapse;color:var(--pm-text)}
+  body.ps-module-shell th,body.ps-module-shell td{padding:11px 8px;border-bottom:1px solid var(--pm-border);color:var(--pm-text);vertical-align:middle}
+  body.ps-module-shell th{color:var(--pm-muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+  body.ps-module-shell tbody tr:hover{background:color-mix(in srgb,var(--pm-teal) 5%,var(--pm-surface))}
+  body.ps-module-shell .qr-img{padding:4px;border-radius:8px;background:#fff}
+  body.ps-module-shell .qr-unavailable{color:var(--pm-muted)}
+  body.ps-module-shell .msg{min-height:20px;color:var(--pm-muted)}
+  body.ps-module-shell .msg.error,body.ps-module-shell .limit-hit{color:var(--pm-red)}
+  body.ps-module-shell .msg.success{color:var(--pm-green)}
+  body.ps-module-shell .msg.warn{color:var(--pm-amber)}
+  body.ps-module-shell a.back-link,body.ps-module-shell a.gps-link{color:var(--pm-teal)}
+  body.ps-module-shell .action-cell{white-space:normal;min-width:160px}
+  body.ps-module-shell .action-cell button{margin:3px 3px 3px 0}
+  @media(min-width:980px){body.ps-module-shell .pm-main{display:grid;grid-template-columns:minmax(320px,.8fr) minmax(0,1.2fr);gap:16px;align-items:start}body.ps-module-shell .pm-main>p,body.ps-module-shell .pm-main>h2{grid-column:1/-1}body.ps-module-shell .pm-main>.card:nth-of-type(1),body.ps-module-shell .pm-main>.card:nth-of-type(2),body.ps-module-shell .pm-main>.card:nth-of-type(3){grid-column:1}body.ps-module-shell .pm-main>.card:nth-of-type(4){grid-column:2;grid-row:3/6}}
+  @media(max-width:760px){body.ps-module-shell .card{padding:15px}body.ps-module-shell .gps-fields{display:grid;grid-template-columns:1fr 1fr}body.ps-module-shell .locate-wrap{grid-column:1/-1}body.ps-module-shell .locate-wrap button{width:100%}body.ps-module-shell #cpTable{display:block;overflow-x:auto;white-space:nowrap}body.ps-module-shell .bulk-toolbar{display:grid;grid-template-columns:1fr}body.ps-module-shell .bulk-toolbar button{width:100%}}
+</style>
 </head>
-<body>
+<body class="ps-module-shell">
 
 <p><a href="dashboard.html" class="back-link">← Back to Dashboard</a></p>
 <h2>Checkpoint Manager</h2>
