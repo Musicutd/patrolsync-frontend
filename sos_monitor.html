@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SOS Monitor - PatrolSync</title>
 <style>
   body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
@@ -47,8 +48,31 @@
   .msg { font-size: 14px; }
   .msg.error { color: #dc2626; }
 </style>
+<link rel="stylesheet" href="patrolsync-module.css">
+<script src="patrolsync-module.js" defer></script>
+<style>
+  body.ps-module-shell .pm-main{max-width:1380px}
+  body.ps-module-shell .pm-main>h2{margin:0 0 18px;color:var(--pm-text);font-size:28px}
+  body.ps-module-shell a.back-link{color:var(--pm-teal)}
+  body.ps-module-shell .card{margin:0;padding:19px;border:1px solid var(--pm-border);border-radius:14px;background:var(--pm-surface);color:var(--pm-text);box-shadow:var(--pm-shadow)}
+  body.ps-module-shell .card h3{margin:0 0 14px!important;color:var(--pm-text);font-size:18px}
+  body.ps-module-shell .alert-card{padding:17px;margin-bottom:12px;border:1px solid color-mix(in srgb,var(--pm-red) 58%,var(--pm-border));border-left:5px solid var(--pm-red);border-radius:11px;background:color-mix(in srgb,var(--pm-red) 8%,var(--pm-surface));color:var(--pm-text)}
+  body.ps-module-shell .alert-top{gap:13px;flex-wrap:wrap}
+  body.ps-module-shell .alert-guard{color:var(--pm-red)}
+  body.ps-module-shell .alert-time{color:color-mix(in srgb,var(--pm-red) 74%,var(--pm-text))}
+  body.ps-module-shell .alert-site{color:var(--pm-text)}
+  body.ps-module-shell .alert-gps a{color:var(--pm-teal)}
+  body.ps-module-shell .resolve-btn{min-height:39px;border-radius:8px;background:var(--pm-green);color:#fff;font-weight:850}
+  body.ps-module-shell .empty-state{padding:34px 10px;color:var(--pm-muted);border:1px dashed var(--pm-border);border-radius:10px;background:var(--pm-soft)}
+  body.ps-module-shell .history-row{padding:11px 4px;border-bottom:1px solid var(--pm-border);color:var(--pm-muted)}
+  body.ps-module-shell .history-row:last-child{border-bottom:0}
+  body.ps-module-shell .msg.error{color:var(--pm-red)}
+  body.ps-module-shell .live-dot{box-shadow:0 0 0 5px color-mix(in srgb,var(--pm-green) 14%,transparent)}
+  @media(min-width:900px){body.ps-module-shell .pm-main{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(330px,.85fr);gap:16px;align-items:start}body.ps-module-shell .pm-main>p,body.ps-module-shell .pm-main>h2{grid-column:1/-1}body.ps-module-shell .pm-main>.card:nth-of-type(1){grid-column:1}body.ps-module-shell .pm-main>.card:nth-of-type(2){grid-column:2}}
+  @media(max-width:650px){body.ps-module-shell .card{padding:15px}body.ps-module-shell .alert-top{align-items:flex-start;flex-direction:column}body.ps-module-shell .resolve-btn{width:100%}}
+</style>
 </head>
-<body>
+<body class="ps-module-shell">
 
 <p><a href="dashboard.html" class="back-link">← Back to Dashboard</a></p>
 <h2><span class="live-dot"></span> SOS Monitor</h2>
