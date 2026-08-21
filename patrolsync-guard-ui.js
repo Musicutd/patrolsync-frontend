@@ -2,8 +2,7 @@
   const isGuard=Boolean(localStorage.getItem('guard_token'))&&!localStorage.getItem('token');
   const storageKey='patrolsync_guard_theme';
   const saved=localStorage.getItem(storageKey);
-  const preferred=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
-  document.documentElement.dataset.theme=saved||preferred;
+  document.documentElement.dataset.theme=saved||'dark';
 
   const pages={
     'my_shifts.html':['My Shifts','Schedule'],
