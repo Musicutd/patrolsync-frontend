@@ -8,7 +8,8 @@
   <script>
     (function () {
       const saved = localStorage.getItem('patrolsync_theme');
-      document.documentElement.dataset.theme = saved || 'dark';
+      const preferred = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = saved || preferred;
     })();
     function togglePatrolSyncTheme() {
       const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
@@ -312,6 +313,8 @@
     <div class="ps-nav-label">Field Operations</div><nav class="ps-nav">
       <a href="patrol_routes.html"><span class="ps-nav-icon">⌖</span>Patrol Routes</a>
       <a href="patrol_runs.html"><span class="ps-nav-icon">↻</span>Patrol Runs</a>
+      <a href="checkpoint_manager.html"><span class="ps-nav-icon">▦</span>Checkpoint Manager</a>
+      <a href="qr_print.html"><span class="ps-nav-icon">▧</span>QR Codes</a>
       <a href="trustproof.html"><span class="ps-nav-icon">◇</span>TrustProof Evidence</a>
       <a href="lone_worker.html"><span class="ps-nav-icon">◉</span>Lone Worker</a>
       <a href="quality_inspections.html"><span class="ps-nav-icon">✓</span>Quality</a>
