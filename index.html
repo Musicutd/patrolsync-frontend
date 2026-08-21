@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -71,7 +71,7 @@
 
   <script>
     const root=document.documentElement,themeButton=document.getElementById('theme'),saved=localStorage.getItem('patrolsync_public_theme');
-    root.dataset.theme=saved||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+ root.dataset.theme=saved||'dark';
     function paintTheme(){themeButton.textContent=root.dataset.theme==='dark'?'☀':'☾';themeButton.setAttribute('aria-label',root.dataset.theme==='dark'?'Use light mode':'Use dark mode')}
     themeButton.onclick=()=>{root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';localStorage.setItem('patrolsync_public_theme',root.dataset.theme);paintTheme()};paintTheme();
     document.getElementById('menu').onclick=()=>document.getElementById('navLinks').classList.toggle('open');
