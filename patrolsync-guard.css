@@ -16,6 +16,26 @@
 @media(max-width:420px){.ps-guard-app{padding:12px 11px 88px!important}.ps-guard-app section{padding:15px!important;border-radius:14px!important}#header{padding:13px 12px;flex-wrap:wrap}#header>div{width:100%}#header .install-btn,#header .logout{width:calc(50% - 5px)!important}.timeclock-card .clock-timer{font-size:36px}.ps-services-card .shift-open-btn{width:100%!important;margin:4px 0!important}.clock-actions{display:grid!important;grid-template-columns:1fr 1fr}.clock-actions button{min-width:0!important}.clock-actions button:only-child{grid-column:1/-1}.sos-contact-row{flex-direction:column}.ps-login-shell{padding-top:3vh}}
 @media(min-width:780px){.ps-guard-app{max-width:920px!important}.ps-guard-screen{display:grid;grid-template-columns:1fr 1fr;gap:16px}.ps-guard-screen>#header,.ps-guard-screen>#connectionBanner{grid-column:1/-1}.ps-guard-screen>section{margin-bottom:0!important}.ps-services-card,.ps-incident-card{grid-column:1/-1}}
 
+/* Strong, accessible contrast for the light guard workspace. */
+html:not([data-theme="dark"]) .ps-guard-app{color:#10233b!important}
+html:not([data-theme="dark"]) .ps-guard-app section{color:#10233b!important}
+html:not([data-theme="dark"]) .ps-guard-app .timeclock-card{background:#ffffff!important;border:1px solid #c9d8e3!important;color:#10233b!important}
+html:not([data-theme="dark"]) .ps-guard-app .timeclock-card h3,
+html:not([data-theme="dark"]) .ps-guard-app .timeclock-card label{color:#10233b!important}
+html:not([data-theme="dark"]) .ps-guard-app .timeclock-card .clock-state{color:#087f72!important}
+html:not([data-theme="dark"]) .ps-guard-app .timeclock-card .clock-timer{color:#071a2b!important}
+html:not([data-theme="dark"]) .ps-guard-app .timeclock-card .clock-meta,
+html:not([data-theme="dark"]) .ps-guard-app .timeclock-card .hint{color:#536b80!important}
+html:not([data-theme="dark"]) .ps-guard-app p,
+html:not([data-theme="dark"]) .ps-guard-app .hint{color:#536b80!important}
+html:not([data-theme="dark"]) .ps-guard-app input,
+html:not([data-theme="dark"]) .ps-guard-app select,
+html:not([data-theme="dark"]) .ps-guard-app textarea{background:#fff!important;color:#10233b!important;border-color:#b8cad7!important}
+html:not([data-theme="dark"]) .ps-guard-app input::placeholder,
+html:not([data-theme="dark"]) .ps-guard-app textarea::placeholder{color:#667d91!important;opacity:1}
+html:not([data-theme="dark"]) .ps-guard-app .ps-emergency-card,
+html:not([data-theme="dark"]) .ps-guard-app .ps-scan-card{color:#10233b!important}
+
 /* Shared guard workspace: secondary field pages and light/dark themes. */
 :root{--pg-bg:#edf3f7;--pg-surface:#fff;--pg-soft:#f3f7f9;--pg-text:#10233b;--pg-muted:#60758c;--pg-line:#d7e2ea;--pg-teal:#0f9b8e;--pg-teal-2:#20c9b7;--pg-navy:#092238;--pg-red:#dc3545;--pg-amber:#d98212;--pg-green:#159976;--pg-shadow:0 10px 28px rgba(16,35,59,.075)}
 html[data-theme="dark"]{color-scheme:dark;--pg-bg:#080e15;--pg-surface:#111a25;--pg-soft:#17222e;--pg-text:#edf4f8;--pg-muted:#94a6b7;--pg-line:#2b3946;--pg-teal:#2dd4bf;--pg-teal-2:#5eead4;--pg-navy:#050b12;--pg-red:#fb5d78;--pg-amber:#f5a524;--pg-green:#2dd4bf;--pg-shadow:none;--ps-bg:#080e15;--ps-card:#111a25;--ps-text:#edf4f8;--ps-muted:#94a6b7;--ps-line:#2b3946;--ps-navy:#071622;--ps-navy-2:#102b3f;--ps-teal:#2dd4bf;--ps-teal-dark:#22b8a6;--ps-green:#2dd4bf;--ps-red:#fb5d78;--ps-amber:#f5a524;--ps-shadow:none}
