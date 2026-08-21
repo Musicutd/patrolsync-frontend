@@ -135,6 +135,7 @@
     .shift-badge.part_time { background: #d97706; }
     .install-btn { background:#0f766e; width:auto; padding:7px 12px; margin-left:auto; margin-right:8px; }
   </style>
+  <script src="patrolsync-guard-ui.js" defer></script>
 </head>
 <body class="ps-guard-app">
   <div id="loginScreen" class="ps-login-shell">
@@ -282,7 +283,7 @@
   <script>
     let installPromptEvent = null;
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js?v=2', { updateViaCache: 'none' })
+    window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js?v=3', { updateViaCache: 'none' })
         .catch(err => console.warn('Service worker registration failed:', err.message)));
     }
     window.addEventListener('beforeinstallprompt', event => {
