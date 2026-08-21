@@ -25,6 +25,29 @@
     body.ps-module-shell .muted{color:var(--pm-muted)!important;font-size:13px}
     body.ps-module-shell .error{color:var(--pm-red)}
     @media(max-width:720px){body.ps-module-shell .wrap{padding:0}body.ps-module-shell .layout{grid-template-columns:1fr;min-height:auto}body.ps-module-shell .sidebar{border-right:0;border-bottom:1px solid var(--pm-border)}body.ps-module-shell .messages{min-height:380px;max-height:55vh}body.ps-module-shell .message{max-width:88%}body.ps-module-shell .composer{position:sticky;bottom:0}}
+
+    /* Guard workspace messaging theme. The page is shared with subscriber admins. */
+    body.ps-guard-page .wrap{width:100%;max-width:1100px;margin:0 auto;padding:0}
+    body.ps-guard-page .wrap>p:first-child{margin:0 0 16px}
+    body.ps-guard-page .wrap>h2{margin:0 0 18px;color:var(--pg-text)!important}
+    body.ps-guard-page .layout{display:grid;grid-template-columns:minmax(230px,290px) minmax(0,1fr);min-height:min(570px,calc(100vh - 245px));background:var(--pg-surface)!important;color:var(--pg-text)!important;border:1px solid var(--pg-line)!important;border-radius:15px;overflow:hidden;box-shadow:var(--pg-shadow)}
+    body.ps-guard-page .sidebar{padding:16px;background:var(--pg-soft)!important;color:var(--pg-text)!important;border-right:1px solid var(--pg-line)!important}
+    body.ps-guard-page .sidebar h3{margin:5px 0 12px;color:var(--pg-text)!important}
+    body.ps-guard-page .chat{display:flex;min-width:0;flex-direction:column;background:var(--pg-surface)!important;color:var(--pg-text)!important}
+    body.ps-guard-page .chat-head{padding:16px 18px;border-bottom:1px solid var(--pg-line)!important;background:var(--pg-surface)!important;color:var(--pg-text)!important}
+    body.ps-guard-page .messages{padding:18px;flex:1;overflow:auto;max-height:500px;background:var(--pg-surface)!important;color:var(--pg-text)!important}
+    body.ps-guard-page .conversation{margin-bottom:6px;padding:12px;border:1px solid transparent!important;border-radius:9px;cursor:pointer;color:var(--pg-text)!important}
+    body.ps-guard-page .conversation:hover{background:color-mix(in srgb,var(--pg-teal) 9%,var(--pg-surface))!important}
+    body.ps-guard-page .conversation.active{background:color-mix(in srgb,var(--pg-teal) 15%,var(--pg-surface))!important;border-color:color-mix(in srgb,var(--pg-teal) 40%,var(--pg-line))!important}
+    body.ps-guard-page .message{width:max-content;max-width:min(78%,650px);padding:11px 13px;border:1px solid var(--pg-line)!important;border-radius:11px 11px 11px 3px;background:var(--pg-soft)!important;color:var(--pg-text)!important;margin:8px 0}
+    body.ps-guard-page .message.mine{margin-left:auto;border-color:transparent!important;border-radius:11px 11px 3px 11px;background:var(--pg-teal)!important;color:#fff!important}
+    body.ps-guard-page .message.mine .meta{color:#fff!important}
+    body.ps-guard-page .meta{font-size:11px;color:var(--pg-muted)!important;margin-top:5px}
+    body.ps-guard-page .muted{color:var(--pg-muted)!important}
+    body.ps-guard-page .composer{display:flex;gap:8px;padding:12px;border-top:1px solid var(--pg-line)!important;background:var(--pg-soft)!important}
+    body.ps-guard-page .composer textarea{flex:1;min-height:52px!important;padding:10px;resize:vertical;background:var(--pg-surface)!important;color:var(--pg-text)!important;border-color:var(--pg-line)!important}
+    body.ps-guard-page .composer button{min-width:72px}
+    @media(max-width:720px){body.ps-guard-page .layout{grid-template-columns:1fr;min-height:auto}body.ps-guard-page .sidebar{border-right:0!important;border-bottom:1px solid var(--pg-line)!important}body.ps-guard-page .messages{min-height:330px;max-height:52vh}body.ps-guard-page .message{max-width:90%}body.ps-guard-page .composer{position:sticky;bottom:0}}
   </style>
   <link rel="stylesheet" href="patrolsync-guard.css">
   <script src="patrolsync-guard-ui.js" defer></script>
