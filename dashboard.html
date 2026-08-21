@@ -8,8 +8,7 @@
   <script>
     (function () {
       const saved = localStorage.getItem('patrolsync_theme');
-      const preferred = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      document.documentElement.dataset.theme = saved || preferred;
+      document.documentElement.dataset.theme = saved || 'dark';
     })();
     function togglePatrolSyncTheme() {
       const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
