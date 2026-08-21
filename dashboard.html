@@ -8,8 +8,7 @@
   <script>
     (function () {
       const saved = localStorage.getItem('patrolsync_theme');
-      const preferred = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      document.documentElement.dataset.theme = saved || preferred;
+      document.documentElement.dataset.theme = saved || 'dark';
     })();
     function togglePatrolSyncTheme() {
       const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
@@ -399,7 +398,8 @@
     <span id="planBadge" class="plan-badge plan-starter">Loading...</span>
     <div class="price-line" id="planPriceLine"></div>
     <div id="usageBars"></div>
-    <p style="font-size:13px;color:#64748b;margin-bottom:0;">Plan changes are managed by PatrolSync. Contact support if you need to upgrade or change your subscription.</p>
+    <p style="font-size:13px;color:#64748b;">Plan changes are managed by PatrolSync. Contact support if you need to upgrade or change your subscription.</p>
+    <button type="button" onclick="location.href='subscription_usage.html'">Open Detailed Plan & Usage →</button>
   </section>
 
   <section>
