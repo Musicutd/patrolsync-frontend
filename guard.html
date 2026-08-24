@@ -112,6 +112,11 @@
     }
     .photo-count-hint { font-size: 12px; color: #666; margin-top: 4px; }
     .photo-compressing { font-size: 12px; color: #0891b2; margin-top: 4px; }
+    .incident-queue { margin-top: 12px; border-top: 1px solid #cbd5e1; padding-top: 10px; }
+    .incident-queue-row { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; padding:8px 0; border-bottom:1px solid #e2e8f0; font-size:12px; }
+    .incident-queue-row:last-child { border-bottom:0; }
+    .incident-queue-state { font-weight:700; color:#b45309; }
+    .incident-queue-state.failed { color:#dc2626; }
 
     /* --- Offline mode --- */
     .connection-banner { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; font-weight: bold; }
@@ -262,8 +267,13 @@
       <div id="photoCompressing" class="photo-compressing hidden">Compressing photo...</div>
       <div id="photoPreviews" class="photo-previews"></div>
       <button onclick="submitIncident()">Submit Report</button>
-      <p class="hint">Incident reports require a connection to submit — they are not queued offline.</p>
+      <p class="hint">Reports and compressed photos are saved securely on this device first, then synchronized automatically when online.</p>
       <div id="incidentStatus" class="status"></div>
+      <div class="incident-queue">
+        <b>Pending incident synchronization</b>
+        <button type="button" onclick="syncIncidentQueue()" style="margin:6px 0;background:#0f766e;">Sync Now</button>
+        <div id="incidentQueueList" class="hint">Loading pending reports...</div>
+      </div>
     </section>
   </div>
 
@@ -634,7 +644,7 @@
         syncBtn.classList.add('hidden');
       }
     }
-    window.addEventListener('online', () => { updateConnectionBanner(); syncQueue(); refreshCheckpointCache(); });
+    window.addEventListener('online', () => { updateConnectionBanner(); syncQueue(); syncIncidentQueue(); refreshCheckpointCache(); });
     window.addEventListener('offline', updateConnectionBanner);
 
     async function syncQueue() {
@@ -993,6 +1003,88 @@
       }, 2500);
     }
 
+    // --- Durable offline incident and photo queue (IndexedDB) ---
+    const INCIDENT_DB_NAME = 'patrolsync_guard_evidence';
+    const INCIDENT_DB_VERSION = 1;
+    const INCIDENT_STORE = 'incident_queue';
+    let incidentSyncRunning = false;
+
+    function openIncidentDb() {
+      return new Promise((resolve, reject) => {
+        if (!window.indexedDB) return reject(new Error('This browser does not support durable offline evidence storage.'));
+        const request = indexedDB.open(INCIDENT_DB_NAME, INCIDENT_DB_VERSION);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(INCIDENT_STORE)) db.createObjectStore(INCIDENT_STORE, { keyPath: 'id' });
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('Could not open offline evidence storage.'));
+      });
+    }
+    async function incidentDbRequest(mode, operation) {
+      const db = await openIncidentDb();
+      try {
+        return await new Promise((resolve, reject) => {
+          const tx = db.transaction(INCIDENT_STORE, mode), store = tx.objectStore(INCIDENT_STORE);
+          let request;
+          try { request = operation(store); } catch (err) { reject(err); return; }
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error || new Error('Offline evidence operation failed.'));
+          tx.onabort = () => reject(tx.error || new Error('Offline evidence transaction was interrupted.'));
+        });
+      } finally { db.close(); }
+    }
+    function saveIncidentQueueItem(item) { return incidentDbRequest('readwrite', store => store.put(item)); }
+    function deleteIncidentQueueItem(id) { return incidentDbRequest('readwrite', store => store.delete(id)); }
+    async function loadIncidentQueue() {
+      const rows = await incidentDbRequest('readonly', store => store.getAll());
+      const { tenantId, userId } = getSession();
+      return rows.filter(row => String(row.tenant_id) === String(tenantId) && String(row.user_id) === String(userId)).sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)));
+    }
+    async function renderIncidentQueue() {
+      const container = document.getElementById('incidentQueueList');
+      if (!container) return;
+      try {
+        const rows = await loadIncidentQueue();
+        if (!rows.length) { container.textContent = 'No incident reports waiting to sync.'; return; }
+        container.innerHTML = rows.map(row => '<div class="incident-queue-row"><div><b>' + escapeHtmlGuard(row.description.slice(0,80)) + '</b><br>' + row.photos.length + ' photo(s) · ' + new Date(row.created_at).toLocaleString() + (row.last_error ? '<br><span class="error">' + escapeHtmlGuard(row.last_error) + '</span>' : '') + '</div><span class="incident-queue-state ' + (row.status === 'failed' ? 'failed' : '') + '">' + escapeHtmlGuard(row.status === 'failed' ? 'Needs retry' : 'Pending') + '</span></div>').join('');
+      } catch (err) { container.textContent = 'Offline queue unavailable: ' + err.message; }
+    }
+
+    async function syncIncidentQueue() {
+      if (!navigator.onLine || incidentSyncRunning) { renderIncidentQueue(); return; }
+      incidentSyncRunning = true;
+      const statusDiv = document.getElementById('incidentStatus');
+      try {
+        const rows = await loadIncidentQueue();
+        for (const row of rows) {
+          row.status = 'syncing'; row.attempts = Number(row.attempts || 0) + 1; row.last_attempt_at = new Date().toISOString(); row.last_error = null;
+          await saveIncidentQueueItem(row); await renderIncidentQueue();
+          try {
+            const res = await fetch(API_BASE + '/api/incidents', { method:'POST', headers:authHeaders(), body:JSON.stringify({
+              tenant_id:row.tenant_id, site_id:row.site_id, checkpoint_id:row.checkpoint_id||null,
+              description:row.description, severity:row.severity, category:row.category, photos:row.photos,
+              client_incident_id:row.id, device_reported_at:row.device_reported_at,
+              offline_captured:row.offline_captured, device_id:row.device_id
+            }) });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw Object.assign(new Error(data.error || ('Incident sync failed with HTTP ' + res.status)), { httpStatus:res.status });
+            await deleteIncidentQueueItem(row.id);
+            statusDiv.textContent = 'Incident ' + (data.reference_code || '') + ' synchronized with ' + row.photos.length + ' photo(s).';
+            statusDiv.className = 'status success';
+          } catch (err) {
+            row.status = err.httpStatus && err.httpStatus >= 400 && err.httpStatus < 500 ? 'failed' : 'pending';
+            row.last_error = String(err.message || err).slice(0,300);
+            await saveIncidentQueueItem(row);
+            if (!navigator.onLine || !err.httpStatus) break;
+          }
+        }
+      } catch (err) {
+        statusDiv.textContent = 'Incident synchronization paused: ' + err.message;
+        statusDiv.className = 'status error';
+      } finally { incidentSyncRunning = false; await renderIncidentQueue(); }
+    }
+
     // --- Incident photo attachments ---
     function compressImage(file, maxDimension, quality) {
       return new Promise((resolve, reject) => {
@@ -1052,44 +1144,30 @@
     }
 
     async function submitIncident() {
-      const { tenantId } = getSession();
+      const { tenantId, userId } = getSession();
       const siteId = document.getElementById('siteSelect').value;
       const description = document.getElementById('incidentDescription').value;
       const severity = document.getElementById('incidentSeverity').value;
       const category = document.getElementById('incidentCategory').value;
       const statusDiv = document.getElementById('incidentStatus');
 
-      if (!navigator.onLine) {
-        statusDiv.textContent = 'You are offline. Incident reports (especially with photos) require a connection — please try again once back online.';
-        statusDiv.className = 'status error';
-        return;
-      }
       if (!siteId) { statusDiv.textContent = 'No site assigned — cannot submit report'; statusDiv.className = 'status error'; return; }
-      if (!description) { statusDiv.textContent = 'Description is required'; statusDiv.className = 'status error'; return; }
+      if (!description.trim()) { statusDiv.textContent = 'Description is required'; statusDiv.className = 'status error'; return; }
 
       try {
-        const res = await fetch(API_BASE + '/api/incidents', {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({
-            tenant_id: Number(tenantId),
-            site_id: Number(siteId),
-            description,
-            severity,
-            category,
-            photos: attachedPhotos
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to submit incident');
-
-        statusDiv.textContent = 'Incident submitted' + (attachedPhotos.length ? ' with ' + attachedPhotos.length + ' photo(s)' : '') + '. Thank you.';
+        const item = { id:createClientScanId(), tenant_id:Number(tenantId), user_id:Number(userId), site_id:Number(siteId), checkpoint_id:null,
+          description:description.trim(), severity, category, photos:[...attachedPhotos], device_reported_at:new Date().toISOString(),
+          offline_captured:!navigator.onLine, device_id:getGuardDeviceId(), status:'pending', attempts:0, last_error:null, created_at:new Date().toISOString() };
+        await saveIncidentQueueItem(item);
+        statusDiv.textContent = navigator.onLine ? 'Report saved safely — synchronizing now.' : 'Report saved safely offline — it will synchronize automatically when online.';
         statusDiv.className = 'status success';
         document.getElementById('incidentDescription').value = '';
         attachedPhotos = [];
         renderPhotoPreviews();
+        await renderIncidentQueue();
+        if (navigator.onLine) syncIncidentQueue();
       } catch (err) {
-        statusDiv.textContent = err.message;
+        statusDiv.textContent = 'Could not save this report on the device: ' + err.message;
         statusDiv.className = 'status error';
       }
     }
@@ -1336,6 +1414,8 @@
       loadActiveCheckpointRequirements();
       configureNfcSupport();
       syncQueue();
+      renderIncidentQueue();
+      syncIncidentQueue();
       startLocationReporting();
     }
 
@@ -1356,7 +1436,7 @@
       } else {
         showScreen('login');
       }
-      setInterval(() => { if (navigator.onLine) syncQueue(); }, 30000);
+      setInterval(() => { if (navigator.onLine) { syncQueue(); syncIncidentQueue(); } }, 30000);
     }
     init();
   </script>
