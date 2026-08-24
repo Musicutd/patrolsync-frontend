@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Assurance Trends — PatrolSync</title>
+  <link rel="stylesheet" href="patrolsync-module.css">
+  <script src="patrolsync-module.js" defer></script>
+  <style>
+    .hero,.toolbar,.site-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.muted{color:var(--pm-muted)}
+    .filters{display:flex;gap:9px;flex-wrap:wrap;align-items:end}.filters select{min-width:230px}.filters button{width:auto}
+    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.metric strong{display:block;font-size:30px;margin-top:4px}
+    .trend-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.score{font-size:36px;font-weight:900}.delta{font-weight:800}.up{color:#34d399}.down{color:#fb7185}.flat{color:var(--pm-muted)}
+    .chart{height:190px;display:flex;align-items:end;gap:7px;padding:18px 8px 0;border-bottom:1px solid var(--pm-border)}.point{flex:1;min-width:12px;position:relative;background:#2dd4bf;border-radius:7px 7px 0 0}.point.down-bar{background:#fb7185}.point:hover::after{content:attr(data-label);position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);white-space:nowrap;padding:6px 8px;border-radius:6px;background:var(--pm-soft);border:1px solid var(--pm-border);font-size:11px;z-index:2}
+    .component-list{display:grid;gap:8px;margin-top:14px}.component{display:grid;grid-template-columns:1fr auto;gap:12px;padding:10px;border:1px solid var(--pm-border);border-radius:9px}.empty{text-align:center;padding:28px;color:var(--pm-muted)}
+    @media(max-width:850px){.metrics,.trend-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:560px){.hero,.toolbar{display:block}.filters{margin-top:12px}.filters select,.filters button{width:100%}.metrics,.trend-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body class="ps-module-shell">
+<main class="ps-module-main">
+  <a href="dashboard.html#reports">← Operations workspace</a>
+  <section class="ps-card hero">
+    <div><p class="muted" style="margin:0 0 7px">Client assurance intelligence</p><h1 style="margin:0">ProofScore Trends</h1><p class="muted">Compare published assurance snapshots, identify deterioration, and focus corrective action before client confidence is affected.</p></div>
+    <button id="refreshBtn" style="width:auto">Refresh trends</button>
+  </section>
+  <section class="ps-card toolbar">
+    <div class="filters"><label>Site<select id="siteFilter"><option value="">All sites</option></select></label><button id="applyBtn" class="secondary">Apply filter</button></div>
+    <p id="status" class="muted">Loading published assurance history…</p>
+  </section>
+  <section class="metrics">
+    <article class="ps-card metric"><span class="muted">Latest average</span><strong id="latestAverage">—</strong><small id="latestGrade">UNRATED</small></article>
+    <article class="ps-card metric"><span class="muted">Change</span><strong id="averageDelta">—</strong><small>against previous published result</small></article>
+    <article class="ps-card metric"><span class="muted">Sites declining</span><strong id="decliningSites">0</strong><small>negative latest movement</small></article>
+    <article class="ps-card metric"><span class="muted">Snapshots analysed</span><strong id="snapshotCount">0</strong><small>immutable published points</small></article>
+  </section>
+  <section id="trends" class="trend-grid"><article class="ps-card empty">No published assurance snapshots found.</article></section>
+</main>
+<script>
+const API='https://patrolsync-backend.onrender.com',token=localStorage.getItem('token'),tenant=localStorage.getItem('tenant_id'),$=id=>document.getElementById(id);if(!token||!tenant)location.replace('login.html');
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(path){const r=await fetch(API+path,{headers:{Authorization:'Bearer '+token}}),d=await r.json().catch(()=>({error:'Unexpected server response'}));if(!r.ok)throw Error(d.error||'Request failed');return d}
+function grade(score){if(score>=90)return'A';if(score>=80)return'B';if(score>=70)return'C';if(score>=60)return'D';return'E'}
+function deltaText(value){if(value===null)return'<span class="flat">First result</span>';const cls=value>0?'up':value<0?'down':'flat',arrow=value>0?'▲':value<0?'▼':'•';return`<span class="delta ${cls}">${arrow} ${Math.abs(value).toFixed(2)} points</span>`}
+function components(snapshot){return Array.isArray(snapshot?.components)?snapshot.components:[]}
+function render(rows){
+  const groups=new Map();for(const row of rows){const key=String(row.site_id);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row)}
+  const sites=[...groups.values()].map(list=>{list.sort((a,b)=>new Date(a.calculated_at)-new Date(b.calculated_at));const latest=list.at(-1),previous=list.at(-2),movement=previous?Number(latest.score)-Number(previous.score):null;return{list,latest,previous,movement}});
+  const current=sites.map(x=>Number(x.latest.score)).filter(Number.isFinite),previous=sites.map(x=>x.previous?Number(x.previous.score):null).filter(Number.isFinite),avg=current.length?current.reduce((a,b)=>a+b,0)/current.length:null,prevAvg=previous.length?previous.reduce((a,b)=>a+b,0)/previous.length:null,avgMove=avg!==null&&prevAvg!==null?avg-prevAvg:null;
+  $('latestAverage').textContent=avg===null?'—':avg.toFixed(2)+'%';$('latestGrade').textContent=avg===null?'UNRATED':'Grade '+grade(avg);$('averageDelta').innerHTML=deltaText(avgMove);$('decliningSites').textContent=sites.filter(x=>x.movement<0).length;$('snapshotCount').textContent=rows.length;
+  $('trends').innerHTML=sites.length?sites.map(site=>{
+    const latestComponents=components(site.latest),oldByKey=new Map(components(site.previous).map(x=>[x.key,x])),changes=latestComponents.filter(x=>x.applicable).map(x=>{const old=oldByKey.get(x.key),change=old?.applicable?Number(x.score)-Number(old.score):null;return{...x,change}}).sort((a,b)=>(a.change??999)-(b.change??999));
+    return`<article class="ps-card"><div class="site-head"><div><h2 style="margin:0">${esc(site.latest.site_name)}</h2><p class="muted">${site.list.length} published snapshot(s)</p></div><div style="text-align:right"><div class="score">${Number(site.latest.score).toFixed(2)}%</div>${deltaText(site.movement)}</div></div><div class="chart">${site.list.slice(-12).map((x,i,a)=>{const prior=i?a[i-1]:null,down=prior&&Number(x.score)<Number(prior.score);return`<div class="point ${down?'down-bar':''}" style="height:${Math.max(4,Number(x.score))}%" data-label="${Number(x.score).toFixed(2)}% · ${new Date(x.calculated_at).toLocaleDateString()}"></div>`}).join('')}</div><div class="component-list">${changes.map(x=>`<div class="component"><div><strong>${esc(x.label)}</strong><br><small class="muted">Latest ${Number(x.score).toFixed(2)}%</small></div>${deltaText(x.change)}</div>`).join('')||'<p class="muted">No measured components.</p>'}</div></article>`}).join(''):'<article class="ps-card empty">No published assurance snapshots match this selection. Publish snapshots from ProofScore Assurance first.</article>';
+}
+async function loadSites(){const data=await api('/api/sites?tenant_id='+tenant),rows=Array.isArray(data)?data:data.sites||[];$('siteFilter').innerHTML='<option value="">All sites</option>'+rows.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}
+async function load(){try{$('status').textContent='Loading published assurance history…';const p=new URLSearchParams({tenant_id:tenant});if($('siteFilter').value)p.set('site_id',$('siteFilter').value);const rows=await api('/api/proofscore/history?'+p);render(rows);$('status').textContent=`Updated ${new Date().toLocaleString()} · ${rows.length} snapshot(s) analysed.`}catch(e){$('status').textContent=e.message;$('trends').innerHTML=`<article class="ps-card empty">${esc(e.message)}</article>`}}
+$('refreshBtn').onclick=load;$('applyBtn').onclick=load;loadSites().then(load).catch(e=>$('status').textContent=e.message);
+</script>
+</body>
+</html>
