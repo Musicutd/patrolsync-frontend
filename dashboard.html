@@ -80,6 +80,7 @@
       items.set('competency matrix|competency_matrix.html',{label:'Competency Matrix',href:'competency_matrix.html',keywords:'training skills remediation mandatory learning readiness'});
       items.set('compliance readiness|compliance_readiness.html',{label:'Compliance Readiness',href:'compliance_readiness.html',keywords:'stage 4 certificates competency alerts security validation gate'});
       items.set('proofscore assurance|proofscore.html',{label:'ProofScore Assurance',href:'proofscore.html',keywords:'client assurance score evidence patrol incidents shifts certificates training'});
+      items.set('proofscore trends|assurance_trends.html',{label:'ProofScore Trends',href:'assurance_trends.html',keywords:'client assurance trend decline degradation published snapshots score'});
       moduleSearchItems = Array.from(items.values()).sort((a,b) => a.label.localeCompare(b.label));
     }
     function renderModuleSearch(query) {
@@ -383,6 +384,7 @@
     </nav>
     <div class="ps-nav-label">Business</div><nav class="ps-nav">
       <a href="proofscore.html"><span class="ps-nav-icon">◆</span>ProofScore Assurance</a>
+      <a href="assurance_trends.html"><span class="ps-nav-icon">⌁</span>ProofScore Trends</a>
       <a href="service_contracts.html"><span class="ps-nav-icon">▤</span>Contracts & SLAs</a>
       <a href="client_reports.html"><span class="ps-nav-icon">▥</span>Client Reports</a>
       <a href="invoices.html"><span class="ps-nav-icon">€</span>Billing</a>
@@ -554,6 +556,7 @@
     <button onclick="window.location.href='invoices.html'">Billing & Invoices →</button>
     <button onclick="window.location.href='analytics.html'">Operational Analytics →</button>
     <button onclick="window.location.href='proofscore.html'">ProofScore Client Assurance →</button>
+    <button onclick="window.location.href='assurance_trends.html'">ProofScore Trends →</button>
     <button onclick="window.location.href='service_tickets.html'">Client Service Tickets →</button>
     <button onclick="window.location.href='contract_renewals.html'">Contract Renewals →</button>
     <button onclick="window.location.href='email_deliveries.html'">Email Delivery Monitor →</button>
