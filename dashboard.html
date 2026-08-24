@@ -76,7 +76,7 @@
         const match = (button.getAttribute('onclick') || '').match(/href=['"]([^'"]+)['"]/);
         if (label && match) items.set(label.toLowerCase() + '|' + match[1], {label,href:match[1]});
       });
-      items.set('guard certifications|certifications',{label:'Guard Certifications',href:'#certifications',keywords:'licenses expiry workforce compliance'});
+      items.set('guard certifications|certificate_register.html',{label:'Guard Certifications',href:'certificate_register.html',keywords:'licenses expiry renewal workforce compliance archived'});
       moduleSearchItems = Array.from(items.values()).sort((a,b) => a.label.localeCompare(b.label));
     }
     function renderModuleSearch(query) {
@@ -115,7 +115,7 @@
           { title: 'Intelligence & assurance', icon: '✦', files: ['coverage_autopilot.html','operations_risk.html','intelligence_readiness.html','audit_log.html','integrity_tests.html'] },
           { title: 'Patrol, incidents & safety', icon: '⌖', files: ['patrol_routes.html','patrol_runs.html','patrol_alerts.html','patrol_evidence.html','trustproof.html','checkpoint_requirements.html','incident_management.html','handover_management.html','lone_worker.html','dispatch_center.html'] },
           { title: 'Clients, reporting & finance', icon: '▥', files: ['service_contracts.html','sla_dashboard.html','client_reports.html','invoices.html','analytics.html','service_tickets.html','contract_renewals.html','email_deliveries.html'] },
-          { title: 'People, communications & quality', icon: '◇', files: ['notification_center.html','team_messages.html','training_compliance.html','asset_management.html','quality_inspections.html'] },
+          { title: 'People, communications & quality', icon: '◇', files: ['notification_center.html','team_messages.html','training_compliance.html','certificate_register.html','asset_management.html','quality_inspections.html'] },
           { title: 'Administration & security', icon: '⚙', files: ['access_control.html','integrations.html','system_health.html','security_recovery.html','mfa_settings.html','session_management.html'] }
         ];
         const buttons = Array.from(toolsGrid.querySelectorAll('button'));
@@ -362,7 +362,7 @@
       <a href="field_reliability.html"><span class="ps-nav-icon">⇄</span>Field Reliability</a>
       <a href="visitor_management.html"><span class="ps-nav-icon">◉</span>Visitors & On-Site Register</a>
       <a href="workforce_readiness.html"><span class="ps-nav-icon">✓</span>Workforce Readiness</a>
-      <a href="#certifications" data-certifications-link><span class="ps-nav-icon">◈</span>Guard Certifications</a>
+      <a href="certificate_register.html"><span class="ps-nav-icon">◈</span>Guard Certifications</a>
       <a href="timesheets.html"><span class="ps-nav-icon">◫</span>Timesheets</a>
       <a href="leave_management.html"><span class="ps-nav-icon">◇</span>Leave Management</a>
       <a href="training_compliance.html"><span class="ps-nav-icon">◎</span>Training & Compliance</a>
@@ -555,6 +555,7 @@
     <button onclick="window.location.href='lone_worker.html'">Lone-Worker Safety →</button>
     <button onclick="window.location.href='dispatch_center.html'">Dispatch Command Center →</button>
     <button onclick="window.location.href='training_compliance.html'">Training & Policy Compliance →</button>
+    <button onclick="window.location.href='certificate_register.html'">Guard Certificate Register →</button>
     <button onclick="window.location.href='asset_management.html'">Equipment, Keys & Vehicles →</button>
     <button onclick="window.location.href='quality_inspections.html'">Quality Inspections & Actions →</button>
     <button onclick="window.location.href='access_control.html'">Staff Roles & Permissions →</button>
