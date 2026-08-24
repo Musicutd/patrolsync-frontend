@@ -199,8 +199,10 @@
 
     <section class="ps-scan-card">
       <h3>Scan a Checkpoint</h3>
-      <p class="hint">Point your camera at any checkpoint's QR label. Works even with no signal — scans are queued and synced automatically.</p>
+      <p class="hint">Scan a checkpoint by QR or NFC. Captures made without a signal are queued safely and synced exactly once.</p>
       <button class="scanqr" onclick="openScanner()">📷 Open Camera Scanner</button>
+      <button id="nfcScanBtn" class="scanqr hidden" onclick="scanNfcCheckpoint()" style="margin-top:8px;background:#0f766e;">📡 Scan NFC Checkpoint</button>
+      <p id="nfcSupportHint" class="hint"></p>
       <div id="activePatrolHint" class="hint"></div>
       <div id="activeCheckpointRequirements" class="hidden" style="margin-top:12px;padding:12px;border:1px solid #bfdbfe;border-radius:7px;background:#eff6ff;">
         <b id="activeCheckpointName"></b>
@@ -548,7 +550,7 @@
 
     // --- Offline mode: checkpoint cache + scan queue ---
     // Two localStorage-backed stores:
-    // guard_checkpoint_cache: { qr_code: { id, name, site_id, site_name } }
+    // guard_checkpoint_cache: { "qr:value"|"nfc:value": checkpoint }
     // refreshed opportunistically whenever online, so QR scans can be
     // validated and matched to a checkpoint even with zero connectivity.
     // guard_scan_queue: [{ local_id, tenant_id, checkpoint_id, user_id,
@@ -576,6 +578,23 @@
     function saveQueue(queue) {
       localStorage.setItem(getQueueKey(), JSON.stringify(queue));
     }
+    function createClientScanId() {
+      if (crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+      return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + '-' + Math.random().toString(36).slice(2);
+    }
+    function getGuardDeviceId() {
+      const key = 'patrolsync_guard_device_id';
+      let value = localStorage.getItem(key);
+      if (!value) { value = createClientScanId(); localStorage.setItem(key, value); }
+      return value;
+    }
+    function normalizeNfcTag(value) {
+      return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9:_-]/g, '');
+    }
+    function cachedCheckpoint(cache, value, method) {
+      const normalized = method === 'nfc' ? normalizeNfcTag(value) : String(value || '').trim();
+      return cache[method + ':' + normalized] || (method === 'qr' ? cache[normalized] : null);
+    }
 
     async function refreshCheckpointCache() {
       if (!navigator.onLine) return;
@@ -587,7 +606,10 @@
           if (!res.ok) continue;
           const checkpoints = await res.json();
           checkpoints.forEach(cp => {
-            cache[cp.qr_code] = { id: cp.id, name: cp.name, site_id: cp.site_id, site_name: site.name };
+            const record = { id: cp.id, name: cp.name, site_id: cp.site_id, site_name: site.name };
+            cache['qr:' + cp.qr_code] = record;
+            cache[cp.qr_code] = record;
+            if (cp.nfc_tag_uid) cache['nfc:' + normalizeNfcTag(cp.nfc_tag_uid)] = record;
           });
         }
         saveCheckpointCache(cache);
@@ -639,6 +661,10 @@
               patrol_run_id: item.patrol_run_id || null,
               checkpoint_note: item.checkpoint_note || null,
               instruction_confirmed: Boolean(item.instruction_confirmed)
+              ,client_scan_id: item.client_scan_id || item.local_id
+              ,scan_method: item.scan_method || 'qr'
+              ,device_id: item.device_id || getGuardDeviceId()
+              ,offline_captured: Boolean(item.offline_captured)
             })
           });
           const data = await res.json().catch(() => ({}));
@@ -794,7 +820,7 @@
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
         if (code && code.data) {
-          handleScannedCode(code.data);
+          handleScannedCode(code.data, 'qr');
           return;
         }
       }
@@ -807,7 +833,8 @@
     //    reports offline), fall back to the local checkpoint cache to
     //    validate the QR code, then push the scan into the local queue
     //    with an accurate scanned_at timestamp instead of losing it.
-    async function handleScannedCode(qrValue) {
+    async function handleScannedCode(scanValue, scanMethod) {
+      scanMethod = scanMethod === 'nfc' ? 'nfc' : 'qr';
       scannerActive = false;
       const statusDiv = document.getElementById('scannerStatus');
       const { tenantId, userId } = getSession();
@@ -816,9 +843,10 @@
       const deviceScannedAt = new Date().toISOString();
 
       if (navigator.onLine) {
-        statusDiv.textContent = 'Found code: ' + qrValue + ' — looking up checkpoint...';
+        statusDiv.textContent = 'Found ' + scanMethod.toUpperCase() + ' checkpoint — verifying...';
         try {
-          const lookupRes = await fetch(API_BASE + '/api/checkpoints/lookup?tenant_id=' + tenantId + '&qr_code=' + encodeURIComponent(qrValue), { headers: authHeaders() });
+          const lookupParam = scanMethod === 'nfc' ? '&nfc_tag_uid=' : '&qr_code=';
+          const lookupRes = await fetch(API_BASE + '/api/checkpoints/lookup?tenant_id=' + tenantId + lookupParam + encodeURIComponent(scanValue), { headers: authHeaders() });
           const checkpoint = await lookupRes.json();
           if (!lookupRes.ok) throw new Error(checkpoint.error || 'Checkpoint not found');
 
@@ -829,10 +857,11 @@
           const activeRunId=localStorage.getItem('active_patrol_run_id');
           let checkpointResponse={};
           try{checkpointResponse=JSON.parse(localStorage.getItem('patrol_checkpoint_response_'+activeRunId+'_'+checkpoint.id)||'{}')}catch(e){}
+          const clientScanId = createClientScanId();
           const scanRes = await fetch(API_BASE + '/api/patrol-logs', {
             method: 'POST',
             headers: authHeaders(),
-            body: JSON.stringify({ tenant_id: Number(tenantId), checkpoint_id: checkpoint.id, user_id: Number(userId), latitude:scanLocation.latitude, longitude:scanLocation.longitude, accuracy:scanLocation.accuracy, device_scanned_at:deviceScannedAt, patrol_run_id:activeRunId||null, checkpoint_note:checkpointResponse.checkpoint_note||null, instruction_confirmed:Boolean(checkpointResponse.instruction_confirmed) })
+            body: JSON.stringify({ tenant_id: Number(tenantId), checkpoint_id: checkpoint.id, user_id: Number(userId), latitude:scanLocation.latitude, longitude:scanLocation.longitude, accuracy:scanLocation.accuracy, device_scanned_at:deviceScannedAt, patrol_run_id:activeRunId||null, checkpoint_note:checkpointResponse.checkpoint_note||null, instruction_confirmed:Boolean(checkpointResponse.instruction_confirmed), client_scan_id:clientScanId, scan_method:scanMethod, device_id:getGuardDeviceId(), offline_captured:false })
           });
           const scanData = await scanRes.json();
           if (!scanRes.ok) throw new Error(scanData.error || 'Failed to log scan');
@@ -856,17 +885,17 @@
             return;
           }
           console.warn('Online scan failed, falling back to offline queue:', err.message);
-          queueScanOffline(qrValue, statusDiv, scanLocation, deviceScannedAt);
+          queueScanOffline(scanValue, scanMethod, statusDiv, scanLocation, deviceScannedAt);
         }
       } else {
-        queueScanOffline(qrValue, statusDiv, scanLocation, deviceScannedAt);
+        queueScanOffline(scanValue, scanMethod, statusDiv, scanLocation, deviceScannedAt);
       }
     }
 
-    function queueScanOffline(qrValue, statusDiv, scanLocation, deviceScannedAt) {
+    function queueScanOffline(scanValue, scanMethod, statusDiv, scanLocation, deviceScannedAt) {
       const { tenantId, userId } = getSession();
       const cache = loadCheckpointCache();
-      const cached = cache[qrValue];
+      const cached = cachedCheckpoint(cache, scanValue, scanMethod);
       if (!cached) {
         statusDiv.textContent = 'Unknown checkpoint (not in offline cache). Connect to the internet at least once at this site before going offline.';
         retryFrameAfterDelay(statusDiv);
@@ -881,8 +910,10 @@
 
       const queue = loadQueue();
       const activeRunId=localStorage.getItem('active_patrol_run_id');let checkpointResponse={};try{checkpointResponse=JSON.parse(localStorage.getItem('patrol_checkpoint_response_'+activeRunId+'_'+cached.id)||'{}')}catch(e){}
+      const clientScanId = createClientScanId();
       queue.push({
-        local_id: Date.now() + '-' + Math.random().toString(36).slice(2),
+        local_id: clientScanId,
+        client_scan_id: clientScanId,
         tenant_id: Number(tenantId),
         site_id: cached.site_id,
         checkpoint_id: cached.id,
@@ -894,6 +925,9 @@
         scanned_at: deviceScannedAt,
         device_scanned_at: deviceScannedAt,
         patrol_run_id: localStorage.getItem('active_patrol_run_id') || null
+        ,scan_method: scanMethod
+        ,device_id: getGuardDeviceId()
+        ,offline_captured: true
         ,checkpoint_note: checkpointResponse.checkpoint_note || null
         ,instruction_confirmed: Boolean(checkpointResponse.instruction_confirmed)
       });
@@ -902,6 +936,40 @@
 
       statusDiv.textContent = 'Queued offline: ' + cached.name + ' — will sync automatically when back online.';
       finishScanUI(statusDiv, 'queued');
+    }
+
+    async function scanNfcCheckpoint() {
+      if (!('NDEFReader' in window)) return alert('NFC scanning is not supported by this browser. Use QR scanning instead.');
+      const status = document.getElementById('qrScanStatus');
+      try {
+        status.textContent = 'Hold the phone close to the checkpoint NFC tag...';
+        status.className = 'status';
+        const reader = new NDEFReader();
+        await reader.scan();
+        reader.addEventListener('readingerror', () => {
+          status.textContent = 'The NFC tag could not be read. Try again or use QR.';
+          status.className = 'status error';
+        }, { once: true });
+        reader.addEventListener('reading', event => {
+          const uid = normalizeNfcTag(event.serialNumber);
+          if (!uid) {
+            status.textContent = 'This NFC tag does not expose a usable identifier. Use QR or register a compatible tag.';
+            status.className = 'status error';
+            return;
+          }
+          document.getElementById('scannerStatus').textContent = 'NFC tag detected.';
+          handleScannedCode(uid, 'nfc');
+        }, { once: true });
+      } catch (err) {
+        status.textContent = 'NFC unavailable: ' + err.message;
+        status.className = 'status error';
+      }
+    }
+
+    function configureNfcSupport() {
+      const supported = 'NDEFReader' in window;
+      document.getElementById('nfcScanBtn').classList.toggle('hidden', !supported);
+      document.getElementById('nfcSupportHint').textContent = supported ? 'NFC scanning is available on this device.' : 'NFC is unavailable in this browser; QR scanning remains available.';
     }
 
     function finishScanUI(statusDiv, kind) {
@@ -1266,6 +1334,7 @@
       loadTodayShiftSummary();
       loadAttendance();
       loadActiveCheckpointRequirements();
+      configureNfcSupport();
       syncQueue();
       startLocationReporting();
     }
