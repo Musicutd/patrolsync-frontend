@@ -64,6 +64,40 @@
       if (updateHash) history.replaceState(null, '', '#' + selected);
       window.scrollTo({top:0,behavior:'smooth'});
     }
+    let moduleSearchItems = [];
+    function buildModuleSearchIndex() {
+      const items = new Map();
+      document.querySelectorAll('.ps-sidebar .ps-nav a').forEach(link => {
+        const label = link.textContent.replace(/\s+/g,' ').trim(), href = link.getAttribute('href') || '';
+        if (label && href) items.set(label.toLowerCase() + '|' + href, {label,href});
+      });
+      document.querySelectorAll('.tool-grid button').forEach(button => {
+        const label = button.textContent.replace(/→/g,'').replace(/\s+/g,' ').trim();
+        const match = (button.getAttribute('onclick') || '').match(/href=['"]([^'"]+)['"]/);
+        if (label && match) items.set(label.toLowerCase() + '|' + match[1], {label,href:match[1]});
+      });
+      items.set('guard certifications|certifications',{label:'Guard Certifications',href:'#certifications',keywords:'licenses expiry workforce compliance'});
+      moduleSearchItems = Array.from(items.values()).sort((a,b) => a.label.localeCompare(b.label));
+    }
+    function renderModuleSearch(query) {
+      const results = document.getElementById('moduleSearchResults'); if (!results) return;
+      const words = String(query || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+      const matches = moduleSearchItems.filter(item => words.every(word => (item.label + ' ' + (item.keywords || '')).toLowerCase().includes(word))).slice(0,18);
+      results.innerHTML = matches.length ? matches.map((item,index) => `<button type="button" class="module-search-result${index===0?' selected':''}" data-module-index="${moduleSearchItems.indexOf(item)}"><span>${item.label}</span><small>${item.href.startsWith('#')?'Dashboard workspace':item.href}</small></button>`).join('') : '<p class="module-search-empty">No matching PatrolSync module found.</p>';
+      results.querySelectorAll('[data-module-index]').forEach(button => button.addEventListener('click',() => openModuleSearchItem(moduleSearchItems[Number(button.dataset.moduleIndex)])));
+    }
+    function openModuleSearch() {
+      const dialog = document.getElementById('moduleSearchDialog'); if (!dialog) return;
+      buildModuleSearchIndex(); dialog.classList.add('open'); dialog.setAttribute('aria-hidden','false');
+      const input = document.getElementById('moduleSearchInput'); input.value=''; renderModuleSearch(''); setTimeout(() => input.focus(),20);
+    }
+    function closeModuleSearch() { const dialog=document.getElementById('moduleSearchDialog'); if(dialog){dialog.classList.remove('open');dialog.setAttribute('aria-hidden','true');} }
+    function openModuleSearchItem(item) {
+      if (!item) return; closeModuleSearch();
+      if (item.href==='#certifications') { showWorkspaceView('workforce',true); setTimeout(() => document.getElementById('guardCertificationsSection')?.scrollIntoView({behavior:'smooth',block:'start'}),100); }
+      else if (item.href.startsWith('#')) showWorkspaceView(item.href.slice(1),true);
+      else window.location.href=item.href;
+    }
     document.addEventListener('DOMContentLoaded', function () {
       const workforceViews = Array.from(document.querySelectorAll('.workspace-view[data-view="workforce"]'));
       if (workforceViews.length > 1) {
@@ -108,7 +142,13 @@
       const requested = location.hash.replace('#','');
       showWorkspaceView(['overview','company','workforce','tools','patrol','reports','incidents'].includes(requested) ? requested : 'overview', false);
       setupSidebarGroups();
+      buildModuleSearchIndex();
+      document.getElementById('moduleSearchInput')?.addEventListener('input',event => renderModuleSearch(event.target.value));
+      document.getElementById('moduleSearchInput')?.addEventListener('keydown',event => { if(event.key==='Enter')document.querySelector('#moduleSearchResults .module-search-result')?.click(); if(event.key==='Escape')closeModuleSearch(); });
+      document.getElementById('moduleSearchDialog')?.addEventListener('click',event => { if(event.target.id==='moduleSearchDialog')closeModuleSearch(); });
+      document.querySelector('[data-certifications-link]')?.addEventListener('click',event => { event.preventDefault(); openModuleSearchItem({href:'#certifications'}); });
     });
+    document.addEventListener('keydown',event => { if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();openModuleSearch();} if(event.key==='Escape')closeModuleSearch(); });
   </script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <style>
@@ -280,6 +320,20 @@
     .cert-date-row { display: flex; gap: 8px; }
     .cert-date-row > div { flex: 1; }
     .cert-date-row label { font-size: 12px; font-weight: bold; color: #333; display: block; margin-bottom: 2px; }
+    .ps-search-trigger { width:auto!important; min-width:190px; margin:0!important; padding:10px 13px!important; display:flex; align-items:center; justify-content:space-between; gap:18px; background:var(--ps-soft,#eef3f6)!important; color:var(--ps-text,#17212b)!important; border:1px solid var(--ps-border,#d5dfe5)!important; border-radius:10px!important; font-weight:700; }
+    .ps-search-trigger kbd { padding:2px 6px; border:1px solid var(--ps-border,#cbd5e1); border-radius:5px; color:var(--ps-muted,#64748b); background:var(--ps-surface,#fff); font:11px/1.4 Arial,sans-serif; }
+    .module-search-dialog { position:fixed; inset:0; z-index:3000; display:none; align-items:flex-start; justify-content:center; padding:10vh 18px 30px; background:rgba(3,10,18,.72); backdrop-filter:blur(5px); }
+    .module-search-dialog.open { display:flex; }
+    .module-search-panel { width:min(680px,100%); max-height:76vh; overflow:hidden; padding:16px; border:1px solid var(--ps-border,#d5dfe5); border-radius:16px; background:var(--ps-surface,#fff); box-shadow:0 24px 70px rgba(0,0,0,.32); }
+    .module-search-head { display:flex; gap:10px; align-items:center; }
+    #moduleSearchInput { margin:0; padding:14px 15px; border-radius:10px; background:var(--ps-soft,#f4f7f9); color:var(--ps-text,#17212b); border:1px solid var(--ps-border,#d5dfe5); }
+    .module-search-close { width:44px!important; min-width:44px; height:44px; margin:0!important; padding:0!important; background:transparent!important; color:var(--ps-text,#17212b)!important; border:1px solid var(--ps-border,#d5dfe5)!important; font-size:22px; }
+    #moduleSearchResults { max-height:58vh; overflow:auto; margin-top:12px; }
+    .module-search-result { width:100%; margin:4px 0!important; padding:12px 13px!important; display:flex; align-items:center; justify-content:space-between; gap:15px; text-align:left; border:1px solid transparent!important; border-radius:10px!important; background:transparent!important; color:var(--ps-text,#17212b)!important; }
+    .module-search-result:hover,.module-search-result:focus,.module-search-result.selected { background:color-mix(in srgb,var(--ps-teal,#16b8a7) 12%,var(--ps-surface,#fff))!important; border-color:var(--ps-teal,#16b8a7)!important; }
+    .module-search-result span { font-weight:800; } .module-search-result small { color:var(--ps-muted,#64748b); }
+    .module-search-empty { padding:24px; text-align:center; color:var(--ps-muted,#64748b); }
+    @media(max-width:700px){.ps-search-trigger{min-width:0}.ps-search-trigger span{display:none}.ps-search-trigger kbd{display:none}}
   </style>
 </head>
 <body class="ps-admin-shell">
@@ -308,6 +362,7 @@
       <a href="field_reliability.html"><span class="ps-nav-icon">⇄</span>Field Reliability</a>
       <a href="visitor_management.html"><span class="ps-nav-icon">◉</span>Visitors & On-Site Register</a>
       <a href="workforce_readiness.html"><span class="ps-nav-icon">✓</span>Workforce Readiness</a>
+      <a href="#certifications" data-certifications-link><span class="ps-nav-icon">◈</span>Guard Certifications</a>
       <a href="timesheets.html"><span class="ps-nav-icon">◫</span>Timesheets</a>
       <a href="leave_management.html"><span class="ps-nav-icon">◇</span>Leave Management</a>
       <a href="training_compliance.html"><span class="ps-nav-icon">◎</span>Training & Compliance</a>
@@ -331,8 +386,9 @@
   </aside>
   <div id="header">
     <div class="ps-header-copy"><button class="ps-menu-toggle" onclick="document.body.classList.toggle('ps-nav-open')" aria-label="Open navigation">☰</button><div><h2 id="companyName">Loading...</h2><span id="workspaceViewTitle" style="font-size:12px;color:#64748b">Operations Overview</span></div></div>
-    <div class="ps-header-actions"><button id="themeToggle" class="ps-theme-toggle" type="button" onclick="togglePatrolSyncTheme()" aria-label="Change color theme"><span>☾</span><b>Dark</b></button><button class="logout" onclick="logout()">Log Out</button></div>
+    <div class="ps-header-actions"><button class="ps-search-trigger" type="button" onclick="openModuleSearch()" aria-label="Search PatrolSync modules"><span>⌕ Search modules</span><kbd>Ctrl K</kbd></button><button id="themeToggle" class="ps-theme-toggle" type="button" onclick="togglePatrolSyncTheme()" aria-label="Change color theme"><span>☾</span><b>Dark</b></button><button class="logout" onclick="logout()">Log Out</button></div>
   </div>
+  <div id="moduleSearchDialog" class="module-search-dialog" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="moduleSearchTitle"><div class="module-search-panel"><div class="module-search-head"><input id="moduleSearchInput" type="search" placeholder="Search attendance, certifications, visitors, reports…" autocomplete="off" aria-label="Search PatrolSync modules"><button type="button" class="module-search-close" onclick="closeModuleSearch()" aria-label="Close search">×</button></div><h2 id="moduleSearchTitle" style="position:absolute;left:-9999px">Search PatrolSync modules</h2><div id="moduleSearchResults"></div></div></div>
   <p><b>Company ID:</b> <span id="tenantIdLabel">-</span> <span style="font-size:12px;color:#64748b;">— give this number to guards for login and password recovery</span></p>
 
   <div class="workspace-view active" data-view="overview">
@@ -513,7 +569,7 @@
   </div>
 
   <div class="workspace-view" data-view="workforce"><div class="workspace-grid">
-  <section class="cert-section">
+  <section class="cert-section" id="guardCertificationsSection">
     <h3>🎓 Guard Certifications</h3>
     <p style="font-size:13px; color:#92400e;">Track licenses and certifications per guard (e.g. SIA license, first aid, fire warden) with expiry warnings.</p>
     <select id="certGuardSelect"><option value="">Select a guard</option></select>
