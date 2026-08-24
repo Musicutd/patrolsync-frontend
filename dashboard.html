@@ -77,6 +77,7 @@
         if (label && match) items.set(label.toLowerCase() + '|' + match[1], {label,href:match[1]});
       });
       items.set('guard certifications|certificate_register.html',{label:'Guard Certifications',href:'certificate_register.html',keywords:'licenses expiry renewal workforce compliance archived'});
+      items.set('competency matrix|competency_matrix.html',{label:'Competency Matrix',href:'competency_matrix.html',keywords:'training skills remediation mandatory learning readiness'});
       moduleSearchItems = Array.from(items.values()).sort((a,b) => a.label.localeCompare(b.label));
     }
     function renderModuleSearch(query) {
@@ -363,6 +364,7 @@
       <a href="visitor_management.html"><span class="ps-nav-icon">◉</span>Visitors & On-Site Register</a>
       <a href="workforce_readiness.html"><span class="ps-nav-icon">✓</span>Workforce Readiness</a>
       <a href="certificate_register.html"><span class="ps-nav-icon">◈</span>Guard Certifications</a>
+      <a href="competency_matrix.html"><span class="ps-nav-icon">✦</span>Competency Matrix</a>
       <a href="timesheets.html"><span class="ps-nav-icon">◫</span>Timesheets</a>
       <a href="leave_management.html"><span class="ps-nav-icon">◇</span>Leave Management</a>
       <a href="training_compliance.html"><span class="ps-nav-icon">◎</span>Training & Compliance</a>
