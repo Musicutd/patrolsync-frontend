@@ -113,6 +113,9 @@
   <select id="cpSite"><option value="">Select a site</option></select>
   <input id="cpCode" placeholder="Unique code (e.g. gate-01)">
   <input id="cpLocation" placeholder="Location name (e.g. Main Gate)">
+  <input id="cpNfcTag" placeholder="NFC tag UID (optional — scan or enter manually)">
+  <button type="button" id="readNfcBtn" class="locate-btn" onclick="readNfcTag()">📡 Read NFC Tag</button>
+  <div id="nfcStatus" class="msg"></div>
   <input id="cpBuilding" placeholder="Building (optional)">
   <input id="cpFloor" placeholder="Floor (optional)">
 
@@ -164,7 +167,7 @@
     <thead>
       <tr>
         <th class="check-col"><input type="checkbox" id="selectAllCp" class="select-all-check" onchange="toggleAllRows(this.checked)"></th>
-        <th>Code</th><th>Location</th><th>Building</th><th>Floor</th><th>GPS</th><th>QR Code</th><th>Actions</th>
+        <th>Code</th><th>Location</th><th>NFC</th><th>Building</th><th>Floor</th><th>GPS</th><th>QR Code</th><th>Actions</th>
       </tr>
     </thead>
     <tbody id="cpBody"></tbody>
@@ -204,6 +207,39 @@
 
   function qrImageUrl(code) {
     return API_BASE + '/api/qr-image?text=' + encodeURIComponent(code) + '&token=' + encodeURIComponent(token);
+  }
+
+  function normalizeNfcTag(value) {
+    return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9:_-]/g, '');
+  }
+
+  async function readNfcTag() {
+    const status = document.getElementById('nfcStatus');
+    if (!('NDEFReader' in window)) {
+      status.textContent = 'Web NFC is unavailable in this browser. Enter the tag UID manually or use Android Chrome.';
+      status.className = 'msg error';
+      return;
+    }
+    try {
+      status.textContent = 'Hold the NFC tag close to this device...';
+      status.className = 'msg';
+      const reader = new NDEFReader();
+      await reader.scan();
+      reader.addEventListener('reading', event => {
+        const uid = normalizeNfcTag(event.serialNumber);
+        if (!uid) {
+          status.textContent = 'The tag did not expose a usable UID. Try a compatible NDEF tag.';
+          status.className = 'msg error';
+          return;
+        }
+        document.getElementById('cpNfcTag').value = uid;
+        status.textContent = 'NFC tag captured: ' + uid;
+        status.className = 'msg success';
+      }, { once: true });
+    } catch (err) {
+      status.textContent = 'Could not read NFC: ' + err.message;
+      status.className = 'msg error';
+    }
   }
 
   function toggleGpsFields() {
@@ -319,6 +355,7 @@
     const siteId = document.getElementById('cpSite').value;
     const code = document.getElementById('cpCode').value.trim();
     const location_name = document.getElementById('cpLocation').value.trim();
+    const nfcTagUid = normalizeNfcTag(document.getElementById('cpNfcTag').value);
     const building = document.getElementById('cpBuilding').value.trim();
     const floor = document.getElementById('cpFloor').value.trim();
     const gpsOn = document.getElementById('gpsToggle').checked;
@@ -348,6 +385,7 @@
           site_id: Number(siteId),
           name: location_name,
           qr_code: code,
+          nfc_tag_uid: nfcTagUid || null,
           building: building || null,
           floor: floor || null,
           latitude: (gpsOn && lat) ? Number(lat) : null,
@@ -361,6 +399,8 @@
       msgDiv.className = 'msg success';
       document.getElementById('cpCode').value = '';
       document.getElementById('cpLocation').value = '';
+      document.getElementById('cpNfcTag').value = '';
+      document.getElementById('nfcStatus').textContent = '';
       document.getElementById('cpBuilding').value = '';
       document.getElementById('cpFloor').value = '';
       document.getElementById('cpLat').value = '';
@@ -379,7 +419,7 @@
     const body = document.getElementById('cpBody');
     const listMsg = document.getElementById('listMsg');
     listMsg.textContent = '';
-    body.innerHTML = '<tr><td colspan="8">Loading...</td></tr>';
+    body.innerHTML = '<tr><td colspan="9">Loading...</td></tr>';
 
     let checkpoints;
     try {
@@ -401,7 +441,7 @@
     updateSelectedCount();
 
     if (checkpoints.length === 0) {
-      body.innerHTML = '<tr><td colspan="8">No checkpoints yet.</td></tr>';
+      body.innerHTML = '<tr><td colspan="9">No checkpoints yet.</td></tr>';
       return;
     }
 
@@ -417,12 +457,14 @@
         '<td class="check-col"><input type="checkbox" class="row-check" value="' + cp.id + '" data-site="' + cp.site_id + '" onchange="updateSelectedCount()"></td>' +
         '<td>' + escapeHtml(cp.qr_code) + '</td>' +
         '<td>' + escapeHtml(cp.name) + '</td>' +
+        '<td>' + escapeHtml(cp.nfc_tag_uid || 'Not registered') + '</td>' +
         '<td>' + escapeHtml(cp.building || '-') + '</td>' +
         '<td>' + escapeHtml(cp.floor || '-') + '</td>' +
         '<td>' + gpsCell + '</td>' +
         '<td><img id="' + imgId + '" class="qr-img" alt="QR code"></td>' +
         '<td class="action-cell">' +
           '<button class="print-btn" data-img="' + imgId + '" data-code="' + escapeHtml(cp.qr_code) + '" data-name="' + escapeHtml(cp.name) + '">Print</button>' +
+          '<button class="print-btn nfc-btn" data-id="' + cp.id + '" data-nfc="' + escapeHtml(cp.nfc_tag_uid || '') + '">Set NFC</button>' +
           '<button class="delete-btn" data-id="' + cp.id + '" data-code="' + escapeHtml(cp.qr_code) + '">Delete</button>' +
         '</td>';
       body.appendChild(tr);
@@ -452,6 +494,32 @@
         deleteCheckpoint(this.getAttribute('data-id'), this.getAttribute('data-code'));
       });
     });
+    document.querySelectorAll('.nfc-btn').forEach(btn => {
+      btn.addEventListener('click', function () {
+        setCheckpointNfc(this.getAttribute('data-id'), this.getAttribute('data-nfc'));
+      });
+    });
+  }
+
+  async function setCheckpointNfc(id, currentValue) {
+    const entered = prompt('Enter the NFC tag UID. Leave blank to remove the current NFC assignment.', currentValue || '');
+    if (entered === null) return;
+    const nfcTagUid = normalizeNfcTag(entered);
+    const listMsg = document.getElementById('listMsg');
+    try {
+      const res = await fetch(API_BASE + '/api/checkpoints/' + id + '/nfc', {
+        method: 'PATCH', headers: authHeaders(),
+        body: JSON.stringify({ tenant_id: Number(tenantId), nfc_tag_uid: nfcTagUid || null })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update NFC tag');
+      listMsg.textContent = nfcTagUid ? 'NFC tag assigned.' : 'NFC assignment removed.';
+      listMsg.className = 'msg success';
+      loadCheckpoints();
+    } catch (err) {
+      listMsg.textContent = err.message;
+      listMsg.className = 'msg error';
+    }
   }
 
   // --- Bulk selection + handoff to the full print tool (qr_print.html) ---
