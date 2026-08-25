@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Commercial Assurance Readiness — PatrolSync</title>
+  <link rel="stylesheet" href="patrolsync-module.css">
+  <script>document.documentElement.dataset.theme=localStorage.getItem('patrolsync_theme')||'dark';</script>
+  <script src="patrolsync-module.js" defer></script>
+  <style>
+    .gate{max-width:1180px;margin:auto;padding:30px}.top,.hero,.result{display:flex;align-items:center;justify-content:space-between;gap:15px}.back{color:#2dd4bf;text-decoration:none;font-weight:850}.gate button{border:0;border-radius:9px;padding:11px 15px;font-weight:850;cursor:pointer}.run{background:#26c9b8;color:#062e29}.hero{margin:26px 0 12px}.hero h1{font-size:32px;letter-spacing:-.04em;margin:0 0 5px}.hero p,.status,.check p,.result small{color:var(--pm-muted)}.status{min-height:24px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}.card,.panel{background:var(--pm-surface);border:1px solid var(--pm-border);border-radius:14px}.card{padding:18px}.card span{display:block;color:var(--pm-muted);font-size:13px}.card strong{display:block;font-size:29px;margin-top:5px}.panel{padding:20px}.result-status{font-size:21px;font-weight:900}.stage_6_ready,.pass{color:#21c58b}.ready_with_warnings,.warning{color:#f3aa36}.action_required,.fail{color:#ff6369}.checks{display:grid;gap:10px;margin-top:18px}.check{display:grid;grid-template-columns:75px 1fr;gap:12px;padding:14px;background:var(--pm-soft);border:1px solid var(--pm-border);border-radius:10px}.badge{text-transform:uppercase;font-size:11px;font-weight:900}.check b{display:block;margin-bottom:4px}.check p{margin:0;font-size:13px}.empty{text-align:center;padding:34px;color:var(--pm-muted)}@media(max-width:720px){.gate{padding:16px}.hero,.result{align-items:flex-start;flex-direction:column}.run{width:100%}.metrics{grid-template-columns:repeat(2,1fr)}.check{grid-template-columns:1fr}}
+  </style>
+</head>
+<body class="ps-module-shell">
+  <main class="gate">
+    <div class="top"><a class="back" href="dashboard.html#reports">← Operations workspace</a></div>
+    <section class="hero"><div><p style="margin:0 0 7px;color:var(--pm-muted)">Stage 6.3 · Final validation</p><h1>Commercial Assurance Readiness</h1><p>Validate predictive SLA risk, explainable recommendations, governed service credits, tenant protection, approval evidence, and the invoice-safety boundary.</p></div><button class="run" onclick="runGate()">Run Stage 6 gate</button></section>
+    <div id="status" class="status"></div>
+    <section class="metrics"><article class="card"><span>Passed</span><strong id="passed">—</strong></article><article class="card"><span>Warnings</span><strong id="warnings">—</strong></article><article class="card"><span>Failures</span><strong id="failures">—</strong></article><article class="card"><span>Total checks</span><strong id="total">—</strong></article></section>
+    <section class="panel"><div class="result"><div><div id="gate" class="result-status">Not run</div><small id="generated">Run the validation after deploying the Stage 6.3 backend.</small></div><span id="duration"></span></div><div id="checks" class="checks"><div class="empty">No result yet.</div></div></section>
+  </main>
+  <script>
+    const API='https://patrolsync-backend.onrender.com',token=localStorage.getItem('token'),tenant=localStorage.getItem('tenant_id'),$=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    if(!token||!tenant)location.replace('login.html');
+    async function runGate(){
+      $('status').textContent='Running Stage 6 validation…';$('status').className='status';
+      try{
+        const response=await fetch(API+'/api/commercial-assurance-readiness?tenant_id='+encodeURIComponent(tenant),{headers:{Authorization:'Bearer '+token}}),type=response.headers.get('content-type')||'',data=type.includes('json')?await response.json():{error:await response.text()};
+        if(!response.ok)throw Error(data.error||'Readiness check failed');
+        render(data);$('status').textContent='Stage 6 checks completed.';
+      }catch(error){$('status').textContent=error.message;$('status').className='status fail'}
+    }
+    function render(data){
+      $('passed').textContent=data.summary.passed;$('warnings').textContent=data.summary.warnings;$('failures').textContent=data.summary.failures;$('total').textContent=data.summary.total;
+      const labels={stage_6_ready:'STAGE 6 READY',ready_with_warnings:'READY WITH WARNINGS',action_required:'ACTION REQUIRED'};
+      $('gate').textContent=labels[data.status]||data.status;$('gate').className='result-status '+data.status;$('generated').textContent='Completed '+new Date(data.generated_at).toLocaleString();$('duration').textContent=data.duration_ms+' ms';
+      $('checks').innerHTML=data.checks.map(check=>`<div class="check"><span class="badge ${check.status}">${check.status}</span><div><b>${esc(check.label)}</b><p>${esc(check.message)}</p></div></div>`).join('');
+    }
+  </script>
+</body>
+</html>
