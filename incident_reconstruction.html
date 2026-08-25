@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Incident Reconstruction Studio</title>
+  <link rel="stylesheet" href="patrolsync-module.css">
+  <script src="patrolsync-module.js" defer></script>
+  <style>
+    .ir-toolbar{display:grid;grid-template-columns:minmax(260px,1fr) auto;gap:12px;align-items:end}.ir-summary{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px}.ir-stat strong{display:block;font-size:28px;margin-top:8px}.ir-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:16px}.ir-timeline{position:relative;padding-left:28px}.ir-timeline:before{content:"";position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:var(--pm-border)}.ir-event{position:relative;padding:14px 16px;margin:0 0 12px;border:1px solid var(--pm-border);border-radius:12px;background:var(--pm-soft)}.ir-event:before{content:"";position:absolute;left:-25px;top:19px;width:11px;height:11px;border-radius:50%;background:var(--pm-teal);box-shadow:0 0 0 4px var(--pm-bg)}.ir-event[data-type="incident"]:before,.ir-event[data-type="sos"]:before{background:#ef476f}.ir-event[data-type="photo"]:before{background:#f5a524}.ir-event[data-type="location"]:before{background:#5b8def}.ir-event-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.ir-event small,.ir-muted{color:var(--pm-muted)}.ir-pill{display:inline-block;padding:3px 8px;border-radius:999px;background:color-mix(in srgb,var(--pm-teal) 15%,transparent);color:var(--pm-teal);font-size:11px;text-transform:uppercase;font-weight:700}.ir-detail{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0}.ir-empty{text-align:center;padding:46px 20px;color:var(--pm-muted)}@media(max-width:900px){.ir-summary{grid-template-columns:repeat(2,1fr)}.ir-layout{grid-template-columns:1fr}}@media(max-width:560px){.ir-toolbar,.ir-summary{grid-template-columns:1fr}.ir-event-head{display:block}}
+  </style>
+</head>
+<body class="ps-module-shell">
+  <main>
+    <p><a href="dashboard.html#incidents">← Operations workspace</a></p>
+    <section class="card">
+      <div class="ir-toolbar">
+        <div><small class="ir-muted">Stage 7 · Evidence-led response</small><h1>Incident Reconstruction Studio</h1><p>Rebuild the operational sequence around an incident using tenant-protected source records. Nearby events are contextual evidence, not proof of causation.</p></div>
+        <button id="refreshButton" type="button">Refresh reconstruction</button>
+      </div>
+    </section>
+    <section class="card">
+      <label for="incidentSelect">Incident case</label>
+      <select id="incidentSelect"><option value="">Select an incident</option></select>
+      <div id="status" class="status"></div>
+    </section>
+    <section id="results" hidden>
+      <div class="ir-summary">
+        <article class="card ir-stat"><span>Status</span><strong id="caseStatus">—</strong><small id="caseReference"></small></article>
+        <article class="card ir-stat"><span>Timeline events</span><strong id="eventCount">0</strong><small>chronologically ordered</small></article>
+        <article class="card ir-stat"><span>Evidence items</span><strong id="evidenceCount">0</strong><small>scans and photos</small></article>
+        <article class="card ir-stat"><span>Response signals</span><strong id="responseCount">0</strong><small>SOS and dispatch records</small></article>
+      </div>
+      <div class="ir-layout">
+        <section class="card"><h2>Reconstructed timeline</h2><div id="timeline" class="ir-timeline"></div></section>
+        <aside>
+          <section class="card"><h2>Case context</h2><dl id="caseContext"></dl></section>
+          <section class="card"><h2>Source coverage</h2><div id="sourceCounts"></div><p class="ir-muted">The reconstruction window extends two hours before reporting and two hours after the latest case update or resolution.</p></section>
+        </aside>
+      </div>
+    </section>
+  </main>
+  <script>
+    const API='https://patrolsync-backend.onrender.com';
+    const token=localStorage.getItem('token'),tenant=localStorage.getItem('tenant_id');
+    if(!token||!tenant)location.replace('login.html');
+    const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    async function api(path){const response=await fetch(API+path,{headers:{Authorization:'Bearer '+token}});const data=await response.json();if(!response.ok)throw Error(data.error||'Request failed');return data}
+    function formatDate(value){return value?new Date(value).toLocaleString():'—'}
+    async function loadIncidents(){try{const rows=await api('/api/incidents?tenant_id='+encodeURIComponent(tenant));$('incidentSelect').innerHTML='<option value="">Select an incident</option>'+rows.map(row=>`<option value="${row.id}">${esc(row.reference_code||'#'+row.id)} · ${esc(row.site_name)} · ${esc(row.status)} · ${esc(formatDate(row.reported_at))}</option>`).join('');$('status').textContent=rows.length?rows.length+' incident case(s) available.':'No incident cases are available.'}catch(error){$('status').textContent=error.message}}
+    function render(data){const incident=data.incident,counts=data.counts;$('results').hidden=false;$('caseStatus').textContent=incident.status;$('caseReference').textContent=incident.reference_code||'#'+incident.id;$('eventCount').textContent=data.timeline.length;$('evidenceCount').textContent=Number(counts.photos)+Number(counts.patrol_scans);$('responseCount').textContent=Number(counts.sos_alerts)+Number(counts.dispatches);$('caseContext').innerHTML=`<dt>Site</dt><dd>${esc(incident.site_name)}</dd><dt>Reported</dt><dd>${esc(formatDate(incident.reported_at))}</dd><dt>Reporter</dt><dd>${esc(incident.reporter_email||'Unknown')}</dd><dt>Severity</dt><dd>${esc(incident.severity)}</dd><dt>Category</dt><dd>${esc(incident.category)}</dd><dt>Description</dt><dd>${esc(incident.description)}</dd><dt>Assigned supervisor</dt><dd>${esc(incident.assigned_email||'Unassigned')}</dd>`;$('sourceCounts').innerHTML=Object.entries(counts).map(([key,value])=>`<p><b>${esc(key.replaceAll('_',' '))}</b>: ${Number(value)}</p>`).join('');$('timeline').innerHTML=data.timeline.length?data.timeline.map(event=>`<article class="ir-event" data-type="${esc(event.type)}"><div class="ir-event-head"><div><span class="ir-pill">${esc(event.type)}</span> <b>${esc(event.title)}</b></div><small>${esc(formatDate(event.at))}</small></div><div class="ir-detail">${esc(event.detail)}</div><small>${esc(event.actor)} · source #${esc(event.source_id)}${event.coordinates?` · ${Number(event.coordinates.latitude).toFixed(5)}, ${Number(event.coordinates.longitude).toFixed(5)}`:''}</small></article>`).join(''):'<div class="ir-empty">No source events found in this case window.</div>';}
+    async function reconstruct(){const id=$('incidentSelect').value;if(!id){$('status').textContent='Select an incident first.';return}$('status').textContent='Reconstructing timeline…';try{const data=await api('/api/incident-reconstruction/'+encodeURIComponent(id)+'?tenant_id='+encodeURIComponent(tenant));render(data);$('status').textContent='Reconstruction complete. '+data.timeline.length+' chronological event(s) assembled.'}catch(error){$('status').textContent=error.message}}
+    $('incidentSelect').addEventListener('change',reconstruct);$('refreshButton').addEventListener('click',reconstruct);loadIncidents();
+  </script>
+</body>
+</html>
