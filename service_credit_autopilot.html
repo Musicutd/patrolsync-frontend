@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Service Credit Autopilot — PatrolSync</title>
+  <link rel="stylesheet" href="patrolsync-module.css">
+  <script src="patrolsync-module.js" defer></script>
+  <style>
+    .hero,.row,.card-head,.decision{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.muted{color:var(--pm-muted)}
+    .controls{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end}.controls button{width:auto}
+    .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.metric strong{display:block;font-size:30px;margin-top:5px}
+    .assessment{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.signal{border:1px solid var(--pm-border);border-radius:10px;padding:12px}.signal strong{display:block;font-size:21px}
+    .rule-grid{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:10px;align-items:end}.rule-grid button{width:auto}
+    .badge{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:900;text-transform:uppercase}.draft{background:#92400e33;color:#fcd34d}.approved{background:#0f766e33;color:#5eead4}.rejected{background:#9f123933;color:#fda4af}
+    .amount{font-size:34px;font-weight:900}.recommendation{border-left:4px solid #fbbf24}.recommendation.approved-card{border-left-color:#2dd4bf}.recommendation.rejected-card{border-left-color:#fb7185}
+    .decision{margin-top:14px;align-items:end}.decision input{flex:1}.decision button{width:auto}.reasons{margin:8px 0;padding-left:20px}.notice{border:1px solid #f59e0b66;background:#92400e18;padding:12px;border-radius:10px}
+    table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid var(--pm-border);text-align:left;font-size:13px}th{font-size:10px;text-transform:uppercase;color:var(--pm-muted)}
+    @media(max-width:900px){.controls,.assessment,.summary{grid-template-columns:repeat(2,1fr)}.rule-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:620px){.hero,.row,.card-head,.decision{display:block}.controls,.assessment,.summary,.rule-grid{grid-template-columns:1fr}.controls button,.rule-grid button,.decision button{width:100%;margin-top:8px}}
+  </style>
+</head>
+<body class="ps-module-shell">
+<main class="ps-module-main">
+  <a href="dashboard.html#reports">← Operations workspace</a>
+  <section class="ps-card hero">
+    <div><p class="muted" style="margin:0 0 7px">Stage 6 · Commercial assurance</p><h1 style="margin:0">Service Credit Autopilot</h1><p class="muted">Calculate transparent SLA credit recommendations, then require a recorded administrator decision. Approval never changes an invoice automatically.</p></div>
+  </section>
+  <section class="ps-card">
+    <h2>Assess a billing period</h2>
+    <div class="controls"><label>Active contract<select id="contract"></select></label><label>From<input id="from" type="date"></label><label>To<input id="to" type="date"></label><button id="preview" class="secondary">Calculate preview</button></div>
+    <p id="status" class="muted">Choose a contract and period.</p>
+  </section>
+  <section id="previewCard" class="ps-card" hidden>
+    <div class="card-head"><div><h2 id="previewTitle" style="margin:0"></h2><p id="previewPeriod" class="muted"></p></div><div style="text-align:right"><div id="previewAmount" class="amount"></div><small id="previewPct" class="muted"></small></div></div>
+    <div id="metrics" class="assessment"></div><ul id="reasons" class="reasons"></ul>
+    <p id="basis" class="notice"></p>
+    <button id="draftBtn">Create approval draft</button>
+  </section>
+  <section class="ps-card">
+    <div class="card-head"><div><h2 style="margin:0">Credit policy</h2><p class="muted">Percent of the billing basis recommended for each missed SLA. The cap limits the combined recommendation.</p></div></div>
+    <div class="rule-grid"><label>Patrol miss %<input id="patrolPct" type="number" min="0" max="100" step="0.01"></label><label>Incident miss %<input id="incidentPct" type="number" min="0" max="100" step="0.01"></label><label>Coverage miss %<input id="coveragePct" type="number" min="0" max="100" step="0.01"></label><label>Maximum credit %<input id="capPct" type="number" min="0" max="100" step="0.01"></label><button id="saveRule" class="secondary">Save policy</button></div>
+  </section>
+  <section class="summary">
+    <article class="ps-card metric"><span class="muted">Drafts</span><strong id="drafts">0</strong><small>awaiting decision</small></article>
+    <article class="ps-card metric"><span class="muted">Approved</span><strong id="approved">0</strong><small>recorded recommendations</small></article>
+    <article class="ps-card metric"><span class="muted">Rejected</span><strong id="rejected">0</strong><small>recorded decisions</small></article>
+    <article class="ps-card metric"><span class="muted">Automatic credits</span><strong>0</strong><small>governance safeguard</small></article>
+  </section>
+  <section class="ps-card">
+    <div class="card-head"><div><h2 style="margin:0">Recommendation register</h2><p class="muted">Every draft and decision remains traceable in the subscriber audit log.</p></div><div><select id="statusFilter"><option value="all">All statuses</option><option value="draft">Draft</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select><button id="refresh" class="secondary">Refresh</button></div></div>
+    <div id="register"><p class="muted">No recommendations yet.</p></div>
+  </section>
+</main>
+<script>
+const API='https://patrolsync-backend.onrender.com',token=localStorage.getItem('token'),tenant=localStorage.getItem('tenant_id'),$=id=>document.getElementById(id);if(!token||!tenant)location.replace('login.html');let rules=[],lastPreview=null;
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),money=(currency,value)=>`${esc(currency)} ${Number(value||0).toFixed(2)}`;
+async function api(path,options={}){const r=await fetch(API+path,{...options,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',...(options.headers||{})}}),d=await r.json().catch(()=>({error:'Unexpected server response'}));if(!r.ok)throw Error(d.error||'Request failed');return d}
+function dates(){const now=new Date(),first=new Date(now.getFullYear(),now.getMonth(),1),last=new Date(now.getFullYear(),now.getMonth()+1,0),iso=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`};$('from').value=iso(first);$('to').value=iso(last)}
+function currentRule(){return rules.find(x=>String(x.contract_id)===$('contract').value)}
+function fillRule(){const r=currentRule();if(!r)return;for(const[id,key]of[['patrolPct','patrol_miss_pct'],['incidentPct','incident_miss_pct'],['coveragePct','coverage_miss_pct'],['capPct','maximum_credit_pct']])$(id).value=Number(r[key]).toFixed(2)}
+async function loadRules(){rules=await api('/api/service-credit-rules?tenant_id='+tenant);$('contract').innerHTML=rules.length?rules.map(x=>`<option value="${x.contract_id}">${esc(x.site_name)} · ${esc(x.reference_code)}</option>`).join(''):'<option value="">No active contracts</option>';fillRule()}
+function metric(label,m){const actual=m.actual==null?'No data':Number(m.actual).toFixed(2)+'%',met=m.actual==null?'not assessed':m.actual>=m.target?'met':'missed';return`<div class="signal"><span class="muted">${label}</span><strong>${actual}</strong><small>Target ${Number(m.target).toFixed(2)}% · ${met}</small></div>`}
+function showPreview(d){lastPreview=d;$('previewCard').hidden=false;$('previewTitle').textContent=`${d.site_name} · ${d.reference_code}`;$('previewPeriod').textContent=`${d.period_start} to ${d.period_end}`;$('previewAmount').innerHTML=money(d.currency,d.recommended_amount);$('previewPct').textContent=`${Number(d.credit_percent).toFixed(2)}% recommendation`;$('metrics').innerHTML=metric('Patrol completion',d.metrics.patrol)+metric('Incident acknowledgement',d.metrics.incident)+metric('Shift coverage',d.metrics.coverage)+`<div class="signal"><span class="muted">Decision mode</span><strong>Approval only</strong><small>No automatic invoice change</small></div>`;$('reasons').innerHTML=d.reasons.length?d.reasons.map(x=>`<li>${esc(x)}</li>`).join(''):'<li>No measured SLA miss. Recommended credit is zero.</li>';$('basis').innerHTML=`Billing basis: <strong>${money(d.currency,d.credit_basis)}</strong> from ${esc(d.basis_source)}.${d.invoice_number?' Matching invoice: '+esc(d.invoice_number)+'.':''}`}
+async function preview(){try{if(!$('contract').value)throw Error('Select an active contract');$('status').textContent='Calculating SLA result…';const p=new URLSearchParams({tenant_id:tenant,contract_id:$('contract').value,period_start:$('from').value,period_end:$('to').value}),d=await api('/api/service-credits/preview?'+p);showPreview(d);$('status').textContent='Preview calculated. Nothing has been saved or applied.'}catch(e){$('status').textContent=e.message}}
+async function draft(){try{if(!lastPreview)throw Error('Calculate a preview first');if(!confirm('Create or replace the approval draft for this contract period?'))return;const d=await api('/api/service-credits/generate',{method:'POST',body:JSON.stringify({tenant_id:Number(tenant),contract_id:Number($('contract').value),period_start:$('from').value,period_end:$('to').value})});$('status').textContent=`Draft #${d.id} created. No invoice was changed.`;loadRegister()}catch(e){$('status').textContent=e.message}}
+async function saveRule(){try{const body={tenant_id:Number(tenant),patrol_miss_pct:Number($('patrolPct').value),incident_miss_pct:Number($('incidentPct').value),coverage_miss_pct:Number($('coveragePct').value),maximum_credit_pct:Number($('capPct').value)};await api('/api/service-credit-rules/'+$('contract').value,{method:'PUT',body:JSON.stringify(body)});$('status').textContent='Credit policy saved.';await loadRules();lastPreview=null;$('previewCard').hidden=true}catch(e){$('status').textContent=e.message}}
+async function decide(id,decision){const reason=$('decision-note-'+id)?.value.trim()||'';if(!reason)return alert('Enter a decision reason first.');if(!confirm(`${decision==='approved'?'Approve':'Reject'} this recommendation? No invoice will be changed.`))return;try{const d=await api('/api/service-credits/'+id+'/decision',{method:'PATCH',body:JSON.stringify({tenant_id:Number(tenant),decision,reason})});$('status').textContent=d.message;loadRegister()}catch(e){$('status').textContent=e.message}}
+function card(x){const cls=x.status==='approved'?'approved-card':x.status==='rejected'?'rejected-card':'',reasons=Array.isArray(x.reasons)?x.reasons:[];return`<article class="ps-card recommendation ${cls}"><div class="card-head"><div><h3 style="margin:0">${esc(x.site_name)} · ${esc(x.reference_code)}</h3><p class="muted">${String(x.period_start).slice(0,10)} to ${String(x.period_end).slice(0,10)} · generated by ${esc(x.generated_by_email||'System')}</p></div><div style="text-align:right"><span class="badge ${esc(x.status)}">${esc(x.status)}</span><div class="amount">${money(x.currency,x.recommended_amount)}</div><small>${Number(x.credit_percent).toFixed(2)}% of ${money(x.currency,x.credit_basis)}</small></div></div><ul class="reasons">${reasons.map(r=>`<li>${esc(r)}</li>`).join('')||'<li>No measured SLA miss.</li>'}</ul>${x.status==='draft'?`<div class="decision"><input id="decision-note-${x.id}" value="Review completed" aria-label="Decision reason"><button onclick="decide(${x.id},'approved')">Approve recommendation</button><button class="danger" onclick="decide(${x.id},'rejected')">Reject</button></div>`:`<p class="notice"><strong>${esc(x.status)}</strong> by ${esc(x.decided_by_email||'administrator')} · ${esc(x.decision_reason||'No reason recorded')}<br>No invoice was changed automatically.</p>`}</article>`}
+async function loadRegister(){try{const rows=await api('/api/service-credits?tenant_id='+tenant),status=$('statusFilter').value,shown=status==='all'?rows:rows.filter(x=>x.status===status);$('drafts').textContent=rows.filter(x=>x.status==='draft').length;$('approved').textContent=rows.filter(x=>x.status==='approved').length;$('rejected').textContent=rows.filter(x=>x.status==='rejected').length;$('register').innerHTML=shown.length?shown.map(card).join(''):'<p class="muted">No recommendations match this filter.</p>'}catch(e){$('register').innerHTML=`<p class="muted">${esc(e.message)}</p>`}}
+$('contract').onchange=()=>{fillRule();lastPreview=null;$('previewCard').hidden=true};$('preview').onclick=preview;$('draftBtn').onclick=draft;$('saveRule').onclick=saveRule;$('refresh').onclick=loadRegister;$('statusFilter').onchange=loadRegister;dates();loadRules().then(loadRegister).catch(e=>$('status').textContent=e.message);
+</script>
+</body>
+</html>
