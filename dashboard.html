@@ -87,6 +87,7 @@
       items.set('service credit autopilot|service_credit_autopilot.html',{label:'Service Credit Autopilot',href:'service_credit_autopilot.html',keywords:'stage 6 sla credit recommendation approval commercial contract billing governance'});
       items.set('commercial readiness|commercial_readiness.html',{label:'Commercial Assurance Readiness',href:'commercial_readiness.html',keywords:'stage 6 final gate forecasting service credits approvals invoice safety tenant rls'});
       items.set('client retention radar|client_retention_radar.html',{label:'Client Retention Radar',href:'client_retention_radar.html',keywords:'stage 8 renewal churn relationship risk client intelligence tenders'});
+      items.set('tender proposal builder|tender_builder.html',{label:'Tender & Proposal Builder',href:'tender_builder.html',keywords:'stage 8 bid proposal procurement scope commercial prospect print pdf'});
       moduleSearchItems = Array.from(items.values()).sort((a,b) => a.label.localeCompare(b.label));
     }
     function renderModuleSearch(query) {
@@ -124,7 +125,7 @@
           { title: 'Workforce operations', icon: '◎', files: ['attendance.html','timesheets.html','leave_management.html','shift_operations.html'] },
           { title: 'Intelligence & assurance', icon: '✦', files: ['coverage_autopilot.html','operations_risk.html','intelligence_readiness.html','audit_log.html','integrity_tests.html'] },
           { title: 'Patrol, incidents & safety', icon: '⌖', files: ['patrol_routes.html','patrol_runs.html','patrol_alerts.html','patrol_evidence.html','trustproof.html','checkpoint_requirements.html','incident_management.html','incident_reconstruction.html','crisis_mode.html','reconstruction_crisis_readiness.html','handover_management.html','lone_worker.html','dispatch_center.html'] },
-          { title: 'Clients, reporting & finance', icon: '▥', files: ['client_retention_radar.html','service_contracts.html','sla_dashboard.html','client_reports.html','invoices.html','analytics.html','service_tickets.html','contract_renewals.html','email_deliveries.html'] },
+          { title: 'Clients, reporting & finance', icon: '▥', files: ['client_retention_radar.html','tender_builder.html','service_contracts.html','sla_dashboard.html','client_reports.html','invoices.html','analytics.html','service_tickets.html','contract_renewals.html','email_deliveries.html'] },
           { title: 'People, communications & quality', icon: '◇', files: ['notification_center.html','team_messages.html','training_compliance.html','certificate_register.html','asset_management.html','quality_inspections.html'] },
           { title: 'Administration & security', icon: '⚙', files: ['access_control.html','integrations.html','system_health.html','security_recovery.html','mfa_settings.html','session_management.html'] }
         ];
@@ -401,6 +402,7 @@
       <a href="service_credit_autopilot.html"><span class="ps-nav-icon">€</span>Service Credit Autopilot</a>
       <a href="commercial_readiness.html"><span class="ps-nav-icon">✓</span>Commercial Readiness</a>
       <a href="client_retention_radar.html"><span class="ps-nav-icon">◎</span>Client Retention Radar</a>
+      <a href="tender_builder.html"><span class="ps-nav-icon">▤</span>Tender & Proposal Builder</a>
       <a href="service_contracts.html"><span class="ps-nav-icon">▤</span>Contracts & SLAs</a>
       <a href="client_reports.html"><span class="ps-nav-icon">▥</span>Client Reports</a>
       <a href="invoices.html"><span class="ps-nav-icon">€</span>Billing</a>
@@ -582,6 +584,7 @@
     <button onclick="window.location.href='service_credit_autopilot.html'">Service Credit Autopilot →</button>
     <button onclick="window.location.href='commercial_readiness.html'">Commercial Readiness →</button>
     <button onclick="window.location.href='client_retention_radar.html'">Client Retention Radar →</button>
+    <button onclick="window.location.href='tender_builder.html'">Tender & Proposal Builder →</button>
     <button onclick="window.location.href='service_tickets.html'">Client Service Tickets →</button>
     <button onclick="window.location.href='contract_renewals.html'">Contract Renewals →</button>
     <button onclick="window.location.href='email_deliveries.html'">Email Delivery Monitor →</button>
