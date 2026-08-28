@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operations Assistant · PatrolSync</title>
+  <link rel="stylesheet" href="patrolsync-module.css">
+  <style>
+    .assistant-wrap{max-width:1050px;margin:0 auto}.assistant-hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-start}.assistant-badge{display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(45,212,191,.12);color:#2dd4bf;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.assistant-grid{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:18px}.chat-card,.guardrail-card{border:1px solid var(--pm-border,#263548);background:var(--pm-card,#111b2a);border-radius:16px}.chat-log{min-height:420px;max-height:58vh;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:14px}.message{max-width:86%;padding:14px 16px;border-radius:14px;white-space:pre-wrap;line-height:1.55}.message.assistant{align-self:flex-start;background:var(--pm-soft,#182436);border:1px solid var(--pm-border,#263548)}.message.user{align-self:flex-end;background:#139b91;color:#fff}.chat-compose{padding:16px;border-top:1px solid var(--pm-border,#263548);display:grid;grid-template-columns:1fr auto;gap:10px}.chat-compose textarea{min-height:74px;resize:vertical}.suggested-modules{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.suggested-modules a{display:inline-flex;padding:7px 10px;border-radius:9px;background:rgba(45,212,191,.12);color:#2dd4bf;text-decoration:none;font-weight:700;font-size:13px}.guardrail-card{padding:18px;height:max-content}.guardrail-card ul{padding-left:20px;color:var(--pm-muted,#9eb0c9);line-height:1.6}.prompt-list{display:grid;gap:8px}.prompt-list button{text-align:left;background:transparent;border:1px solid var(--pm-border,#263548);color:inherit}.assistant-status{font-size:13px;color:var(--pm-muted,#9eb0c9);margin-top:9px}.error{color:#fb7185}.notice{padding:12px 14px;border-radius:10px;background:rgba(245,158,11,.1);color:#fbbf24;font-size:13px}@media(max-width:850px){.assistant-grid{grid-template-columns:1fr}.assistant-hero{display:block}.message{max-width:94%}.chat-compose{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="assistant-wrap">
+    <a href="dashboard.html#tools">← Operations workspace</a>
+    <section class="assistant-hero">
+      <div>
+        <span class="assistant-badge">Stage 11 · Governed AI</span>
+        <h1>Operations Assistant</h1>
+        <p>Ask how to use PatrolSync and review aggregate operational signals without giving the assistant authority to change records.</p>
+      </div>
+    </section>
+    <div class="assistant-grid">
+      <section class="chat-card" aria-label="Operations assistant chat">
+        <div id="chatLog" class="chat-log" aria-live="polite">
+          <div class="message assistant">Hello. I can explain PatrolSync workflows, highlight aggregate operational priorities, and direct you to the correct module. I cannot change records or make decisions about individual guards.</div>
+        </div>
+        <form id="chatForm" class="chat-compose">
+          <textarea id="question" maxlength="1200" required placeholder="Example: Which areas need attention today, and where should I review them?"></textarea>
+          <button id="sendButton" type="submit">Ask assistant</button>
+        </form>
+      </section>
+      <aside class="guardrail-card">
+        <h2>Safe by design</h2>
+        <ul>
+          <li>Read-only and advisory</li>
+          <li>Aggregate company counts only</li>
+          <li>No individual guard ranking</li>
+          <li>No automatic scheduling or dispatch</li>
+          <li>No passwords or precise locations</li>
+        </ul>
+        <div class="notice">For an active emergency, use SOS Monitor or Crisis Mode and follow your local emergency procedure.</div>
+        <h3>Try asking</h3>
+        <div class="prompt-list">
+          <button type="button" data-prompt="Which operational areas need attention today?">What needs attention?</button>
+          <button type="button" data-prompt="How do I review expiring guard certificates?">Review certificates</button>
+          <button type="button" data-prompt="Where can I verify patrol evidence for a client?">Verify patrol evidence</button>
+          <button type="button" data-prompt="Explain the incident acknowledgement workflow.">Incident workflow</button>
+        </div>
+        <p id="assistantStatus" class="assistant-status">Checking configuration…</p>
+      </aside>
+    </div>
+  </div>
+  <script src="patrolsync-module.js"></script>
+  <script>
+    const API_BASE='https://patrolsync-backend.onrender.com';
+    const token=localStorage.getItem('token');
+    if(!token)location.replace('login.html');
+    const chatLog=document.getElementById('chatLog'),form=document.getElementById('chatForm'),question=document.getElementById('question'),sendButton=document.getElementById('sendButton'),statusEl=document.getElementById('assistantStatus');
+    const esc=value=>String(value||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    function addMessage(role,text,modules=[]){const box=document.createElement('div');box.className='message '+role;box.textContent=text;if(modules.length){const links=document.createElement('div');links.className='suggested-modules';links.innerHTML=modules.map(item=>`<a href="${esc(item.href)}">${esc(item.label)} →</a>`).join('');box.appendChild(links)}chatLog.appendChild(box);chatLog.scrollTop=chatLog.scrollHeight}
+    async function api(path,options={}){const response=await fetch(API_BASE+path,{...options,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',...(options.headers||{})}});const data=await response.json().catch(()=>({}));if(response.status===401){localStorage.removeItem('token');location.replace('login.html');throw new Error('Session expired')}if(!response.ok)throw new Error(data.error||'Request failed');return data}
+    async function checkStatus(){try{const data=await api('/api/ai-assistant/status');statusEl.textContent=data.enabled?`Available · ${data.mode.replaceAll('_',' ')} · ${data.privacy.replaceAll('_',' ')}`:'Not configured by the platform owner';statusEl.classList.toggle('error',!data.enabled);sendButton.disabled=!data.enabled}catch(err){statusEl.textContent=err.message;statusEl.classList.add('error');sendButton.disabled=true}}
+    form.addEventListener('submit',async event=>{event.preventDefault();const text=question.value.trim();if(!text)return;addMessage('user',text);question.value='';sendButton.disabled=true;sendButton.textContent='Thinking…';try{const data=await api('/api/ai-assistant/chat',{method:'POST',body:JSON.stringify({question:text})});addMessage('assistant',data.answer,data.modules||[])}catch(err){addMessage('assistant',err.message)}finally{sendButton.disabled=false;sendButton.textContent='Ask assistant';question.focus()}});
+    document.querySelectorAll('[data-prompt]').forEach(button=>button.addEventListener('click',()=>{question.value=button.dataset.prompt;question.focus()}));
+    checkStatus();
+  </script>
+</body>
+</html>
