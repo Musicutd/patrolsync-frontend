@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Role & Workflow Acceptance — PatrolSync</title>
+  <link rel="stylesheet" href="patrolsync-module.css">
+  <script src="patrolsync-module.js" defer></script>
+  <style>
+    .muted{color:var(--pm-muted)}.hero,.gate-head,.check{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.hero button{width:auto}.metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.metric strong{display:block;font-size:30px;margin-top:5px}.gate-label{font-size:24px;font-weight:900}.stage_12_1_ready .gate-label{color:#2dd4bf}.ready_with_warnings .gate-label{color:#fbbf24}.action_required .gate-label{color:#fb7185}.checks{display:grid;gap:10px}.check{padding:14px;border:1px solid var(--pm-border);border-radius:10px}.check strong{display:block}.check small{color:var(--pm-muted)}.state{font-weight:900;text-transform:uppercase;font-size:11px}.pass .state{color:#2dd4bf}.warning .state{color:#fbbf24}.fail .state{color:#fb7185}.empty{text-align:center;padding:30px;color:var(--pm-muted)}@media(max-width:900px){.metrics{grid-template-columns:repeat(3,1fr)}}@media(max-width:650px){.hero,.gate-head{display:block}.hero button{width:100%;margin-top:12px}.metrics{grid-template-columns:repeat(2,1fr)}}
+  </style>
+</head>
+<body class="ps-module-shell">
+  <main class="ps-module-main">
+    <a href="dashboard.html#tools">← Operations workspace</a>
+    <section class="ps-card hero">
+      <div><p class="muted" style="margin:0 0 7px">Stage 12.1 · Launch acceptance</p><h1 style="margin:0">Role & Workflow Acceptance</h1><p class="muted">Validate real access paths and operational evidence for subscriber administrators, guards, delegated staff, and site-specific clients before broader launch testing.</p></div>
+      <button id="runBtn">Run Stage 12.1 gate</button>
+    </section>
+    <section id="gate" class="ps-card"><div class="gate-head"><div><div id="label" class="gate-label">Not run</div><p id="status" class="muted">Run validation after deploying the Stage 12.1 backend.</p></div><div id="duration" class="muted"></div></div></section>
+    <section class="metrics">
+      <article class="ps-card metric"><span class="muted">Admins</span><strong id="admins">—</strong></article>
+      <article class="ps-card metric"><span class="muted">Guards</span><strong id="guards">—</strong></article>
+      <article class="ps-card metric"><span class="muted">Staff</span><strong id="staff">—</strong></article>
+      <article class="ps-card metric"><span class="muted">Client accounts</span><strong id="clients">—</strong></article>
+      <article class="ps-card metric"><span class="muted">Assigned guards</span><strong id="assigned">—</strong></article>
+      <article class="ps-card metric"><span class="muted">Tracked sessions</span><strong id="sessions">—</strong></article>
+    </section>
+    <section class="metrics" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+      <article class="ps-card metric"><span class="muted">Passed</span><strong id="passed">—</strong></article><article class="ps-card metric"><span class="muted">Warnings</span><strong id="warnings">—</strong></article><article class="ps-card metric"><span class="muted">Failures</span><strong id="failures">—</strong></article><article class="ps-card metric"><span class="muted">Total checks</span><strong id="total">—</strong></article>
+    </section>
+    <section id="checks" class="ps-card checks"><div class="empty">No result yet.</div></section>
+  </main>
+  <script>
+    const API='https://patrolsync-backend.onrender.com',token=localStorage.getItem('token'),tenant=localStorage.getItem('tenant_id'),$=id=>document.getElementById(id);if(!token||!tenant)location.replace('login.html');
+    const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    async function run(){
+      try{
+        $('runBtn').disabled=true;$('status').textContent='Checking role access, sessions, assignments, workflows, client boundaries, and audit evidence…';
+        const r=await fetch(`${API}/api/launch/workflow-acceptance?tenant_id=${encodeURIComponent(tenant)}`,{headers:{Authorization:'Bearer '+token}}),d=await r.json().catch(()=>({error:'Unexpected server response'}));
+        if(r.status===401){localStorage.removeItem('token');location.replace('login.html');return}if(!r.ok)throw Error(d.error||'Acceptance check failed');
+        $('gate').className='ps-card '+d.status;$('label').textContent=d.label;$('status').textContent=`Completed ${new Date(d.completed_at).toLocaleString()} · ${d.activity.active_admins} admin(s) · ${d.activity.active_guards} guard(s) · ${d.activity.client_accounts} client account(s)`;$('duration').textContent=d.duration_ms+' ms';
+        const values={admins:d.activity.active_admins,guards:d.activity.active_guards,staff:d.activity.active_staff,clients:d.activity.client_accounts,assigned:d.activity.assigned_guards,sessions:d.activity.tracked_sessions};Object.entries(values).forEach(([k,v])=>$(k).textContent=v);
+        ['passed','warnings','failures','total'].forEach(k=>$(k).textContent=d.summary[k]);
+        $('checks').innerHTML=d.checks.map(x=>`<article class="check ${x.status}"><div><strong>${esc(x.label)}</strong><small>${esc(x.message)}</small></div><span class="state">${esc(x.status)}</span></article>`).join('');
+      }catch(e){$('gate').className='ps-card action_required';$('label').textContent='ACTION REQUIRED';$('status').textContent=e.message;$('checks').innerHTML='<div class="empty">'+esc(e.message)+'</div>'}finally{$('runBtn').disabled=false}
+    }
+    $('runBtn').onclick=run;
+  </script>
+</body>
+</html>
