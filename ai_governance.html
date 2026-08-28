@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Governance & Usage - PatrolSync</title>
+  <link rel="stylesheet" href="patrolsync-module.css">
+  <style>
+    .ai-wrap{max-width:1220px;margin:0 auto;padding:24px}.ai-hero,.ai-card{background:var(--ps-surface,#111b29);border:1px solid var(--ps-border,#29394d);border-radius:16px;padding:22px;margin-bottom:16px}.ai-hero{border-left:4px solid #2dd4bf}.ai-kicker{color:#2dd4bf;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}.ai-hero h1{font-size:30px;margin:12px 0 8px}.ai-muted{color:var(--ps-muted,#91a4bf)}.ai-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:16px 0}.ai-stat{background:var(--ps-surface,#111b29);border:1px solid var(--ps-border,#29394d);border-radius:14px;padding:16px}.ai-stat span{display:block;color:var(--ps-muted,#91a4bf);font-size:13px}.ai-stat strong{display:block;font-size:25px;margin-top:7px}.ai-two{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.ai-form{display:grid;grid-template-columns:1fr 1fr;gap:14px}.ai-field{display:flex;flex-direction:column;gap:7px}.ai-field label{font-weight:700}.ai-field input[type=number]{width:100%;padding:12px;border-radius:9px;border:1px solid var(--ps-border,#29394d);background:var(--ps-input,#0d1725);color:var(--ps-text,#fff)}.ai-toggle{grid-column:1/-1;display:flex;gap:10px;align-items:center;padding:13px;border-radius:10px;background:rgba(45,212,191,.08)}.ai-actions{grid-column:1/-1;display:flex;align-items:center;gap:12px}.ai-btn{border:0;border-radius:9px;padding:11px 16px;background:#2dd4bf;color:#06201d;font-weight:800;cursor:pointer}.ai-btn.secondary{background:#243247;color:#fff}.ai-safe{margin:0;padding-left:20px;color:var(--ps-muted,#91a4bf);line-height:1.8}.ai-table-wrap{overflow:auto}.ai-table{width:100%;border-collapse:collapse;min-width:850px}.ai-table th,.ai-table td{text-align:left;padding:12px;border-bottom:1px solid var(--ps-border,#29394d);font-size:13px}.ai-table th{color:var(--ps-muted,#91a4bf);font-size:11px;text-transform:uppercase;letter-spacing:.06em}.ai-pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#243247}.ai-pill.completed{background:rgba(34,197,94,.16);color:#4ade80}.ai-pill.failed{background:rgba(239,68,68,.16);color:#f87171}.ai-errors{display:flex;gap:8px;flex-wrap:wrap}.ai-status{font-weight:700}.ai-status.ok{color:#34d399}.ai-status.bad{color:#fb7185}@media(max-width:900px){.ai-grid{grid-template-columns:repeat(2,1fr)}.ai-two{grid-template-columns:1fr}}@media(max-width:580px){.ai-wrap{padding:14px}.ai-grid,.ai-form{grid-template-columns:1fr}.ai-toggle,.ai-actions{grid-column:auto}.ai-hero h1{font-size:25px}}
+  </style>
+</head>
+<body>
+  <main class="ai-wrap">
+    <p><a href="dashboard.html#tools">← Operations workspace</a></p>
+    <section class="ai-hero">
+      <div class="ai-kicker">Stage 11.2 · Governed AI</div>
+      <h1>AI Governance & Usage</h1>
+      <p class="ai-muted">Control company access, bound consumption, and review privacy-safe operational metadata. PatrolSync never stores raw assistant questions or answers in this audit register.</p>
+    </section>
+
+    <div id="message" class="ai-status"></div>
+    <section class="ai-grid">
+      <div class="ai-stat"><span>Platform</span><strong id="platformState">—</strong></div>
+      <div class="ai-stat"><span>Requests today</span><strong id="today">—</strong></div>
+      <div class="ai-stat"><span>Completed · 30 days</span><strong id="completed">—</strong></div>
+      <div class="ai-stat"><span>Failed · 30 days</span><strong id="failed">—</strong></div>
+      <div class="ai-stat"><span>Total tokens · 30 days</span><strong id="tokens">—</strong></div>
+    </section>
+
+    <section class="ai-two">
+      <div class="ai-card">
+        <h2>Company AI policy</h2>
+        <p class="ai-muted">These limits apply to the subscriber company. Changes take effect immediately.</p>
+        <form id="policyForm" class="ai-form">
+          <label class="ai-toggle"><input id="enabled" type="checkbox"> Enable Operations Assistant for this company</label>
+          <div class="ai-field"><label for="dailyLimit">Daily request limit</label><input id="dailyLimit" type="number" min="1" max="500" required><small class="ai-muted">1–500 requests per day</small></div>
+          <div class="ai-field"><label for="outputLimit">Maximum output tokens</label><input id="outputLimit" type="number" min="100" max="2000" required><small class="ai-muted">100–2,000 tokens per answer</small></div>
+          <div class="ai-actions"><button class="ai-btn" type="submit">Save policy</button><button class="ai-btn secondary" type="button" onclick="loadGovernance()">Refresh</button><span id="policyUpdated" class="ai-muted"></span></div>
+        </form>
+      </div>
+      <div class="ai-card">
+        <h2>Privacy and safety boundary</h2>
+        <ul class="ai-safe">
+          <li>Read-only advisory access.</li><li>Aggregate company counts only.</li><li>No individual guard ranking or automated decisions.</li><li>No passwords or precise live locations.</li><li>Raw questions and answers are not retained in this audit.</li><li>Only hashes, usage counts, status and diagnostics are recorded.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="ai-card">
+      <h2>Failure diagnostics · last 30 days</h2>
+      <div id="errors" class="ai-errors"><span class="ai-muted">No failures recorded.</span></div>
+    </section>
+    <section class="ai-card">
+      <h2>Recent usage audit</h2>
+      <p class="ai-muted">Metadata only. Prompts and assistant responses are deliberately excluded.</p>
+      <div class="ai-table-wrap"><table class="ai-table"><thead><tr><th>Time</th><th>Status</th><th>Model</th><th>Tokens</th><th>Matched modules</th><th>Diagnostic</th><th>Request ID</th></tr></thead><tbody id="auditRows"><tr><td colspan="7">Loading…</td></tr></tbody></table></div>
+    </section>
+  </main>
+  <script src="patrolsync-module.js"></script>
+  <script>
+    const API_BASE='https://patrolsync-backend.onrender.com';
+    const token=localStorage.getItem('token');
+    if(!token) location.href='login.html';
+    const headers=()=>({'Authorization':'Bearer '+token,'Content-Type':'application/json'});
+    const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const fmt=v=>v?new Date(v).toLocaleString():'—';
+    function show(text,ok=true){const el=document.getElementById('message');el.textContent=text;el.className='ai-status '+(ok?'ok':'bad')}
+    async function api(path,options={}){const res=await fetch(API_BASE+path,{...options,headers:{...headers(),...(options.headers||{})}});const data=await res.json().catch(()=>({}));if(res.status===401){localStorage.removeItem('token');location.href='login.html';throw new Error('Session expired')}if(!res.ok)throw new Error(data.error||'Unexpected response');return data}
+    async function loadGovernance(){
+      try{
+        const d=await api('/api/ai-assistant/governance');
+        document.getElementById('platformState').textContent=d.platform.configured?'Configured':'Not configured';
+        document.getElementById('today').textContent=`${d.today_requests} / ${d.policy.daily_request_limit}`;
+        document.getElementById('completed').textContent=d.summary.completed||0;document.getElementById('failed').textContent=d.summary.failed||0;
+        document.getElementById('tokens').textContent=Number(d.summary.input_tokens||0)+Number(d.summary.output_tokens||0);
+        document.getElementById('enabled').checked=Boolean(d.policy.enabled);document.getElementById('dailyLimit').value=d.policy.daily_request_limit;document.getElementById('outputLimit').value=d.policy.max_output_tokens;
+        document.getElementById('policyUpdated').textContent=d.policy.updated_at?'Updated '+fmt(d.policy.updated_at):'Using default policy';
+        document.getElementById('errors').innerHTML=d.errors.length?d.errors.map(x=>`<span class="ai-pill failed">${esc(x.error_code)} · ${Number(x.count)}</span>`).join(''):'<span class="ai-muted">No failures recorded.</span>';
+        document.getElementById('auditRows').innerHTML=d.recent.length?d.recent.map(r=>`<tr><td>${esc(fmt(r.created_at))}</td><td><span class="ai-pill ${esc(r.status)}">${esc(r.status)}</span></td><td>${esc(r.model||'—')}</td><td>${Number(r.input_tokens||0)+Number(r.output_tokens||0)}</td><td>${esc((r.matched_modules||[]).map(x=>x.label||x).join(', ')||'—')}</td><td>${esc(r.error_code||'—')}</td><td>${esc(r.request_id||'—')}</td></tr>`).join(''):'<tr><td colspan="7">No assistant usage recorded.</td></tr>';
+        show('AI governance data refreshed.');
+      }catch(err){show(err.message,false)}
+    }
+    document.getElementById('policyForm').addEventListener('submit',async e=>{e.preventDefault();try{const body={enabled:document.getElementById('enabled').checked,daily_request_limit:Number(document.getElementById('dailyLimit').value),max_output_tokens:Number(document.getElementById('outputLimit').value)};const d=await api('/api/ai-assistant/governance',{method:'PATCH',body:JSON.stringify(body)});show(d.message||'AI governance policy saved.');await loadGovernance()}catch(err){show(err.message,false)}});
+    loadGovernance();
+  </script>
+</body>
+</html>
