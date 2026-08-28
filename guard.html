@@ -344,7 +344,12 @@
 
     function authHeaders() {
       const { token } = getSession();
-      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+      let deviceId = localStorage.getItem('patrolsync_device_id');
+      if (!deviceId) {
+        deviceId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'device-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+        localStorage.setItem('patrolsync_device_id', deviceId);
+      }
+      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-PatrolSync-Device': deviceId };
     }
 
     let activeAttendance = null;
