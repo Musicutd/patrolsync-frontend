@@ -89,6 +89,7 @@
       items.set('site risk digital twin|site_risk_twin.html',{label:'Site Risk Digital Twin',href:'site_risk_twin.html',keywords:'stage 9 site hazards critical zones exposure live operational risk model'});
       items.set('risk scenario simulator|risk_scenarios.html',{label:'Risk Scenario Simulator',href:'risk_scenarios.html',keywords:'stage 9 what if simulation guard absence missed checkpoint sos visitors controls'});
       items.set('digital twin readiness|site_risk_readiness.html',{label:'Digital Twin Readiness',href:'site_risk_readiness.html',keywords:'stage 9 final gate site risk twin scenario rls validation'});
+      items.set('identity assurance readiness|identity_assurance_readiness.html',{label:'Identity Assurance Readiness',href:'identity_assurance_readiness.html',keywords:'stage 10 final gate trusted devices consent verification sos privacy rls validation'});
       items.set('client retention radar|client_retention_radar.html',{label:'Client Retention Radar',href:'client_retention_radar.html',keywords:'stage 8 renewal churn relationship risk client intelligence tenders'});
       items.set('tender proposal builder|tender_builder.html',{label:'Tender & Proposal Builder',href:'tender_builder.html',keywords:'stage 8 bid proposal procurement scope commercial prospect print pdf'});
       items.set('client intelligence readiness|client_intelligence_readiness.html',{label:'Client Intelligence Readiness',href:'client_intelligence_readiness.html',keywords:'stage 8 final gate retention tender proposal renewal rls validation'});
@@ -131,7 +132,7 @@
           { title: 'Patrol, incidents & safety', icon: '⌖', files: ['patrol_routes.html','patrol_runs.html','patrol_alerts.html','patrol_evidence.html','trustproof.html','checkpoint_requirements.html','incident_management.html','incident_reconstruction.html','crisis_mode.html','reconstruction_crisis_readiness.html','handover_management.html','lone_worker.html','dispatch_center.html'] },
           { title: 'Clients, reporting & finance', icon: '▥', files: ['client_retention_radar.html','tender_builder.html','client_intelligence_readiness.html','service_contracts.html','sla_dashboard.html','client_reports.html','invoices.html','analytics.html','service_tickets.html','contract_renewals.html','email_deliveries.html'] },
           { title: 'People, communications & quality', icon: '◇', files: ['notification_center.html','team_messages.html','training_compliance.html','certificate_register.html','asset_management.html','quality_inspections.html'] },
-          { title: 'Administration & security', icon: '⚙', files: ['access_control.html','identity_assurance.html','integrations.html','system_health.html','security_recovery.html','mfa_settings.html','session_management.html'] }
+          { title: 'Administration & security', icon: '⚙', files: ['access_control.html','identity_assurance.html','identity_assurance_readiness.html','integrations.html','system_health.html','security_recovery.html','mfa_settings.html','session_management.html'] }
         ];
         const buttons = Array.from(toolsGrid.querySelectorAll('button'));
         categories.forEach(category => {
@@ -421,6 +422,7 @@
       <a href="team_messages.html"><span class="ps-nav-icon">◎</span>Team Messages</a>
       <a href="geofences.html"><span class="ps-nav-icon">⌖</span>Site Geofences</a>
       <a href="identity_assurance.html"><span class="ps-nav-icon">◇</span>Identity Assurance</a>
+      <a href="identity_assurance_readiness.html"><span class="ps-nav-icon">✓</span>Identity Readiness</a>
       <a href="integrations.html"><span class="ps-nav-icon">⌁</span>API &amp; Webhooks</a>
       <a href="audit_log.html"><span class="ps-nav-icon">▥</span>Audit Log</a>
       <a href="system_health.html"><span class="ps-nav-icon">♡</span>System Health</a>
@@ -629,6 +631,7 @@
     <button onclick="window.location.href='mfa_settings.html'">Two-Step Verification →</button>
     <button onclick="window.location.href='session_management.html'">Active Sessions & Devices →</button>
     <button onclick="window.location.href='identity_assurance.html'">PatrolSync Verify →</button>
+    <button onclick="window.location.href='identity_assurance_readiness.html'">Identity Assurance Readiness →</button>
     </div>
   </section>
   </div>
