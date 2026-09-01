@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pilot Operations Register — PatrolSync</title>
+  <link rel="stylesheet" href="patrolsync-module.css">
+  <script src="patrolsync-module.js" defer></script>
+  <style>
+    .muted{color:var(--pm-muted)}.hero,.pilot-head,.review-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.hero button,.pilot-head button{width:auto}.badge{display:inline-flex;padding:5px 10px;border-radius:999px;background:rgba(45,212,191,.12);color:#2dd4bf;font-size:12px;font-weight:900;text-transform:uppercase}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.metric strong{display:block;font-size:27px;margin-top:5px}.form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.wide{grid-column:1/-1}.half{grid-column:span 2}.checkline{display:flex;gap:10px;align-items:flex-start;padding:14px;border:1px solid var(--pm-border);border-radius:10px}.checkline input{width:auto;margin-top:4px}.danger-fields{display:none}.danger-fields.open{display:grid}.status{min-height:22px;font-weight:700}.reviews{display:grid;gap:12px}.review{padding:16px;border:1px solid var(--pm-border);border-radius:12px}.review.green{border-left:4px solid #2dd4bf}.review.amber{border-left:4px solid #fbbf24}.review.red{border-left:4px solid #fb7185}.review h3{margin:0}.review-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.signal{padding:9px;background:var(--pm-panel-2,var(--pm-bg));border-radius:8px}.signal small,.signal strong{display:block}.signal small{color:var(--pm-muted)}.decision{font-weight:900;text-transform:uppercase;font-size:11px}.green .decision{color:#2dd4bf}.amber .decision{color:#fbbf24}.red .decision{color:#fb7185}.copy{white-space:pre-wrap}.empty{text-align:center;padding:28px}.alert{padding:12px;border-radius:9px;background:rgba(251,113,133,.12);color:#fb7185;font-weight:700}@media(max-width:850px){.metrics,.form-grid,.review-grid{grid-template-columns:1fr}.wide,.half{grid-column:auto}.hero,.pilot-head{display:block}.hero button,.pilot-head button{width:100%;margin-top:12px}}
+  </style>
+</head>
+<body class="ps-module-shell">
+<main class="ps-module-main">
+  <a href="dashboard.html#tools">← Operations workspace</a>
+  <section class="ps-card hero">
+    <div><span class="badge">Stage 13.1 · Controlled pilot</span><h1>Pilot Operations Register</h1><p class="muted">Record daily production health, workflow evidence, support issues, corrective actions and rollback signals throughout the controlled pilot. Entries are append-only and never execute production changes.</p></div>
+    <button id="refreshBtn" class="secondary">Refresh register</button>
+  </section>
+  <section id="pilotCard" class="ps-card"><p class="muted">Loading controlled pilot plan…</p></section>
+  <section class="metrics">
+    <article class="ps-card metric"><span class="muted">Reviews recorded</span><strong id="reviewCount">—</strong><small id="coverage" class="muted"></small></article>
+    <article class="ps-card metric"><span class="muted">Green / Amber / Red</span><strong id="statusCounts">—</strong><small class="muted">recorded assessments</small></article>
+    <article class="ps-card metric"><span class="muted">Critical failures</span><strong id="criticalCount">—</strong><small class="muted">reported during pilot</small></article>
+    <article class="ps-card metric"><span class="muted">Rollback signals</span><strong id="rollbackCount">—</strong><small class="muted">require accountable review</small></article>
+  </section>
+  <section class="ps-card">
+    <h2>Record daily pilot review</h2>
+    <p class="muted">Only record evidence after completing the review for that date. Saving a red status or rollback recommendation does not perform a rollback.</p>
+    <div class="form-grid">
+      <label>Review date<input id="reviewDate" type="date"></label>
+      <label>Overall status<select id="operationalStatus"><option value="green">Green — operating normally</option><option value="amber">Amber — attention required</option><option value="red">Red — critical concern</option></select></label>
+      <label>Recorded decision<select id="decision"><option value="continue">Continue pilot</option><option value="monitor">Continue with enhanced monitoring</option><option value="pause">Recommend pause</option><option value="recommend_rollback">Recommend rollback review</option></select></label>
+      <label>Platform health<select id="platformHealth"><option value="pass">Pass</option><option value="issue">Issue found</option><option value="not_tested">Not tested</option></select></label>
+      <label>Administrator workflow<select id="adminWorkflow"><option value="pass">Pass</option><option value="issue">Issue found</option><option value="not_tested">Not tested</option></select></label>
+      <label>Guard workflow<select id="guardWorkflow"><option value="pass">Pass</option><option value="issue">Issue found</option><option value="not_tested">Not tested</option></select></label>
+      <label>Client workflow<select id="clientWorkflow"><option value="pass">Pass</option><option value="issue">Issue found</option><option value="not_tested">Not tested</option></select></label>
+      <label>Offline synchronization<select id="offlineSync"><option value="pass">Pass</option><option value="issue">Issue found</option><option value="not_tested">Not tested</option></select></label>
+      <label>Emergency workflow<select id="emergencyWorkflow"><option value="pass">Pass</option><option value="issue">Issue found</option><option value="not_tested">Not tested</option></select></label>
+      <label>Operational incidents<input id="incidentCount" type="number" min="0" value="0"></label>
+      <label>Support issues<input id="supportCount" type="number" min="0" value="0"></label>
+      <label>Critical failures<input id="criticalFailures" type="number" min="0" value="0"></label>
+      <label class="wide">Daily review summary<textarea id="summary" maxlength="3000" placeholder="What was reviewed, what worked, and what requires attention?"></textarea></label>
+      <label class="wide">Corrective actions<textarea id="correctiveActions" maxlength="3000" placeholder="Document owners, deadlines, mitigations, or follow-up checks. Do not include passwords or secrets."></textarea></label>
+      <label class="wide checkline"><input id="rollbackSignal" type="checkbox"><span><strong>Rollback trigger or serious rollback concern observed</strong><small class="muted">This records a governance signal only. It does not change deployment state.</small></span></label>
+      <label id="rollbackFields" class="wide danger-fields">Rollback signal explanation<textarea id="rollbackReason" maxlength="2000" placeholder="Describe the observed trigger and the evidence requiring review."></textarea></label>
+    </div>
+    <button id="saveBtn">Record immutable review</button><p id="saveStatus" class="status"></p>
+  </section>
+  <section class="ps-card"><div class="pilot-head"><div><h2>Recorded pilot history</h2><p class="muted">Newest entries appear first. Corrections must be recorded as a new review so the earlier evidence remains traceable.</p></div></div><div id="reviews" class="reviews"><p class="muted empty">No reviews loaded.</p></div></section>
+</main>
+<script>
+const API='https://patrolsync-backend.onrender.com',token=localStorage.getItem('token'),tenant=localStorage.getItem('tenant_id'),$=id=>document.getElementById(id);if(!token||!tenant)location.replace('login.html');const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),today=()=>new Date().toISOString().slice(0,10);$('reviewDate').max=today();$('reviewDate').value=today();
+async function api(path,options={}){const r=await fetch(API+path,{...options,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',...(options.headers||{})}}),d=await r.json().catch(()=>({error:'Unexpected server response'}));if(r.status===401){localStorage.removeItem('token');location.replace('login.html');throw Error('Session expired')}if(!r.ok)throw Error(d.error||'Request failed');return d}
+const label=v=>String(v||'').replaceAll('_',' '),signal=(name,value)=>`<div class="signal"><small>${esc(name)}</small><strong>${esc(label(value))}</strong></div>`;
+function render(d){const p=d.pilot,s=d.summary;$('pilotCard').innerHTML=`<div class="pilot-head"><div><span class="badge">${esc(p.status)}</span><h2>${esc(p.pilot_name||'Controlled production pilot')}</h2><p class="muted">${esc(p.planned_start)} to ${esc(p.end_date)} · ${esc(p.duration_days||14)} days</p></div><div><strong>Owner</strong><br><span class="muted">${esc(p.pilot_owner_email)}</span></div></div>${p.status==='scheduled'?`<p class="alert">The pilot has not started. Daily evidence can be recorded from ${esc(p.planned_start)}.</p>`:''}`;$('reviewCount').textContent=s.reviews;$('coverage').textContent=`${s.review_days}/${s.expected_days} elapsed pilot day(s) covered`;$('statusCounts').textContent=`${s.green} / ${s.amber} / ${s.red}`;$('criticalCount').textContent=s.critical_failures;$('rollbackCount').textContent=s.rollback_signals;$('saveBtn').disabled=p.status==='scheduled';
+$('reviews').innerHTML=d.reviews.length?d.reviews.map(r=>`<article class="review ${esc(r.operational_status)}"><div class="review-head"><div><h3>${new Date(String(r.review_date).slice(0,10)+'T00:00:00').toLocaleDateString()}</h3><small class="muted">Recorded ${new Date(r.created_at).toLocaleString()} by ${esc(r.created_by_email||'administrator')}</small></div><span class="decision">${esc(label(r.decision))}</span></div><div class="review-grid">${signal('Platform health',r.platform_health)}${signal('Administrator workflow',r.admin_workflow)}${signal('Guard workflow',r.guard_workflow)}${signal('Client workflow',r.client_workflow)}${signal('Offline synchronization',r.offline_sync)}${signal('Emergency workflow',r.emergency_workflow)}</div><p class="copy"><strong>Summary:</strong> ${esc(r.summary)}</p>${r.corrective_actions?`<p class="copy"><strong>Corrective actions:</strong> ${esc(r.corrective_actions)}</p>`:''}${r.rollback_signal?`<p class="alert"><strong>Rollback signal:</strong> ${esc(r.rollback_reason)}</p>`:''}<small class="muted">${r.incident_count} incident(s) · ${r.support_issue_count} support issue(s) · ${r.critical_failure_count} critical failure(s)</small></article>`).join(''):'<p class="muted empty">No pilot operations reviews have been recorded.</p>'}
+async function load(){try{$('refreshBtn').disabled=true;render(await api(`/api/launch/production-pilot/operations?tenant_id=${encodeURIComponent(tenant)}`))}catch(e){$('pilotCard').innerHTML=`<p class="alert">${esc(e.message)}</p>`}finally{$('refreshBtn').disabled=false}}
+async function save(){const body={tenant_id:Number(tenant),review_date:$('reviewDate').value,operational_status:$('operationalStatus').value,decision:$('decision').value,platform_health:$('platformHealth').value,admin_workflow:$('adminWorkflow').value,guard_workflow:$('guardWorkflow').value,client_workflow:$('clientWorkflow').value,offline_sync:$('offlineSync').value,emergency_workflow:$('emergencyWorkflow').value,incident_count:Number($('incidentCount').value),support_issue_count:Number($('supportCount').value),critical_failure_count:Number($('criticalFailures').value),summary:$('summary').value,corrective_actions:$('correctiveActions').value,rollback_signal:$('rollbackSignal').checked,rollback_reason:$('rollbackReason').value};try{$('saveBtn').disabled=true;$('saveStatus').textContent='Recording pilot evidence…';const d=await api('/api/launch/production-pilot/operations',{method:'POST',body:JSON.stringify(body)});$('saveStatus').textContent=d.message;$('summary').value='';$('correctiveActions').value='';$('rollbackReason').value='';$('rollbackSignal').checked=false;$('rollbackFields').classList.remove('open');await load()}catch(e){$('saveStatus').textContent=e.message}finally{$('saveBtn').disabled=false}}
+$('rollbackSignal').onchange=()=>$('rollbackFields').classList.toggle('open',$('rollbackSignal').checked);$('refreshBtn').onclick=load;$('saveBtn').onclick=save;load();
+</script>
+</body></html>
