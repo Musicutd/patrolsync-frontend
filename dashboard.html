@@ -97,6 +97,7 @@
       items.set('browser offline acceptance|browser_offline_acceptance.html',{label:'Browser & Offline Acceptance',href:'browser_offline_acceptance.html',keywords:'stage 12 mobile browser camera gps pwa offline sync retry launch acceptance'});
       items.set('production pilot readiness|production_pilot_readiness.html',{label:'Production Pilot Readiness',href:'production_pilot_readiness.html',keywords:'stage 12 controlled pilot launch owner support rollback readiness acceptance'});
       items.set('pilot operations register|pilot_operations.html',{label:'Pilot Operations Register',href:'pilot_operations.html',keywords:'stage 13 controlled pilot daily review health support rollback corrective actions launch evidence'});
+      items.set('pilot health exit readiness|pilot_health_readiness.html',{label:'Pilot Health & Exit Readiness',href:'pilot_health_readiness.html',keywords:'stage 13 pilot health daily coverage exit go no go public launch gate rollback decision'});
       items.set('client retention radar|client_retention_radar.html',{label:'Client Retention Radar',href:'client_retention_radar.html',keywords:'stage 8 renewal churn relationship risk client intelligence tenders'});
       items.set('tender proposal builder|tender_builder.html',{label:'Tender & Proposal Builder',href:'tender_builder.html',keywords:'stage 8 bid proposal procurement scope commercial prospect print pdf'});
       items.set('client intelligence readiness|client_intelligence_readiness.html',{label:'Client Intelligence Readiness',href:'client_intelligence_readiness.html',keywords:'stage 8 final gate retention tender proposal renewal rls validation'});
@@ -139,7 +140,7 @@
           { title: 'Patrol, incidents & safety', icon: '⌖', files: ['patrol_routes.html','patrol_runs.html','patrol_alerts.html','patrol_evidence.html','trustproof.html','checkpoint_requirements.html','incident_management.html','incident_reconstruction.html','crisis_mode.html','reconstruction_crisis_readiness.html','handover_management.html','lone_worker.html','dispatch_center.html'] },
           { title: 'Clients, reporting & finance', icon: '▥', files: ['client_retention_radar.html','tender_builder.html','client_intelligence_readiness.html','service_contracts.html','sla_dashboard.html','client_reports.html','invoices.html','analytics.html','service_tickets.html','contract_renewals.html','email_deliveries.html'] },
           { title: 'People, communications & quality', icon: '◇', files: ['notification_center.html','team_messages.html','training_compliance.html','certificate_register.html','asset_management.html','quality_inspections.html'] },
-          { title: 'Administration & security', icon: '⚙', files: ['ai_assistant.html','ai_governance.html','ai_readiness.html','workflow_acceptance.html','browser_offline_acceptance.html','production_pilot_readiness.html','pilot_operations.html','access_control.html','identity_assurance.html','identity_assurance_readiness.html','integrations.html','system_health.html','security_recovery.html','mfa_settings.html','session_management.html'] }
+          { title: 'Administration & security', icon: '⚙', files: ['ai_assistant.html','ai_governance.html','ai_readiness.html','workflow_acceptance.html','browser_offline_acceptance.html','production_pilot_readiness.html','pilot_operations.html','pilot_health_readiness.html','access_control.html','identity_assurance.html','identity_assurance_readiness.html','integrations.html','system_health.html','security_recovery.html','mfa_settings.html','session_management.html'] }
         ];
         const buttons = Array.from(toolsGrid.querySelectorAll('button'));
         categories.forEach(category => {
@@ -432,6 +433,7 @@
       <a href="browser_offline_acceptance.html"><span class="ps-nav-icon">⇄</span>Browser &amp; Offline Acceptance</a>
       <a href="production_pilot_readiness.html"><span class="ps-nav-icon">◉</span>Production Pilot Readiness</a>
       <a href="pilot_operations.html"><span class="ps-nav-icon">▥</span>Pilot Operations Register</a>
+      <a href="pilot_health_readiness.html"><span class="ps-nav-icon">✓</span>Pilot Health &amp; Exit Readiness</a>
       <a href="access_control.html"><span class="ps-nav-icon">◈</span>Roles &amp; Permissions</a>
       <a href="team_messages.html"><span class="ps-nav-icon">◎</span>Team Messages</a>
       <a href="geofences.html"><span class="ps-nav-icon">⌖</span>Site Geofences</a>
@@ -653,6 +655,7 @@
     <button onclick="window.location.href='browser_offline_acceptance.html'">Browser & Offline Acceptance →</button>
     <button onclick="window.location.href='production_pilot_readiness.html'">Production Pilot Readiness →</button>
     <button onclick="window.location.href='pilot_operations.html'">Pilot Operations Register →</button>
+    <button onclick="window.location.href='pilot_health_readiness.html'">Pilot Health & Exit Readiness →</button>
     </div>
   </section>
   </div>
