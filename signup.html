@@ -85,6 +85,7 @@
           <div class="field"><label for="companyName">Company name</label><input type="text" id="companyName" maxlength="140" autocomplete="organization" placeholder="Your security company" required></div>
           <div class="field"><label for="adminEmail">Administrator email</label><input type="email" id="adminEmail" maxlength="254" autocomplete="email" placeholder="admin@company.com" required></div>
           <div class="field"><label for="adminPassword">Password</label><div class="password-wrap"><input type="password" id="adminPassword" minlength="6" autocomplete="new-password" placeholder="At least 6 characters" required><button id="showPassword" class="show-password" type="button">Show</button></div></div>
+          <div class="field"><label for="accessCode">Free test access code <span style="font-weight:500;color:var(--muted)">(optional)</span></label><input type="text" id="accessCode" maxlength="40" autocomplete="off" spellcheck="false" placeholder="PSFREE-XXXX-XXXX-XXXX-XXXX-XXXX"><small style="display:block;margin-top:6px;color:var(--muted)">If PatrolSync gave you a code, it selects the included plan and keeps access active until the platform administrator stops the test.</small></div>
           <button id="createButton" class="create" type="submit">Create account</button>
           <div id="signupStatus" class="status" role="status" aria-live="polite"></div>
         </form>
@@ -160,7 +161,7 @@
     }
 
     async function createAccount(){
-      const company_name=$('companyName').value.trim(),admin_email=$('adminEmail').value.trim(),admin_password=$('adminPassword').value;
+      const company_name=$('companyName').value.trim(),admin_email=$('adminEmail').value.trim(),admin_password=$('adminPassword').value,access_code=$('accessCode').value.trim();
       if(!company_name||!admin_email||!admin_password){setStatus('Complete all required fields.','error');return}
       if(!$('adminEmail').validity.valid){setStatus('Enter a valid administrator email address.','error');return}
       if(admin_password.length<6){setStatus('Password must be at least 6 characters.','error');return}
@@ -169,13 +170,13 @@
       const button=$('createButton');button.disabled=true;button.textContent='Creating workspace…';setStatus('Securely creating your company workspace…');
       try{
         const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';
-        const response=await fetch(API_BASE+'/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({company_name,plan:selectedPlan,admin_email,admin_password,timezone})});
+        const response=await fetch(API_BASE+'/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({company_name,plan:selectedPlan,admin_email,admin_password,timezone,access_code})});
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||'Account creation failed.');
         localStorage.setItem('token',data.token);
         localStorage.setItem('tenant_id',data.tenant.id);
         localStorage.setItem('user_email',data.admin.email);
-        setStatus('Account created. Opening your operations workspace…','success');
+        setStatus(data.free_access?'Free test workspace activated. Opening PatrolSync…':'Account created. Opening your operations workspace…','success');
         setTimeout(()=>{window.location.href='dashboard.html'},700);
       }catch(error){
         setStatus(error.message||'Account creation failed. Please try again.','error');
