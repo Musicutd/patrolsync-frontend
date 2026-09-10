@@ -255,10 +255,10 @@
     .shift-section { border-color: #c4b5fd; background: #f5f3ff; }
     .shift-open-btn { background: #7c3aed; width: auto; padding: 10px 16px; font-size: 14px; margin-top: 8px; }
 
-    #qrModal, #resetPwModal, #photoViewerModal, #clientResetPwModal, #certModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
-    #qrModalContent, #resetPwModalContent { background: white; padding: 24px; border-radius: 8px; text-align: center; max-width: 320px; }
+    #qrModal, #resetPwModal, #editGuardModal, #photoViewerModal, #clientResetPwModal, #certModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+    #qrModalContent, #resetPwModalContent, #editGuardModalContent { background: white; padding: 24px; border-radius: 8px; text-align: center; max-width: 360px; width: 90%; }
     #qrModalContent canvas { margin: 10px auto; display: block; }
-    #qrModalContent button, #resetPwModalContent button { margin-top: 10px; }
+    #qrModalContent button, #resetPwModalContent button, #editGuardModalContent button { margin-top: 10px; }
     .qr-close { background: #64748b; }
     .assign-row { display: flex; gap: 6px; flex-wrap: wrap; }
     .assign-row select { flex: 1; min-width: 120px; }
@@ -560,6 +560,8 @@
   <div class="workspace-view" data-view="workforce"><div class="workspace-hero"><h2>Workforce management</h2><p>Manage guards, site assignments, shifts, certifications, and client access.</p></div><div class="workspace-grid">
   <section>
     <h3>Add a Guard</h3>
+    <input type="text" id="guardFirstName" placeholder="First name" maxlength="100" autocomplete="given-name">
+    <input type="text" id="guardLastName" placeholder="Surname" maxlength="100" autocomplete="family-name">
     <input type="email" id="guardEmail" placeholder="Guard email">
     <input type="password" id="guardPassword" placeholder="Temporary password" minlength="6">
     <button onclick="addGuard()">Add Guard</button>
@@ -801,6 +803,18 @@
     </div>
   </div>
 
+  <div id="editGuardModal">
+    <div id="editGuardModalContent">
+      <h3 id="editGuardTitle">Edit Guard</h3>
+      <input type="text" id="editGuardFirstName" placeholder="First name" maxlength="100" autocomplete="given-name">
+      <input type="text" id="editGuardLastName" placeholder="Surname" maxlength="100" autocomplete="family-name">
+      <input type="email" id="editGuardEmail" placeholder="Guard email" maxlength="254" autocomplete="email">
+      <button onclick="saveGuardProfile()">Save Details</button>
+      <button class="qr-close" onclick="closeEditGuardModal()">Cancel</button>
+      <div id="editGuardStatus" class="status"></div>
+    </div>
+  </div>
+
   <div id="clientResetPwModal">
     <div id="clientResetPwModalContent">
       <h3 id="clientResetPwTitle">Reset Client Password</h3>
@@ -940,6 +954,45 @@
     function closeResetPwModal() {
       document.getElementById('resetPwModal').style.display = 'none';
       resetPwTargetId = null;
+    }
+
+    let editGuardTargetId = null;
+
+    function openEditGuardModal(guard) {
+      editGuardTargetId = guard.id;
+      document.getElementById('editGuardTitle').textContent = 'Edit Guard — ID ' + guard.id;
+      document.getElementById('editGuardFirstName').value = guard.first_name || '';
+      document.getElementById('editGuardLastName').value = guard.last_name || '';
+      document.getElementById('editGuardEmail').value = guard.email || '';
+      document.getElementById('editGuardStatus').textContent = '';
+      document.getElementById('editGuardModal').style.display = 'flex';
+    }
+
+    function closeEditGuardModal() {
+      document.getElementById('editGuardModal').style.display = 'none';
+      editGuardTargetId = null;
+    }
+
+    async function saveGuardProfile() {
+      const firstName = document.getElementById('editGuardFirstName').value.trim();
+      const lastName = document.getElementById('editGuardLastName').value.trim();
+      const email = document.getElementById('editGuardEmail').value.trim();
+      const statusDiv = document.getElementById('editGuardStatus');
+      if (!firstName || !lastName || !email) { statusDiv.textContent = 'First name, surname and email are required'; statusDiv.className = 'status error'; return; }
+      try {
+        const res = await fetch(API_BASE + '/api/users/' + editGuardTargetId + '/profile', {
+          method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ tenant_id: Number(tenantId), first_name: firstName, last_name: lastName, email })
+        });
+        const data = await res.json();
+        if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to update guard'); }
+        statusDiv.textContent = data.message || 'Guard details updated.';
+        statusDiv.className = 'status success';
+        await loadGuards();
+        setTimeout(closeEditGuardModal, 700);
+      } catch (err) {
+        statusDiv.textContent = err.message;
+        statusDiv.className = 'status error';
+      }
     }
 
     async function confirmResetPassword() {
@@ -1498,12 +1551,17 @@
 
     let currentGuards = [];
 
+    function guardDisplayName(guard) {
+      const name = [guard.first_name, guard.last_name].filter(Boolean).join(' ').trim();
+      return name || guard.email;
+    }
+
     function populateGuardDropdown(select, guards) {
       select.innerHTML = '<option value="">Select a guard</option>';
       guards.forEach(g => {
         const opt = document.createElement('option');
         opt.value = g.id;
-        opt.textContent = g.email + ' (ID ' + g.id + ')';
+        opt.textContent = guardDisplayName(g) + (guardDisplayName(g) !== g.email ? ' — ' + g.email : '') + ' (ID ' + g.id + ')';
         select.appendChild(opt);
       });
     }
@@ -1521,12 +1579,17 @@
         guards.forEach(g => {
           const li = document.createElement('li');
           const label = document.createElement('span');
-          label.textContent = g.email + ' (Guard ID ' + g.id + ')' + (g.account_active === false ? ' — ARCHIVED' : ' — ACTIVE');
+          const displayName = guardDisplayName(g);
+          label.textContent = displayName + (displayName !== g.email ? ' — ' + g.email : '') + ' (Guard ID ' + g.id + ')' + (g.account_active === false ? ' — ARCHIVED' : ' — ACTIVE');
           if (g.account_active === false) label.style.color = '#64748b';
 
           const actionsDiv = document.createElement('div');
           actionsDiv.className = 'guard-actions';
           if (g.account_active !== false) {
+            const editBtn = document.createElement('button');
+            editBtn.textContent = 'Edit';
+            editBtn.className = 'resetpw';
+            editBtn.onclick = () => openEditGuardModal(g);
             const resetBtn = document.createElement('button');
             resetBtn.textContent = 'Reset Password';
             resetBtn.className = 'resetpw';
@@ -1535,6 +1598,7 @@
             removeBtn.textContent = 'Archive';
             removeBtn.className = 'remove';
             removeBtn.onclick = () => removeGuard(g.id, g.email);
+            actionsDiv.appendChild(editBtn);
             actionsDiv.appendChild(resetBtn);
             actionsDiv.appendChild(removeBtn);
           } else {
@@ -1694,20 +1758,24 @@
     }
 
     async function addGuard() {
-      const email = document.getElementById('guardEmail').value;
+      const firstName = document.getElementById('guardFirstName').value.trim();
+      const lastName = document.getElementById('guardLastName').value.trim();
+      const email = document.getElementById('guardEmail').value.trim();
       const password = document.getElementById('guardPassword').value;
       const statusDiv = document.getElementById('guardStatus');
-      if (!email || !password) { statusDiv.textContent = 'Email and password are required'; statusDiv.className = 'status error'; return; }
+      if (!firstName || !lastName || !email || !password) { statusDiv.textContent = 'First name, surname, email and password are required'; statusDiv.className = 'status error'; return; }
       try {
         const res = await fetch(API_BASE + '/api/users', {
           method: 'POST',
           headers: authHeaders(),
-          body: JSON.stringify({ tenant_id: Number(tenantId), email, role: 'guard', password })
+          body: JSON.stringify({ tenant_id: Number(tenantId), first_name: firstName, last_name: lastName, email, role: 'guard', password })
         });
         const data = await res.json();
         if (!res.ok) { if (handleAuthError(data.error)) return; throw new Error(data.error || 'Failed to add guard'); }
         statusDiv.textContent = 'Guard added.';
         statusDiv.className = 'status success';
+        document.getElementById('guardFirstName').value = '';
+        document.getElementById('guardLastName').value = '';
         document.getElementById('guardEmail').value = '';
         document.getElementById('guardPassword').value = '';
         loadGuards();
