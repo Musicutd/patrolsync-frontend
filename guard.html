@@ -148,12 +148,12 @@
     <h2>Welcome back</h2>
     <p class="ps-login-intro">Sign in to start your shift and access today's patrol operations.</p>
     <section class="ps-login-card">
-      <input type="number" id="loginCompanyId" placeholder="Company ID" min="1" inputmode="numeric">
       <input type="email" id="loginEmail" placeholder="Your email">
       <input type="password" id="loginPassword" placeholder="Password">
+      <input type="number" id="loginCompanyId" placeholder="Company ID (optional)" min="1" inputmode="numeric">
       <button onclick="doLogin()">Log In</button>
       <div id="loginStatus" class="status"></div>
-      <p class="hint">Ask your site admin if you don't have login credentials yet.</p>
+      <p class="hint">Normally, your email and password are enough. Enter a Company ID only if PatrolSync asks for it.</p>
     </section>
     <div class="admin-link"><a href="forgot_password.html?role=guard">Forgot your guard password?</a></div>
     <div class="admin-link"><a href="login.html">Are you an admin? Log in here →</a></div>
@@ -470,13 +470,14 @@
     }
 
     async function doLogin() {
-      const companyId = Number(document.getElementById('loginCompanyId').value);
+      const companyIdValue = document.getElementById('loginCompanyId').value.trim();
+      const companyId = companyIdValue ? Number(companyIdValue) : null;
       const email = document.getElementById('loginEmail').value.trim();
       const password = document.getElementById('loginPassword').value;
       const statusDiv = document.getElementById('loginStatus');
 
-      if (!Number.isInteger(companyId) || companyId < 1 || !email || !password) {
-        statusDiv.textContent = 'Company ID, email and password are required';
+      if ((companyIdValue && (!Number.isInteger(companyId) || companyId < 1)) || !email || !password) {
+        statusDiv.textContent = 'Enter your email and password. Company ID is optional.';
         statusDiv.className = 'status error';
         return;
       }
@@ -485,7 +486,7 @@
         const res = await fetch(API_BASE + '/api/auth/guard-login-v2', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ company_id: companyId, email, password })
+          body: JSON.stringify({ ...(companyId ? { company_id: companyId } : {}), email, password })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Login failed');
@@ -501,7 +502,7 @@
         localStorage.setItem('guard_tenant_id', data.tenant_id);
         localStorage.setItem('guard_user_id', data.user.id);
         localStorage.setItem('guard_email', data.user.email);
-        localStorage.setItem('guard_company_id', String(companyId));
+        localStorage.setItem('guard_company_id', String(data.tenant_id));
         localStorage.setItem('guard_session_scoped', '1');
 
         statusDiv.textContent = '';
@@ -1433,7 +1434,7 @@
         clearAllSessions();
         showScreen('login');
         const status = document.getElementById('loginStatus');
-        status.textContent = 'Please log in again using your Company ID to refresh this device session.';
+        status.textContent = 'Please log in again to refresh this device session.';
         status.className = 'status error';
         return;
       }
