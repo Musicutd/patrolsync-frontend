@@ -519,6 +519,7 @@
   <div class="workspace-view" data-view="company"><div class="workspace-hero"><h2>Company & sites</h2><p>Manage subscription visibility, regional settings, emergency contacts, and operating locations.</p></div><div class="workspace-grid">
   <section>
     <h3>Plan & Usage</h3>
+    <p style="margin:0 0 14px;padding:10px 12px;border:1px solid #2dd4bf;border-radius:8px;background:rgba(45,212,191,.08);"><strong>Company ID:</strong> <span id="companyTenantIdLabel">-</span><br><span style="font-size:12px;color:#94a3b8;">Guards normally sign in using email and password. Share this ID only if PatrolSync requests it for a duplicate email.</span></p>
     <span id="planBadge" class="plan-badge plan-starter">Loading...</span>
     <div class="price-line" id="planPriceLine"></div>
     <div id="usageBars"></div>
@@ -879,6 +880,7 @@
     }
 
     document.getElementById('tenantIdLabel').textContent = tenantId;
+    document.getElementById('companyTenantIdLabel').textContent = tenantId;
     document.getElementById('companyName').textContent = userEmail ? 'Welcome, ' + userEmail : 'Dashboard';
 
     function authHeaders() {
