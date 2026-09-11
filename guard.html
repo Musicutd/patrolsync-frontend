@@ -139,6 +139,21 @@
     .shift-badge.full_time { background: #16a34a; }
     .shift-badge.part_time { background: #d97706; }
     .install-btn { background:#0f766e; width:auto; padding:7px 12px; margin-left:auto; margin-right:8px; }
+
+    /* --- Dark-mode contrast fixes for progress and remaining checkpoints --- */
+    html[data-theme="dark"] .progress-count { color: #f8fafc !important; }
+    html[data-theme="dark"] .progress-target { color: #cbd5e1 !important; }
+    html[data-theme="dark"] .progress-complete { color: #5eead4 !important; }
+    html[data-theme="dark"] #remainingModalContent {
+      background: #111a25 !important;
+      color: #edf4f8 !important;
+      border: 1px solid #344453 !important;
+    }
+    html[data-theme="dark"] #remainingModalContent h3 { color: #f8fafc !important; }
+    html[data-theme="dark"] #remainingModalContent li {
+      color: #e2e8f0 !important;
+      border-bottom-color: #2b3946 !important;
+    }
   </style>
   <script src="patrolsync-guard-ui.js" defer></script>
 </head>
