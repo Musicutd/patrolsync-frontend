@@ -202,6 +202,12 @@
       <div id="sosStatusMsg" class="status"></div>
     </section>
 
+    <section class="ps-services-card ps-scheduled-patrol-card">
+      <h3>⌖ My Scheduled Patrols</h3>
+      <p class="hint">Open your assigned patrol, start the correct time window, and track every required checkpoint.</p>
+      <button class="shift-open-btn" onclick="window.location.href='my_patrols.html'">Open My Scheduled Patrols →</button>
+    </section>
+
     <section class="ps-scan-card">
       <h3>Scan a Checkpoint</h3>
       <p class="hint">Scan a checkpoint by QR or NFC. Captures made without a signal are queued safely and synced exactly once.</p>
@@ -232,26 +238,6 @@
       <button class="remaining" onclick="showRemaining()">Check Remaining Checkpoints</button>
     </section>
 
-    <section class="ps-services-card">
-      <h3>📅 My Shifts</h3>
-      <p class="hint">Your upcoming duty schedule, set by your admin.</p>
-      <div id="todayShiftSummary">Loading...</div>
-      <button class="shift-open-btn" onclick="window.location.href='my_shifts.html'">View Full Shift Schedule →</button>
-      <button class="shift-open-btn" onclick="window.location.href='my_timesheets.html'">Review My Timesheets →</button>
-      <button class="shift-open-btn" onclick="window.location.href='availability.html'">Availability & Leave →</button>
-      <button class="shift-open-btn" onclick="window.location.href='shift_marketplace.html'">Open Shifts & Swaps →</button>
-      <button class="shift-open-btn" onclick="window.location.href='my_patrols.html'">My Scheduled Patrols →</button>
-      <button class="shift-open-btn" onclick="window.location.href='handover.html'">Shift Handover Log →</button>
-      <button class="shift-open-btn" onclick="window.location.href='my_notifications.html'">My Notifications →</button>
-      <button class="shift-open-btn" onclick="window.location.href='team_messages.html'">Team Messages →</button>
-      <button class="shift-open-btn" onclick="window.location.href='my_safety.html'">Lone-Worker Safety Check →</button>
-      <button class="shift-open-btn" onclick="window.location.href='my_dispatches.html'">My Dispatches →</button>
-      <button class="shift-open-btn" onclick="window.location.href='my_training.html'">My Training & Policies →</button>
-      <button class="shift-open-btn" onclick="window.location.href='my_equipment.html'">My Equipment & Keys →</button>
-      <button class="shift-open-btn" onclick="window.location.href='my_inspections.html'">My Site Inspections →</button>
-      <button class="shift-open-btn" onclick="window.location.href='my_identity.html'">My Trusted Device →</button>
-    </section>
-
     <section class="ps-incident-card">
       <h3>Report an Incident</h3>
       <textarea id="incidentDescription" placeholder="Describe what happened" rows="3"></textarea>
@@ -276,6 +262,25 @@
         <div id="incidentQueueList" class="hint">Loading pending reports...</div>
       </div>
     </section>
+
+    <section class="ps-services-card">
+      <h3>📅 My Shifts</h3>
+      <p class="hint">Your upcoming duty schedule, set by your admin.</p>
+      <div id="todayShiftSummary">Loading...</div>
+      <button class="shift-open-btn" onclick="window.location.href='my_shifts.html'">View Full Shift Schedule →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_timesheets.html'">Review My Timesheets →</button>
+      <button class="shift-open-btn" onclick="window.location.href='availability.html'">Availability & Leave →</button>
+      <button class="shift-open-btn" onclick="window.location.href='shift_marketplace.html'">Open Shifts & Swaps →</button>
+      <button class="shift-open-btn" onclick="window.location.href='handover.html'">Shift Handover Log →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_notifications.html'">My Notifications →</button>
+      <button class="shift-open-btn" onclick="window.location.href='team_messages.html'">Team Messages →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_safety.html'">Lone-Worker Safety Check →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_dispatches.html'">My Dispatches →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_training.html'">My Training & Policies →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_equipment.html'">My Equipment & Keys →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_inspections.html'">My Site Inspections →</button>
+      <button class="shift-open-btn" onclick="window.location.href='my_identity.html'">My Trusted Device →</button>
+    </section>
   </div>
 
   <div id="remainingModal">
@@ -290,7 +295,7 @@
     <video id="scannerVideo" playsinline></video>
     <canvas id="scannerCanvas"></canvas>
     <div id="scannerStatus">Point your camera at a checkpoint QR code...</div>
-    <button class="qr-close" onclick="closeScanner()">Cancel</button>
+    <button class="qr-close" onclick="closeScanner()">Close Scanner</button>
   </div>
 
   <script>
@@ -314,6 +319,8 @@
     const API_BASE = 'https://patrolsync-backend.onrender.com';
     let scannerStream = null;
     let scannerActive = false;
+    let lastSuccessfulScanValue = '';
+    let lastSuccessfulScanAt = 0;
     const activePatrolRunId = localStorage.getItem('active_patrol_run_id');
     document.getElementById('activePatrolHint').textContent = activePatrolRunId ? 'Scheduled patrol #' + activePatrolRunId + ' is active. Route order will be enforced.' : 'No scheduled patrol currently active.';
     let activePatrolCheckpoint = null;
@@ -836,7 +843,7 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code && code.data) {
+        if (code && code.data && !(code.data === lastSuccessfulScanValue && Date.now() - lastSuccessfulScanAt < 8000)) {
           handleScannedCode(code.data, 'qr');
           return;
         }
@@ -890,6 +897,8 @@
             statusDiv.textContent = '✓ Scanned ' + checkpoint.name + ' successfully!' + (scanData.checkpoint_count ? ' (' + scanData.scanned_count + '/' + scanData.checkpoint_count + ')' : '');
           }
           if(activeRunId)localStorage.removeItem('patrol_checkpoint_response_'+activeRunId+'_'+checkpoint.id);
+          lastSuccessfulScanValue = scanValue;
+          lastSuccessfulScanAt = Date.now();
           finishScanUI(statusDiv, 'success');
           return;
         } catch (err) {
@@ -952,6 +961,8 @@
       updateConnectionBanner();
 
       statusDiv.textContent = 'Queued offline: ' + cached.name + ' — will sync automatically when back online.';
+      lastSuccessfulScanValue = scanValue;
+      lastSuccessfulScanAt = Date.now();
       finishScanUI(statusDiv, 'queued');
     }
 
@@ -989,14 +1000,28 @@
       document.getElementById('nfcSupportHint').textContent = supported ? 'NFC scanning is available on this device.' : 'NFC is unavailable in this browser; QR scanning remains available.';
     }
 
+    function announceScanResult(kind) {
+      if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return;
+      window.speechSynthesis.cancel();
+      const message = new SpeechSynthesisUtterance(kind === 'queued' ? 'Scan saved offline' : 'Scan completed');
+      message.rate = 1;
+      message.pitch = 1;
+      window.speechSynthesis.speak(message);
+    }
+
     function finishScanUI(statusDiv, kind) {
+      announceScanResult(kind);
       setTimeout(() => {
-        closeScanner();
         const qrScanStatus = document.getElementById('qrScanStatus');
         qrScanStatus.textContent = statusDiv.textContent;
         qrScanStatus.className = 'status ' + (kind === 'queued' ? 'queued-tag' : 'success');
         loadProgress();
         loadActiveCheckpointRequirements();
+        if (document.getElementById('scannerModal').style.display !== 'none') {
+          scannerActive = true;
+          statusDiv.textContent = 'Scan completed. Move to the next checkpoint, or close the scanner.';
+          requestAnimationFrame(scanFrame);
+        }
       }, 1400);
     }
 
