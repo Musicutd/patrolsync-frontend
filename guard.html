@@ -810,7 +810,14 @@
         }
         trueRemaining.forEach(cp => {
           const li = document.createElement('li');
-          li.textContent = cp.name;
+          const name = document.createElement('strong');
+          name.textContent = cp.name;
+          const level = document.createElement('div');
+          level.className = 'hint';
+          level.style.margin = '3px 0 0';
+          level.textContent = 'Level: ' + (cp.level || 'Not specified');
+          li.appendChild(name);
+          li.appendChild(level);
           list.appendChild(li);
         });
       } catch (err) {
