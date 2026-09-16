@@ -14,3 +14,9 @@ jobs:
         with:
           node-version: '24'
       - run: node --test test/vision-ui.test.js
+      - run: node --test test/vision-staging-build.test.js
+      - run: node scripts/build-vision-staging.js
+        env:
+          PATROLSYNC_STAGING_BUILD: 'yes'
+          STAGING_API_BASE: https://patrolsync-vision-staging-backend.onrender.com
+
