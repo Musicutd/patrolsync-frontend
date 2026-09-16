@@ -13,7 +13,7 @@ test('staging build rejects production, unconfirmed and malformed targets', () =
   }
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vision-build-deny-'));
   try {
-    fs.writeFileSync(path.join(root, 'index.html'), 'https://patrolsync-backend.onrender.com');
+    fs.writeFileSync(path.join(root, 'index.html'), '<html><head></head><body>https://patrolsync-backend.onrender.com</body></html>');
     const args = { root, outputDir: path.join(root, 'vision-staging-dist'), apiBase: 'https://patrolsync-vision-staging-backend.onrender.com' };
     assert.throws(() => buildStaging({ ...args, confirmed: '' }), /required/);
     assert.throws(() => buildStaging({ ...args, confirmed: 'yes', renderServiceId: 'srv-d9p147rncjis73ervs9g' }), /production frontend/);
@@ -23,13 +23,14 @@ test('staging build rejects production, unconfirmed and malformed targets', () =
 test('staging artifact replaces production API and leaves source unchanged', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vision-build-pass-'));
   try {
-    const original = 'fetch("https://patrolsync-backend.onrender.com/api/vision/status")';
+    const original = '<html><head></head><body><script>fetch("https://patrolsync-backend.onrender.com/api/vision/status")</script></body></html>';
     fs.writeFileSync(path.join(root, 'index.html'), original);
     fs.writeFileSync(path.join(root, 'patrolsync-module.js'), original);
     const outputDir = path.join(root, 'vision-staging-dist');
     const result = buildStaging({ root, outputDir, apiBase: 'https://patrolsync-vision-staging-backend.onrender.com', confirmed: 'yes' });
     assert.equal(result.replacements, 2);
     assert.match(fs.readFileSync(path.join(outputDir, 'index.html'), 'utf8'), /patrolsync-vision-staging-backend/);
+    assert.match(fs.readFileSync(path.join(outputDir, 'index.html'), 'utf8'), /PATROLSYNC STAGING — TEST DATA ONLY/);
     assert.equal(fs.readFileSync(path.join(root, 'index.html'), 'utf8'), original);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
