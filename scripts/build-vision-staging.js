@@ -8,6 +8,7 @@ const PRODUCTION_FRONTEND_SERVICE = 'srv-d9p147rncjis73ervs9g';
 const STATIC_EXTENSIONS = new Set(['.html', '.css', '.json', '.svg', '.webmanifest', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.woff', '.woff2', '.ttf']);
 const REVIEWED_SCRIPTS = new Set(['patrolsync-guard-ui.js', 'patrolsync-module.js', 'service-worker.js']);
 const SKIP_DIRECTORIES = new Set(['.git', '.github', 'test', 'scripts', 'node_modules', 'vision-staging-dist']);
+const STAGING_BANNER = '<div id="patrolsync-staging-banner" role="status" style="position:fixed;bottom:0;left:0;right:0;z-index:2147483647;padding:5px 10px;background:#9a3412;color:#fff;text-align:center;font:700 12px system-ui,sans-serif;pointer-events:none">PATROLSYNC STAGING — TEST DATA ONLY</div>';
 
 function validatedApiBase(value) {
   let url;
@@ -49,7 +50,14 @@ function buildStaging({ root, outputDir, apiBase, confirmed, renderServiceId }) 
         const input = fs.readFileSync(from, 'utf8');
         const count = input.split(PRODUCTION_API).length - 1;
         replacements += count;
-        const output = input.replaceAll(PRODUCTION_API, stagingApi);
+        let output = input.replaceAll(PRODUCTION_API, stagingApi);
+        if (extension === '.html') {
+          if (!/<body\b[^>]*>/i.test(output)) throw new Error(`Missing body in ${entry.name}`);
+          output = output.replace(/<body\b[^>]*>/i, match => match + STAGING_BANNER);
+          if (/<head\b[^>]*>/i.test(output)) {
+            output = output.replace(/<head\b[^>]*>/i, match => match + '<meta name="robots" content="noindex,nofollow">');
+          }
+        }
         if (output.includes(PRODUCTION_API)) throw new Error(`Production API remains in ${entry.name}`);
         fs.writeFileSync(to, output);
       } else fs.copyFileSync(from, to);
