@@ -63,7 +63,7 @@
     function closeSearch(){search.classList.remove('open');search.setAttribute('aria-hidden','true');input.value=''}
     topbar.querySelector('.pm-menu').addEventListener('click',()=>document.body.classList.add('pm-nav-open'));
     sidebar.querySelector('.pm-sidebar-close').addEventListener('click',()=>document.body.classList.remove('pm-nav-open'));
-    sidebar.querySelectorAll('a').forEach(link=>link.addEventListener('click',()=>document.body.classList.remove('pm-nav-open')));
+    sidebar.addEventListener('click',event=>{if(event.target.closest('a'))document.body.classList.remove('pm-nav-open')});
     topbar.querySelector('.pm-search-trigger').addEventListener('click',openSearch);
     topbar.querySelector('.pm-logout').addEventListener('click',signOut);
     search.querySelector('.pm-search-close').addEventListener('click',closeSearch);
