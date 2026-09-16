@@ -1,0 +1,22 @@
+name: Vision UI scaffold checks
+
+on:
+  pull_request:
+  push:
+    branches: [feature/vision-v01-scaffold]
+
+jobs:
+  static-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test test/vision-ui.test.js
+      - run: node --test test/vision-staging-build.test.js
+      - run: node scripts/build-vision-staging.js
+        env:
+          PATROLSYNC_STAGING_BUILD: 'yes'
+          STAGING_API_BASE: https://patrolsync-vision-staging-backend.onrender.com
+
