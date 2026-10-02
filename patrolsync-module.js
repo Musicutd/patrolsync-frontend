@@ -10,6 +10,19 @@
     ['Administration', [['ai_assistant.html','✦','Operations Assistant'],['ai_governance.html','◉','AI Governance & Usage'],['ai_readiness.html','✓','AI Readiness'],['workflow_acceptance.html','✓','Workflow Acceptance'],['browser_offline_acceptance.html','⇄','Browser & Offline Acceptance'],['production_pilot_readiness.html','◉','Production Pilot Readiness'],['pilot_operations.html','▥','Pilot Operations Register'],['pilot_health_readiness.html','✓','Pilot Health & Exit Readiness'],['access_control.html','◈','Roles & Permissions'],['team_messages.html','◎','Team Messages'],['geofences.html','⌖','Site Geofences'],['identity_assurance.html','◇','Identity Assurance'],['identity_assurance_readiness.html','✓','Identity Readiness'],['integrations.html','⌁','API & Webhooks'],['audit_log.html','▥','Audit Log'],['system_health.html','♡','System Health'],['integrity_tests.html','✓','Integrity Tests'],['security_recovery.html','▣','Security & Recovery'],['mfa_settings.html','◇','Two-Step Verification'],['session_management.html','◉','Sessions & Devices']]]
   ];
   const allItems = groups.flatMap(([group, items]) => items.map(item => ({group,href:item[0],icon:item[1],label:item[2]})));
+  async function addVisionNavigation(sidebar, current) {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const response = await fetch('https://patrolsync-backend.onrender.com/api/vision/status', {headers:{Authorization:'Bearer ' + token},cache:'no-store'});
+      if (!response.ok || !(await response.json()).enabled) return;
+      const group = document.createElement('div');
+      group.className = 'pm-nav-group';
+      group.innerHTML = `<div class="pm-nav-label">Vision</div><nav class="pm-nav"><a href="vision_overview.html" class="${current==='vision_overview.html'?'active':''}"><span>◉</span>Vision Overview</a></nav>`;
+      sidebar.querySelector('.pm-sidebar-foot').before(group);
+      allItems.push({group:'Vision',href:'vision_overview.html',icon:'◉',label:'Vision Overview'});
+    } catch (_) { /* Fail closed: no Vision navigation on network errors. */ }
+  }
   const pageFile = () => location.pathname.split('/').pop() || 'dashboard.html';
   const hrefFile = href => href.split('#')[0];
   const esc = value => String(value || '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -39,6 +52,7 @@
     main.className = 'pm-main';
     Array.from(document.body.childNodes).filter(node => node.nodeName !== 'SCRIPT').forEach(node => main.appendChild(node));
     document.body.prepend(search); document.body.prepend(topbar); document.body.prepend(sidebar); document.body.appendChild(main);
+    addVisionNavigation(sidebar, current);
     const themeButton = topbar.querySelector('.pm-theme');
     function drawTheme(){const dark=document.documentElement.dataset.theme==='dark';themeButton.innerHTML=dark?'☀ <span>Light</span>':'☾ <span>Dark</span>'}
     drawTheme();
@@ -49,7 +63,7 @@
     function closeSearch(){search.classList.remove('open');search.setAttribute('aria-hidden','true');input.value=''}
     topbar.querySelector('.pm-menu').addEventListener('click',()=>document.body.classList.add('pm-nav-open'));
     sidebar.querySelector('.pm-sidebar-close').addEventListener('click',()=>document.body.classList.remove('pm-nav-open'));
-    sidebar.querySelectorAll('a').forEach(link=>link.addEventListener('click',()=>document.body.classList.remove('pm-nav-open')));
+    sidebar.addEventListener('click',event=>{if(event.target.closest('a'))document.body.classList.remove('pm-nav-open')});
     topbar.querySelector('.pm-search-trigger').addEventListener('click',openSearch);
     topbar.querySelector('.pm-logout').addEventListener('click',signOut);
     search.querySelector('.pm-search-close').addEventListener('click',closeSearch);
