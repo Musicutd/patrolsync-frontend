@@ -793,15 +793,32 @@
       }
 
       try {
-        const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, {
-          headers: authHeaders()
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to load remaining checkpoints');
+        const runId = localStorage.getItem('active_patrol_run_id');
+        let remaining;
+        if (runId) {
+          const runRes = await fetch(API_BASE + '/api/patrol-runs?tenant_id=' + tenantId, { headers: authHeaders() });
+          const runs = await runRes.json();
+          if (!runRes.ok) throw new Error(runs.error || 'Failed to load active patrol');
+          const run = runs.find(item => String(item.id) === String(runId) && item.status === 'in_progress');
+          if (run) {
+            remaining = run.checkpoints.filter(cp => !cp.scanned_at);
+          } else {
+            localStorage.removeItem('active_patrol_run_id');
+          }
+        }
+
+        if (!remaining) {
+          const res = await fetch(API_BASE + '/api/guard-progress?tenant_id=' + tenantId + '&site_id=' + siteId + '&user_id=' + userId, {
+            headers: authHeaders()
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to load remaining checkpoints');
+          remaining = data.remaining;
+        }
 
         const queue = loadQueue();
         const queuedIds = new Set(queue.filter(q => String(q.site_id) === String(siteId)).map(q => q.checkpoint_id));
-        const trueRemaining = data.remaining.filter(cp => !queuedIds.has(cp.checkpoint_id));
+        const trueRemaining = remaining.filter(cp => !queuedIds.has(cp.checkpoint_id));
 
         list.innerHTML = '';
         if (trueRemaining.length === 0) {
@@ -916,9 +933,11 @@
             localStorage.removeItem('active_patrol_run_id');
             statusDiv.textContent = '✓ Patrol completed! Final checkpoint: ' + checkpoint.name;
           } else {
-            statusDiv.textContent = '✓ Scanned ' + checkpoint.name + ' successfully!' + (scanData.checkpoint_count ? ' (' + scanData.scanned_count + '/' + scanData.checkpoint_count + ')' : '');
+            const remainingNames = Array.isArray(scanData.remaining) ? scanData.remaining.map(cp => cp.name) : [];
+            statusDiv.textContent = '✓ Scanned ' + checkpoint.name + ' successfully!' + (scanData.checkpoint_count ? ' (' + scanData.scanned_count + '/' + scanData.checkpoint_count + ')' : '') + (remainingNames.length ? ' Remaining: ' + remainingNames.join(', ') + '.' : '');
           }
           if(activeRunId)localStorage.removeItem('patrol_checkpoint_response_'+activeRunId+'_'+checkpoint.id);
+          loadActiveCheckpointRequirements();
           lastSuccessfulScanValue = scanValue;
           lastSuccessfulScanAt = Date.now();
           finishScanUI(statusDiv, 'success');
